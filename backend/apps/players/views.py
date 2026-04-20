@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from common.permissions import IsAdminUserOrReadOnly
 from django.shortcuts import get_object_or_404
 from .models import Player, MahjongSoulAccount
 from apps.games.models import Game, GamePlayer
@@ -15,7 +15,7 @@ from .services import PlayerService
 
 
 class PlayerListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         query = request.query_params.get('q', '')
@@ -31,7 +31,7 @@ class PlayerListView(APIView):
 
 
 class PlayerDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)
@@ -52,7 +52,7 @@ class PlayerDetailView(APIView):
 
 
 class PlayerMajsoulAccountListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)
@@ -69,7 +69,7 @@ class PlayerMajsoulAccountListView(APIView):
 
 
 class MajsoulAccountDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def delete(self, request, account_pk):
         account = get_object_or_404(MahjongSoulAccount, pk=account_pk)
@@ -78,7 +78,7 @@ class MajsoulAccountDetailView(APIView):
 
 
 class PlayerGamesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)

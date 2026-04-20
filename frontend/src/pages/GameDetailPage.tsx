@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord } from '@/api/games';
 import { getPlayers } from '@/api/players';
+import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import HandRecordModal from '@/components/HandRecordModal';
@@ -31,6 +32,7 @@ export default function GameDetailPage() {
   const [showHandRecordModal, setShowHandRecordModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
+  const admin = isAdmin();
 
   const [scoreItems, setScoreItems] = useState<SortableItem[]>([]);
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
@@ -227,7 +229,7 @@ export default function GameDetailPage() {
             <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>{game.start_time}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {!game.is_scored && (
+            {admin && !game.is_scored && (
               <>
                 <button className="btn btn-sm btn-accent" onClick={handleShuffleSeats} disabled={loading}>
                   <Shuffle size={14} /> 随机桩位
@@ -240,10 +242,12 @@ export default function GameDetailPage() {
                 </button>
               </>
             )}
-            <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
-              <Copy size={14} /> 再开一局
-            </button>
-            {game.is_scored && (
+            {admin && (
+              <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
+                <Copy size={14} /> 再开一局
+              </button>
+            )}
+            {admin && game.is_scored && (
               <button className="btn btn-sm btn-outline" onClick={() => setShowHandRecordModal(true)} style={{ borderColor: '#f0b830', color: '#e65100' }}>
                 <Sparkles size={14} /> 役满牌谱
               </button>
@@ -328,9 +332,11 @@ export default function GameDetailPage() {
                       </span>
                     )}
                   </div>
-                  <button onClick={() => { if (window.confirm('确定删除此牌谱？')) handleDeleteHandRecord(hr.id); }} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    <Trash2 size={14} />
-                  </button>
+                  {admin && (
+                    <button onClick={() => { if (window.confirm('确定删除此牌谱？')) handleDeleteHandRecord(hr.id); }} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
                 {hr.hand_tiles && hr.hand_tiles.length > 0 && (
                   <div className="flex items-end gap-0.5 mb-2">

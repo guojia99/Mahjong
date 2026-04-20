@@ -2,8 +2,9 @@ import random
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from django.db.models import Min, Max
 from django.shortcuts import get_object_or_404
+from common.permissions import IsAdminUserOrReadOnly
 from .models import Room, Game, GamePlayer, HandRecord
 from .serializers import (
     RoomListSerializer, RoomDetailSerializer, RoomCreateSerializer,
@@ -16,14 +17,17 @@ from apps.players.models import Player
 
 
 class RoomListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         status_filter = request.query_params.get('status')
         rooms = Room.objects.all()
         if status_filter:
             rooms = rooms.filter(status=status_filter)
-        rooms = rooms.prefetch_related('room_players__player')
+        rooms = rooms.prefetch_related('room_players__player').annotate(
+            earliest_game_time=Min('games__start_time'),
+            latest_game_time=Max('games__start_time'),
+        )
         serializer = RoomListSerializer(rooms, many=True)
         return Response(serializer.data)
 
@@ -35,7 +39,7 @@ class RoomListView(APIView):
 
 
 class RoomDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
@@ -53,7 +57,7 @@ class RoomDetailView(APIView):
 
 
 class RoomCloseView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def post(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
@@ -62,7 +66,7 @@ class RoomCloseView(APIView):
 
 
 class RoomPlayerListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
@@ -79,7 +83,7 @@ class RoomPlayerListView(APIView):
 
 
 class RoomPlayerDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def delete(self, request, pk, player_pk):
         room = get_object_or_404(Room, pk=pk)
@@ -89,7 +93,7 @@ class RoomPlayerDetailView(APIView):
 
 
 class RoomGameListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
@@ -119,7 +123,7 @@ class RoomGameListView(APIView):
 
 
 class GameListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         games = Game.objects.filter(
@@ -150,7 +154,7 @@ class GameListView(APIView):
 
 
 class GameDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -166,7 +170,7 @@ class GameDetailView(APIView):
 
 
 class GameScoreView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def put(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -177,7 +181,7 @@ class GameScoreView(APIView):
 
 
 class GamePlayerUpdateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def put(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -187,7 +191,7 @@ class GamePlayerUpdateView(APIView):
 
 
 class GameShuffleSeatsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def post(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -206,7 +210,7 @@ class GameShuffleSeatsView(APIView):
 
 
 class OnlineGameImportView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def post(self, request):
         source_url = request.data.get('source_url', '')
@@ -221,7 +225,7 @@ class OnlineGameImportView(APIView):
 
 
 class HandRecordListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -238,7 +242,7 @@ class HandRecordListView(APIView):
 
 
 class HandRecordDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def delete(self, request, pk, record_pk):
         record = get_object_or_404(HandRecord, pk=record_pk, game_id=pk)
@@ -247,7 +251,7 @@ class HandRecordDetailView(APIView):
 
 
 class PlayerStatsView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)
@@ -310,7 +314,7 @@ class PlayerStatsView(APIView):
 
 
 class PtRankingView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         player_count = request.query_params.get('player_count')
@@ -353,7 +357,7 @@ class PtRankingView(APIView):
 
 
 class YakumanListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         records = HandRecordService.get_all_yakumans()
@@ -362,7 +366,7 @@ class YakumanListView(APIView):
 
 
 class RecentYakumanView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
         limit = int(request.query_params.get('limit', 10))
@@ -372,7 +376,7 @@ class RecentYakumanView(APIView):
 
 
 class PlayerYakumanListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)

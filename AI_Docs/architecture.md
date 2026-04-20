@@ -11,6 +11,7 @@
 backend/
 ├── manage.py
 ├── requirements.txt
+├── db_config.json                  # 数据库配置 (SQLite路径)
 ├── config/                         # Django 项目配置
 │   ├── __init__.py
 │   ├── settings.py
@@ -40,7 +41,8 @@ backend/
 │   └── majsoul.py                  # 雀魂数据获取服务
 └── common/                         # 公共工具
     ├── __init__.py
-    └── exceptions.py
+    ├── exceptions.py              # 业务异常
+    └── permissions.py             # 自定义权限 (IsAdminUserOrReadOnly)
 ```
 
 ## 数据模型设计
@@ -117,34 +119,40 @@ backend/
 
 ## API 接口设计
 
+### 认证与权限
+- **登录限制**: 仅管理员 (is_staff) 可登录，无注册功能
+- **权限策略**: GET 请求公开访问 (AllowAny)，写操作 (POST/PUT/DELETE) 需要管理员权限 (IsAdminUser)
+- **管理入口**: "雀士管理" 导航仅在管理员登录后显示
+- **公开页面**: 首页、雀士列表、房间、对局、PT排名、役满列表均无需登录
+
 ### 认证 API
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | /api/v1/auth/login/ | 登录 |
-| POST | /api/v1/auth/logout/ | 登出 |
-| GET | /api/v1/auth/me/ | 获取当前用户 |
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| POST | /api/v1/auth/login/ | 管理员登录 | AllowAny |
+| POST | /api/v1/auth/logout/ | 登出 | IsAuthenticated |
+| GET | /api/v1/auth/me/ | 获取当前用户 | IsAuthenticated |
 
 ### 雀士 API
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/v1/players/ | 雀士列表 |
-| POST | /api/v1/players/ | 创建雀士 |
-| GET | /api/v1/players/{id}/ | 雀士详情 |
-| PUT | /api/v1/players/{id}/ | 更新雀士 |
-| DELETE | /api/v1/players/{id}/ | 删除雀士 |
-| POST | /api/v1/players/{id}/majsoul-accounts/ | 添加雀魂账号 |
-| DELETE | /api/v1/players/majsoul-accounts/{id}/ | 删除雀魂账号 |
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | /api/v1/players/ | 雀士列表 | 公开 |
+| POST | /api/v1/players/ | 创建雀士 | 管理员 |
+| GET | /api/v1/players/{id}/ | 雀士详情 | 公开 |
+| PUT | /api/v1/players/{id}/ | 更新雀士 | 管理员 |
+| DELETE | /api/v1/players/{id}/ | 删除雀士 | 管理员 |
+| POST | /api/v1/players/{id}/majsoul-accounts/ | 添加雀魂账号 | 管理员 |
+| DELETE | /api/v1/players/majsoul-accounts/{id}/ | 删除雀魂账号 | 管理员 |
 
 ### 房间 API
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | /api/v1/rooms/ | 房间列表 |
-| POST | /api/v1/rooms/ | 创建房间 |
-| GET | /api/v1/rooms/{id}/ | 房间详情 |
-| PUT | /api/v1/rooms/{id}/ | 更新房间 |
-| POST | /api/v1/rooms/{id}/close/ | 关闭房间 |
-| POST | /api/v1/rooms/{id}/players/ | 添加玩家到房间 |
-| DELETE | /api/v1/rooms/{id}/players/{player_id}/ | 从房间移除玩家 |
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | /api/v1/rooms/ | 房间列表 (含最早/最晚对局时间) | 公开 |
+| POST | /api/v1/rooms/ | 创建房间 | 管理员 |
+| GET | /api/v1/rooms/{id}/ | 房间详情 | 公开 |
+| PUT | /api/v1/rooms/{id}/ | 更新房间 | 管理员 |
+| POST | /api/v1/rooms/{id}/close/ | 关闭房间 | 管理员 |
+| POST | /api/v1/rooms/{id}/players/ | 添加玩家到房间 | 管理员 |
+| DELETE | /api/v1/rooms/{id}/players/{player_id}/ | 从房间移除玩家 | 管理员 |
 
 ### 对局 API
 | 方法 | 路径 | 说明 |
@@ -195,16 +203,19 @@ backend/
 ## 前端页面设计
 
 ### 页面路由
-| 路径 | 页面 | 说明 |
-|------|------|------|
-| /login | 登录页 | 简洁的登录表单 |
-| / | 首页/仪表盘 | 统计概览、最近役满列表、役满列表tab |
-| /players | 雀士管理 | 雀士列表、增删改 |
-| /player-list/:id | 雀士详情 | 统计数据、对局记录、役满列表、个人信息 |
-| /rooms | 房间管理 | 活跃房间列表、创建房间 |
-| /rooms/:id | 房间详情 | 房间内对局管理 |
-| /rooms/:id/games/:gameId | 对局详情 | 选手列表、录分、役满牌谱(含自摸/荣胡) |
-| /games/online | 线上对局 | 导入雀魂友人局 |
+| 路径 | 页面 | 说明 | 访问权限 |
+|------|------|------|------|
+| /login | 登录页 | 管理员登录表单 | 公开 |
+| / | 首页/仪表盘 | 统计概览、最近役满列表 | 公开 |
+| /players | 雀士管理 | 雀士增删改 | 管理员 |
+| /player-list | 雀士列表 | 雀士搜索浏览 | 公开 |
+| /player-list/:id | 雀士详情 | 统计数据、对局记录、役满列表、个人信息 | 公开 |
+| /rooms | 房间列表 | 活跃房间列表 (含最早/最晚对局时间) | 公开 |
+| /rooms/:id | 房间详情 | 房间成员、对局列表 | 公开 |
+| /rooms/:id/games/:gameId | 对局详情 | 选手列表、录分、役满牌谱 | 公开 |
+| /games | 对局列表 | 全部对局筛选浏览 | 公开 |
+| /pt-ranking | PT排名 | PT排名排行榜 | 公开 |
+| /yakumans | 役满列表 | 全部役满记录 | 公开 |
 
 ### 响应式设计断点
 - Mobile: < 640px

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRoom, addPlayerToRoom, removePlayerFromRoom, getRoomGames, createRoomGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
+import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import PlayerCard from '@/components/PlayerCard';
@@ -24,6 +25,7 @@ export default function RoomDetailPage() {
   const [startTime, setStartTime] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
+  const admin = isAdmin();
 
   const loadData = async () => {
     if (!id) return;
@@ -129,7 +131,7 @@ export default function RoomDetailPage() {
               </span>
             </div>
           </div>
-          {room.status === 'open' && (
+          {admin && room.status === 'open' && (
             <div className="flex gap-2">
               <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
                 <Plus size={14} /> 添加雀士
@@ -153,7 +155,7 @@ export default function RoomDetailPage() {
                 key={rp.id}
                 player={rp.player}
                 size="sm"
-                removable={room.status === 'open'}
+                removable={admin && room.status === 'open'}
                 onRemove={() => handleRemovePlayer(rp.player.id)}
               />
             ))}

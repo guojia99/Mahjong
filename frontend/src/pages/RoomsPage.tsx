@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getRooms, createRoom, closeRoom } from '@/api/games';
+import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import type { Room } from '@/types';
-import { Plus, MapPin, Users, Gamepad2 } from 'lucide-react';
+import { Plus, MapPin, Users, Gamepad2, Clock } from 'lucide-react';
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -12,6 +13,7 @@ export default function RoomsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
+  const admin = isAdmin();
 
   const loadRooms = async () => {
     try {
@@ -83,18 +85,22 @@ export default function RoomsPage() {
             </button>
           ))}
         </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> 开启房间
-        </button>
+        {admin && (
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
+            <Plus size={16} /> 开启房间
+          </button>
+        )}
       </div>
 
       {filteredRooms.length === 0 ? (
         <div className="empty-state card">
           <Gamepad2 size={48} style={{ color: 'var(--color-text-light)', opacity: 0.3, margin: '0 auto 1rem' }} />
           <p>暂无房间</p>
-          <button className="btn btn-outline btn-sm mt-3" onClick={() => setShowCreate(true)}>
-            开启第一个房间
-          </button>
+          {admin && (
+            <button className="btn btn-outline btn-sm mt-3" onClick={() => setShowCreate(true)}>
+              开启第一个房间
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -118,7 +124,7 @@ export default function RoomsPage() {
                     </div>
                     <div>
                       <div className="font-semibold">{room.name}</div>
-                      <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--color-text-light)' }}>
+                      <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--color-text-light)' }}>
                         {room.location && (
                           <span className="flex items-center gap-1">
                             <MapPin size={12} /> {room.location}
@@ -128,6 +134,11 @@ export default function RoomsPage() {
                           <Users size={12} /> {room.player_count}人
                         </span>
                         <span>{room.game_count}局</span>
+                        {room.earliest_game_time && room.latest_game_time && (
+                          <span className="flex items-center gap-1">
+                            <Clock size={12} /> {room.earliest_game_time} ~ {room.latest_game_time}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -136,7 +147,7 @@ export default function RoomsPage() {
                   <span className={`badge ${room.status === 'open' ? 'badge-open' : 'badge-closed'}`}>
                     {room.status === 'open' ? '进行中' : '已关闭'}
                   </span>
-                  {room.status === 'open' && (
+                  {admin && room.status === 'open' && (
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={() => handleClose(room.id)}

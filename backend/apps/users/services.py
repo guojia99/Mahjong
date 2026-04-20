@@ -9,6 +9,8 @@ class AuthService:
         user = authenticate(request, username=username, password=password)
         if user is None:
             raise BusinessException('用户名或密码错误', code=401)
+        if not user.is_staff:
+            raise BusinessException('仅管理员可登录', code=403)
         token, _ = Token.objects.get_or_create(user=user)
         return {'user': user, 'token': token.key}
 
@@ -19,13 +21,3 @@ class AuthService:
     @staticmethod
     def get_current_user(user):
         return user
-
-    @staticmethod
-    def register(username, password):
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        if User.objects.filter(username=username).exists():
-            raise BusinessException('用户名已存在', code=409)
-        user = User.objects.create_user(username=username, password=password)
-        token, _ = Token.objects.get_or_create(user=user)
-        return {'user': user, 'token': token.key}

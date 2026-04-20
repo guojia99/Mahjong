@@ -8,13 +8,6 @@ export async function login(username: string, password: string) {
   return data;
 }
 
-export async function register(username: string, password: string) {
-  const { data } = await api.post('/auth/register/', { username, password });
-  localStorage.setItem('token', data.token);
-  localStorage.setItem('user', JSON.stringify(data.user));
-  return data;
-}
-
 export async function logout() {
   try {
     await api.post('/auth/logout/');
@@ -41,4 +34,9 @@ export function getCurrentUser(): User | null {
 
 export function isLoggedIn(): boolean {
   return !!localStorage.getItem('token');
+}
+
+export function isAdmin(): boolean {
+  const user = getCurrentUser();
+  return !!user?.is_admin;
 }
