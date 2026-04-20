@@ -11,6 +11,8 @@ import GameDetailPage from '@/pages/GameDetailPage';
 import GameListPage from '@/pages/GameListPage';
 import PtRankingPage from '@/pages/PtRankingPage';
 import YakumanListPage from '@/pages/YakumanListPage';
+import CalculatorPage from '@/pages/CalculatorPage';
+import PracticePage from '@/pages/PracticePage';
 import { isAdmin } from '@/api/auth';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -36,6 +38,8 @@ function App() {
           <Route path="games" element={<GameListPage />} />
           <Route path="pt-ranking" element={<PtRankingPage />} />
           <Route path="yakumans" element={<YakumanListPage />} />
+          <Route path="calculator" element={<CalculatorPage />} />
+          <Route path="practice" element={<PracticePage />} />
           {/* <Route path="games/online" element={<OnlineGamePage />} /> */}
         </Route>
       </Routes>
