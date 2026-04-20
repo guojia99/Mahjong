@@ -13,14 +13,15 @@ function ScoreTag({ score }: { score: number | null }) {
 
 function PtTag({ pt }: { pt: number | undefined }) {
   if (pt === undefined || pt === null) return null;
-  const color = pt > 0 ? '#2d9d78' : pt < 0 ? '#e74c3c' : '#999';
+  const val = Math.round(pt * 100) / 100;
+  const color = val > 0 ? '#2d9d78' : val < 0 ? '#e74c3c' : '#999';
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       padding: '0.125rem 0.5rem', borderRadius: '0.375rem',
-      fontSize: '0.75rem', fontWeight: 700, color, background: pt > 0 ? '#e8f8f0' : pt < 0 ? '#fde8e8' : '#f0f0f0',
+      fontSize: '0.75rem', fontWeight: 700, color, background: val > 0 ? '#e8f8f0' : val < 0 ? '#fde8e8' : '#f0f0f0',
     }}>
-      {pt > 0 ? `+${pt}` : pt}pt
+      {val > 0 ? `+${val}` : val}pt
     </span>
   );
 }
