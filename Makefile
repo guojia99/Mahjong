@@ -79,23 +79,23 @@ dev:
 	echo "\033[32m  All services running. Press Ctrl+C to stop.\033[0m\n"; \
 	wait
 
+_kill-pid:
+	@-if [ -f $(PIDDIR)/$(1).pid ]; then \
+		PID=$$(cat $(PIDDIR)/$(1).pid); \
+		kill -TERM -$$PID 2>/dev/null; \
+		kill -TERM $$PID 2>/dev/null; \
+		kill -KILL $$PID 2>/dev/null; \
+		echo "  $(1) stopped"; \
+	fi
+
 ## 停止所有服务
 stop:
 	@echo "\033[33mStopping services...\033[0m"
-	@-if [ -f $(PIDDIR)/proxy.pid ]; then \
-		kill $$(cat $(PIDDIR)/proxy.pid) 2>/dev/null && echo "  Proxy stopped"; \
-	fi
-	@-if [ -f $(PIDDIR)/backend.pid ]; then \
-		kill $$(cat $(PIDDIR)/backend.pid) 2>/dev/null && echo "  Backend stopped"; \
-	fi
-	@-if [ -f $(PIDDIR)/frontend.pid ]; then \
-		kill $$(cat $(PIDDIR)/frontend.pid) 2>/dev/null && echo "  Frontend stopped"; \
-	fi
+	@$(MAKE) --no-print-directory _kill-pid PID=proxy
+	@$(MAKE) --no-print-directory _kill-pid PID=frontend
+	@$(MAKE) --no-print-directory _kill-pid PID=backend
 	@-rm -rf $(PIDDIR)
-	@pkill -f "manage.py runserver" 2>/dev/null; \
-	pkill -f "vite.*9998" 2>/dev/null; \
-	pkill -f "proxy.cjs" 2>/dev/null; \
-	echo "\033[32mDone.\033[0m"
+	@echo "\033[32mDone.\033[0m"
 
 ## 重启所有服务
 restart:
