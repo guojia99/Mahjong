@@ -108,15 +108,25 @@ class GameService:
         elif player_count == 3 and total != 1050:
             raise ScoreValidationError(f'3人对局分数总和必须为1050，当前为{total}')
 
+        gps = []
         for score_data in scores_data:
             try:
                 gp = game.game_players.get(player_id=score_data['player_id'])
                 gp.score = score_data['score']
                 gp.is_dealer_start = score_data.get('is_dealer_start', False)
                 gp.seat_number = score_data.get('seat_number', gp.seat_number)
-                gp.save()
+                gps.append(gp)
             except GamePlayer.DoesNotExist:
                 raise BusinessException(f'选手不在对局中: {score_data["player_id"]}')
+
+        from django.db import transaction
+        with transaction.atomic():
+            for gp in gps:
+                gp.seat_number = -(gp.seat_number + 1)
+                gp.save(update_fields=['seat_number'])
+            for gp in gps:
+                gp.seat_number = abs(gp.seat_number) - 1
+                gp.save(update_fields=['seat_number', 'score', 'is_dealer_start'])
 
         return game
 

@@ -65,9 +65,9 @@ _check-npm:
 
 ## 一键启动前后端 + 反向代理
 dev:
-	@mkdir -p $(PIDDIR)
 	@$(MAKE) stop > /dev/null 2>&1; sleep 0.5
-	@trap '$(MAKE) stop; rm -rf $(PIDDIR); exit 0' INT TERM; \
+	@mkdir -p $(PIDDIR)
+	@trap '$(MAKE) stop; exit 0' INT TERM; \
 	$(MAKE) _install-proxy; \
 	$(MAKE) _run-backend & \
 	$(MAKE) _run-frontend & \
