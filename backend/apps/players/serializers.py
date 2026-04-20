@@ -9,6 +9,12 @@ class MahjongSoulAccountSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class PlayerBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Player
+        fields = ['id', 'nickname']
+
+
 class PlayerListSerializer(serializers.ModelSerializer):
     majsoul_uids = serializers.SerializerMethodField()
 

@@ -125,13 +125,16 @@ export async function deleteHandRecord(gameId: string, recordId: string) {
   await api.delete(`/games/${gameId}/hand-records/${recordId}/`);
 }
 
-export async function getRecentYakumans(limit = 10): Promise<HandRecord[]> {
-  const { data } = await api.get('/games/yakumans/recent/', { params: { limit } });
+export async function getRecentYakumans(limit = 10, recordType?: string): Promise<HandRecord[]> {
+  const params: Record<string, string | number> = { limit };
+  if (recordType) params.record_type = recordType;
+  const { data } = await api.get('/games/yakumans/recent/', { params });
   return data;
 }
 
-export async function getAllYakumans(): Promise<HandRecord[]> {
-  const { data } = await api.get('/games/yakumans/');
+export async function getAllYakumans(recordType?: string): Promise<HandRecord[]> {
+  const params = recordType ? { record_type: recordType } : {};
+  const { data } = await api.get('/games/yakumans/', { params });
   return data;
 }
 
