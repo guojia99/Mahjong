@@ -493,6 +493,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
             </div>
           </div>
 
+          {recordType === 'yakuman' && (
           <div className="form-group">
             <label className="form-label">胡牌方式</label>
             <div className="flex gap-2">
@@ -515,6 +516,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
               ))}
             </div>
           </div>
+          )}
 
           <div className="form-group">
             <div className="flex items-center gap-2 flex-wrap">
