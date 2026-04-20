@@ -99,9 +99,6 @@ class GameService:
 
     @staticmethod
     def submit_scores(game, scores_data):
-        if game.is_scored:
-            raise GameAlreadyScored('对局已录分，无法重复提交')
-
         from .models import GamePlayer
         player_count = len(scores_data)
         total = sum(s['score'] for s in scores_data)
