@@ -194,7 +194,7 @@ export default function PlayerProfilePage() {
                   </div>
                   <div>
                     <div className="text-3xl font-bold" style={{ color: stats.total_pt >= 0 ? '#2d9d78' : '#e74c3c' }}>
-                      {stats.total_pt > 0 ? `+${stats.total_pt}` : stats.total_pt}
+                      {(() => { const v = Math.round(stats.total_pt * 100) / 100; return v > 0 ? `+${v}` : v; })()}
                     </div>
                     <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>总PT</div>
                   </div>
@@ -307,7 +307,7 @@ export default function PlayerProfilePage() {
                           color: myPt > 0 ? '#2d9d78' : myPt < 0 ? '#e74c3c' : '#999',
                           background: myPt > 0 ? '#e8f8f0' : myPt < 0 ? '#fde8e8' : '#f0f0f0',
                         }}>
-                          {myPt > 0 ? `+${myPt}` : myPt}pt
+                          {(() => { const v = Math.round(myPt * 100) / 100; return v > 0 ? `+${v}` : v; })()}pt
                         </span>
                       </div>
                     </div>

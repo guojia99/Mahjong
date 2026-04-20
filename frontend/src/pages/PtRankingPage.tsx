@@ -62,6 +62,7 @@ export default function PtRankingPage() {
       ) : (
         <div className="space-y-2">
           {rankings.map((item, idx) => {
+            const pt = Math.round(item.total_pt * 100) / 100;
             const barWidth = ((item.total_pt - minPt) / range) * 100;
             const medalColors = ['#f0b830', '#a8d8ea', '#e8a0bf'];
             return (
@@ -98,8 +99,8 @@ export default function PtRankingPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xl font-bold" style={{ color: item.total_pt >= 0 ? '#2d9d78' : '#e74c3c' }}>
-                    {item.total_pt > 0 ? `+${item.total_pt}` : item.total_pt}
+                  <div className="text-xl font-bold" style={{ color: pt >= 0 ? '#2d9d78' : '#e74c3c' }}>
+                    {pt > 0 ? `+${pt}` : pt}
                   </div>
                   <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>PT</div>
                 </div>
