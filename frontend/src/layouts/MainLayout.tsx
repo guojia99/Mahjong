@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles } from 'lucide-react';
-import { logout as logoutApi, getCurrentUser } from '@/api/auth';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn } from 'lucide-react';
+import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
-const navItems = [
+const publicNavItems = [
   { path: '/', label: '首页', icon: Home },
-  { path: '/players', label: '雀士管理', icon: Users },
   { path: '/player-list', label: '雀士列表', icon: List },
   { path: '/rooms', label: '房间', icon: Gamepad2 },
   { path: '/games', label: '对局列表', icon: Gamepad2 },
@@ -13,15 +12,22 @@ const navItems = [
   { path: '/yakumans', label: '役满列表', icon: Sparkles },
 ];
 
+const adminNavItems = [
+  { path: '/players', label: '雀士管理', icon: Users },
+];
+
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const user = getCurrentUser();
+  const admin = isAdmin();
+
+  const navItems = admin ? [...publicNavItems, ...adminNavItems] : publicNavItems;
 
   const handleLogout = async () => {
     await logoutApi();
-    navigate('/login');
+    navigate('/');
   };
 
   return (
@@ -51,7 +57,7 @@ export default function MainLayout() {
           <nav className="flex-1 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = location.pathname === item.path || 
+              const isActive = location.pathname === item.path ||
                 (item.path !== '/' && location.pathname.startsWith(item.path));
               return (
                 <Link
@@ -72,19 +78,33 @@ export default function MainLayout() {
           </nav>
 
           <div className="border-t pt-4 mt-4" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center gap-3 px-4 py-2 mb-2">
-              <div className="avatar-placeholder text-xs">
-                {(user?.username || 'U').charAt(0).toUpperCase()}
-              </div>
-              <span className="text-sm font-medium truncate">{user?.username || 'User'}</span>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-red-50 text-gray-400 hover:text-red-500"
-            >
-              <LogOut size={18} />
-              退出登录
-            </button>
+            {isLoggedIn() ? (
+              <>
+                <div className="flex items-center gap-3 px-4 py-2 mb-2">
+                  <div className="avatar-placeholder text-xs">
+                    {(user?.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="text-sm font-medium truncate">{user?.username || 'User'}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-red-50 text-gray-400 hover:text-red-500"
+                >
+                  <LogOut size={18} />
+                  退出登录
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                onClick={() => setSidebarOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-gray-50"
+                style={{ color: 'var(--color-text-light)' }}
+              >
+                <LogIn size={18} />
+                管理员登录
+              </Link>
+            )}
           </div>
         </div>
       </aside>

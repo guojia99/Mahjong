@@ -11,11 +11,11 @@ import GameDetailPage from '@/pages/GameDetailPage';
 import GameListPage from '@/pages/GameListPage';
 import PtRankingPage from '@/pages/PtRankingPage';
 import YakumanListPage from '@/pages/YakumanListPage';
-import { isLoggedIn } from '@/api/auth';
+import { isAdmin } from '@/api/auth';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  if (!isLoggedIn()) {
-    return <Navigate to="/login" replace />;
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  if (!isAdmin()) {
+    return <Navigate to="/" replace />;
   }
   return <>{children}</>;
 }
@@ -25,16 +25,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }
-        >
+        <Route path="/" element={<MainLayout />}>
           <Route index element={<HomePage />} />
-          <Route path="players" element={<PlayersPage />} />
+          <Route path="players" element={<AdminRoute><PlayersPage /></AdminRoute>} />
           <Route path="player-list" element={<PlayerListPage />} />
           <Route path="player-list/:id" element={<PlayerProfilePage />} />
           <Route path="rooms" element={<RoomsPage />} />

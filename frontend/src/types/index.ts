@@ -2,6 +2,7 @@ export interface User {
     id: number;
     username: string;
     created_at: string;
+    is_admin: boolean;
 }
 
 export interface Player {
@@ -34,6 +35,8 @@ export interface Room {
     room_players?: RoomPlayer[];
     created_at: string;
     closed_at: string | null;
+    earliest_game_time: string | null;
+    latest_game_time: string | null;
 }
 
 export interface RoomPlayer {

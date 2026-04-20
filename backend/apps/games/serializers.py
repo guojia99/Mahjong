@@ -15,10 +15,15 @@ class RoomPlayerSerializer(serializers.ModelSerializer):
 class RoomListSerializer(serializers.ModelSerializer):
     player_count = serializers.SerializerMethodField()
     game_count = serializers.SerializerMethodField()
+    earliest_game_time = serializers.DateTimeField(allow_null=True, read_only=True)
+    latest_game_time = serializers.DateTimeField(allow_null=True, read_only=True)
 
     class Meta:
         model = Room
-        fields = ['id', 'name', 'location', 'status', 'player_count', 'game_count', 'created_at', 'closed_at']
+        fields = [
+            'id', 'name', 'location', 'status', 'player_count', 'game_count',
+            'created_at', 'closed_at', 'earliest_game_time', 'latest_game_time',
+        ]
 
     def get_player_count(self, obj):
         return obj.room_players.count()

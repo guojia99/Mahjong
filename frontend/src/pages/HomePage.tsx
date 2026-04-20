@@ -1,27 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Gamepad2, Users, TrendingUp, Sparkles } from 'lucide-react';
 import { getRooms } from '@/api/games';
 import { getRecentYakumans } from '@/api/games';
 import { getPlayers } from '@/api/players';
-import { isLoggedIn } from '@/api/auth';
 import type { Room, HandRecord } from '@/types';
 import YakumanCard from '@/components/YakumanCard';
 
 export default function HomePage() {
-  const navigate = useNavigate();
   const [openRooms, setOpenRooms] = useState<Room[]>([]);
   const [playerCount, setPlayerCount] = useState(0);
   const [totalGames, setTotalGames] = useState(0);
   const [recentYakumans, setRecentYakumans] = useState<HandRecord[]>([]);
 
   useEffect(() => {
-    if (!isLoggedIn()) {
-      navigate('/login');
-      return;
-    }
     loadData();
-  }, [navigate]);
+  }, []);
 
   const loadData = async () => {
     try {

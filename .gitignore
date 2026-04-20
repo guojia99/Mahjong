@@ -214,3 +214,6 @@ frontend/dist/
 backend/.venv/
 backend/media/
 backend/*.pyc
+
+# Proxy
+node_modules/

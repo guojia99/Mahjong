@@ -1,6 +1,11 @@
+import json
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+db_config_path = BASE_DIR / 'db_config.json'
+with open(db_config_path) as f:
+    db_config = json.load(f)
 
 SECRET_KEY = 'django-insecure-mahjong-dev-key-change-in-production-x9$k2m!@#'
 
@@ -57,7 +62,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / db_config['database']['sqlite_path'],
     }
 }
 

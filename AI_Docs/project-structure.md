@@ -11,6 +11,7 @@ Mahjong/
 │
 ├── AI_Docs/                            # 项目文档与开发规范
 │   ├── init.md                         # 第一期需求文档
+│   ├── v1.2.0.md                       # v1.2.0 版本需求
 │   ├── architecture.md                 # 架构设计文档 (DDD分层、数据模型、API、页面路由)
 │   ├── getting-started.md              # 启动指南
 │   ├── project-structure.md            # 本文件 - 项目目录结构说明
@@ -79,6 +80,7 @@ Mahjong/
 ├── backend/                            # ====== Django 后端 (DDD架构) ======
 │   ├── manage.py                       # Django 管理入口
 │   ├── requirements.txt                # Python 依赖 (django, djangorestframework, django-cors-headers, Pillow)
+│   ├── db_config.json                  # 数据库配置文件 (管理SQLite路径)
 │   ├── db.sqlite3                      # SQLite 数据库
 │   │
 │   ├── config/                         # Django 项目配置
@@ -96,10 +98,10 @@ Mahjong/
 │   │   │   ├── __init__.py
 │   │   │   ├── apps.py                 # UsersConfig (name='apps.users')
 │   │   │   ├── models.py               # User(AbstractUser) 领域模型
-│   │   │   ├── services.py             # AuthService (login/register/logout)
-│   │   │   ├── serializers.py          # Login/Register/User 序列化器
-│   │   │   ├── views.py                # LoginView, RegisterView, LogoutView, MeView
-│   │   │   ├── urls.py                 # /auth/login, /auth/register, /auth/logout, /auth/me
+│   │   │   ├── services.py             # AuthService (login/logout)
+│   │   │   ├── serializers.py          # Login/User 序列化器
+│   │   │   ├── views.py                # LoginView, LogoutView, MeView
+│   │   │   ├── urls.py                 # /auth/login, /auth/logout, /auth/me
 │   │   │   ├── admin.py                # UserAdmin
 │   │   │   ├── tests.py
 │   │   │   └── migrations/
@@ -139,7 +141,8 @@ Mahjong/
 │   │
 │   ├── common/                         # 公共工具层
 │   │   ├── __init__.py
-│   │   └── exceptions.py              # BusinessException, ScoreValidationError, PlayerAlreadyInGame, GameAlreadyScored
+│   │   ├── exceptions.py              # BusinessException, ScoreValidationError, PlayerAlreadyInGame, GameAlreadyScored
+│   │   └── permissions.py             # IsAdminUserOrReadOnly (GET公开, 写操作需管理员)
 │   │
 │   ├── services/                       # 基础设施服务层
 │   │   └── __init__.py                 # (预留 majsoul.py 雀魂WebSocket+Protobuf对接)
