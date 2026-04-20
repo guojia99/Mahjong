@@ -25,7 +25,7 @@ export default function YakumanCard({ record, showPlayer = true, showLink = fals
         <span className="text-sm" style={{ color: '#e65100' }}>
           {(record.yakuman_names || []).join(' + ')}
         </span>
-        {record.win_type && (
+        {record.record_type === 'yakuman' && record.win_type && (
           <span className="badge" style={{ background: '#e8f5e9', color: '#2e7d32', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>
             {WIN_TYPE_LABELS[record.win_type] || record.win_type}
           </span>
