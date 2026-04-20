@@ -360,7 +360,8 @@ class YakumanListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
-        records = HandRecordService.get_all_yakumans()
+        record_type = request.query_params.get('record_type')
+        records = HandRecordService.get_all_yakumans(record_type=record_type)
         serializer = HandRecordListSerializer(records, many=True)
         return Response(serializer.data)
 
@@ -370,7 +371,8 @@ class RecentYakumanView(APIView):
 
     def get(self, request):
         limit = int(request.query_params.get('limit', 10))
-        records = HandRecordService.get_recent_yakumans(limit)
+        record_type = request.query_params.get('record_type')
+        records = HandRecordService.get_recent_yakumans(limit, record_type=record_type)
         serializer = HandRecordListSerializer(records, many=True)
         return Response(serializer.data)
 
@@ -380,6 +382,7 @@ class PlayerYakumanListView(APIView):
 
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)
-        records = HandRecordService.get_player_yakumans(player)
+        record_type = request.query_params.get('record_type')
+        records = HandRecordService.get_player_yakumans(player, record_type=record_type)
         serializer = HandRecordListSerializer(records, many=True)
         return Response(serializer.data)

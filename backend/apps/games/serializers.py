@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Room, RoomPlayer, Game, GamePlayer, HandRecord
-from apps.players.serializers import PlayerListSerializer
+from apps.players.serializers import PlayerListSerializer, PlayerBriefSerializer
 
 
 class RoomPlayerSerializer(serializers.ModelSerializer):
@@ -67,6 +67,14 @@ class GamePlayerScoreSerializer(serializers.Serializer):
     seat_number = serializers.IntegerField(required=False)
 
 
+class HandRecordBriefSerializer(serializers.ModelSerializer):
+    player = PlayerBriefSerializer(read_only=True)
+
+    class Meta:
+        model = HandRecord
+        fields = ['id', 'player', 'record_type', 'yakuman_names']
+
+
 class GameListSerializer(serializers.ModelSerializer):
     players = serializers.SerializerMethodField()
     is_scored = serializers.BooleanField(read_only=True)
@@ -83,7 +91,7 @@ class GameListSerializer(serializers.ModelSerializer):
         gps = obj.game_players.select_related('player').all()
         return [
             {
-                'player': PlayerListSerializer(gp.player).data,
+                'player': PlayerBriefSerializer(gp.player).data,
                 'seat_number': gp.seat_number,
                 'score': gp.score,
                 'is_dealer_start': gp.is_dealer_start,
@@ -93,7 +101,7 @@ class GameListSerializer(serializers.ModelSerializer):
 
     def get_hand_records(self, obj):
         records = obj.hand_records.select_related('player').all()
-        return HandRecordListSerializer(records, many=True).data
+        return HandRecordBriefSerializer(records, many=True).data
 
 
 class GameDetailSerializer(GameListSerializer):

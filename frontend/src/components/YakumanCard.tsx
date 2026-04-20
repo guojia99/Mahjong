@@ -6,8 +6,15 @@ export default function YakumanCard({ record, showPlayer = true, showLink = fals
   showPlayer?: boolean;
   showLink?: boolean;
 }) {
+  const bgColors: Record<string, string> = {
+    yakuman: '#fffbeb',
+    yakuman_confirmed: '#fff3e0',
+    yakuman_chance: '#f5f5f5',
+  };
+  const bgColor = bgColors[record.record_type] || '#fffbf0';
+
   return (
-    <div className="p-3 rounded-xl" style={{ border: '1px solid var(--color-border)', background: '#fffbf0' }}>
+    <div className="p-3 rounded-xl" style={{ border: '1px solid var(--color-border)', background: bgColor }}>
       <div className="flex items-center gap-2 flex-wrap mb-2">
         <span className="badge" style={{ background: '#fff3e0', color: '#e65100', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>
           {HAND_RECORD_TYPE_LABELS[record.record_type] || record.record_type}

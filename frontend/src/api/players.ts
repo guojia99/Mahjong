@@ -62,7 +62,8 @@ export async function getPlayerGames(playerId: string): Promise<Game[]> {
   return data;
 }
 
-export async function getPlayerYakumans(playerId: string): Promise<HandRecord[]> {
-  const { data } = await api.get(`/players/${playerId}/yakumans/`);
+export async function getPlayerYakumans(playerId: string, recordType?: string): Promise<HandRecord[]> {
+  const params = recordType ? { record_type: recordType } : {};
+  const { data } = await api.get(`/players/${playerId}/yakumans/`, { params });
   return data;
 }

@@ -184,14 +184,16 @@ def calculate_pt(game):
     ranked = sorted(gps, key=lambda x: x.score, reverse=True)
     result = {}
 
-    if game.player_count == 4:
-        pt_map = [30, 10, -10, -30]
-    else:
-        pt_map = [30, 0, -30]
+    base_score = 250
+    uma_map = [30, 10, -10, -30]
+    if game.player_count == 3:
+        base_score = 350
+        uma_map = [30, 0, -30]
 
     for i, gp in enumerate(ranked):
-        if i < len(pt_map):
-            result[str(gp.player_id)] = pt_map[i]
+        if i < len(uma_map):
+            score_pt = (gp.score - base_score) / 10
+            result[str(gp.player_id)] = round(score_pt + uma_map[i], 2)
 
     return result
 
@@ -218,22 +220,25 @@ class HandRecordService:
         return game.hand_records.select_related('player').all()
 
     @staticmethod
-    def get_recent_yakumans(limit=10):
+    def get_recent_yakumans(limit=10, record_type=None):
         from .models import HandRecord
-        return HandRecord.objects.filter(
-            record_type='yakuman'
-        ).select_related('player', 'game').order_by('-created_at')[:limit]
+        qs = HandRecord.objects.all()
+        if record_type:
+            qs = qs.filter(record_type=record_type)
+        return qs.select_related('player', 'game').order_by('-created_at')[:limit]
 
     @staticmethod
-    def get_all_yakumans():
+    def get_all_yakumans(record_type=None):
         from .models import HandRecord
-        return HandRecord.objects.filter(
-            record_type='yakuman'
-        ).select_related('player', 'game').order_by('-created_at')
+        qs = HandRecord.objects.all()
+        if record_type:
+            qs = qs.filter(record_type=record_type)
+        return qs.select_related('player', 'game').order_by('-created_at')
 
     @staticmethod
-    def get_player_yakumans(player):
+    def get_player_yakumans(player, record_type=None):
         from .models import HandRecord
-        return HandRecord.objects.filter(
-            player=player, record_type='yakuman'
-        ).select_related('game').order_by('-created_at')
+        qs = HandRecord.objects.filter(player=player)
+        if record_type:
+            qs = qs.filter(record_type=record_type)
+        return qs.select_related('game').order_by('-created_at')
