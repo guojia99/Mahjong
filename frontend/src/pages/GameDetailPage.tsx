@@ -229,28 +229,30 @@ export default function GameDetailPage() {
             <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>{game.start_time}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {admin && !game.is_scored && (
-              <>
-                <button className="btn btn-sm btn-accent" onClick={handleShuffleSeats} disabled={loading}>
-                  <Shuffle size={14} /> 随机桩位
-                </button>
-                <button className="btn btn-sm btn-outline" onClick={() => setShowChangePlayers(true)}>
-                  <RefreshCw size={14} /> 更换选手
-                </button>
-                <button className="btn btn-sm btn-primary" onClick={() => setShowScoreInput(true)}>
-                  <Save size={14} /> 录入分数
-                </button>
-              </>
-            )}
             {admin && (
-              <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
-                <Copy size={14} /> 再开一局
-              </button>
-            )}
-            {admin && game.is_scored && (
-              <button className="btn btn-sm btn-outline" onClick={() => setShowHandRecordModal(true)} style={{ borderColor: '#f0b830', color: '#e65100' }}>
-                <Sparkles size={14} /> 役满牌谱
-              </button>
+              <>
+                {!game.is_scored && (
+                  <>
+                    <button className="btn btn-sm btn-accent" onClick={handleShuffleSeats} disabled={loading}>
+                      <Shuffle size={14} /> 随机桩位
+                    </button>
+                    <button className="btn btn-sm btn-outline" onClick={() => setShowChangePlayers(true)}>
+                      <RefreshCw size={14} /> 更换选手
+                    </button>
+                  </>
+                )}
+                <button className="btn btn-sm btn-primary" onClick={() => setShowScoreInput(true)}>
+                  <Save size={14} /> {game.is_scored ? '修改分数' : '录入分数'}
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
+                  <Copy size={14} /> 再开一局
+                </button>
+                {game.is_scored && (
+                  <button className="btn btn-sm btn-outline" onClick={() => setShowHandRecordModal(true)} style={{ borderColor: '#f0b830', color: '#e65100' }}>
+                    <Sparkles size={14} /> 役满牌谱
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
