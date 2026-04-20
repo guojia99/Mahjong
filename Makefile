@@ -1,4 +1,4 @@
-.PHONY: dev stop restart check init migrate
+.PHONY: dev stop restart check init migrate env _check-python _check-npm
 
 PIDDIR := .make-pids
 ADMIN_USER ?= admin
@@ -13,6 +13,55 @@ init: migrate
 ## 数据库迁移
 migrate:
 	@cd backend && .venv/bin/python manage.py migrate
+
+## 检查并初始化开发环境 (Python + npm)
+env:
+	@echo "\033[36mChecking development environment...\033[0m"
+	@$(MAKE) --no-print-directory _check-python
+	@$(MAKE) --no-print-directory _check-npm
+	@echo "\033[32mEnvironment ready ✓\033[0m"
+
+_check-python:
+	@if ! command -v python3 > /dev/null 2>&1; then \
+		echo "\033[31m  ✗ python3 not found.\033[0m Please install Python 3.12+"; \
+		exit 1; \
+	fi
+	@echo "\033[32m  ✓ python3\033[0m $$(python3 --version 2>&1)"
+	@if [ ! -d backend/.venv ]; then \
+		echo "  Creating Python venv..."; \
+		python3 -m venv backend/.venv; \
+	fi
+	@if [ ! -f backend/.venv/bin/pip ]; then \
+		echo "  Bootstrap pip..."; \
+		python3 -m venv backend/.venv --clear; \
+		backend/.venv/bin/python -m ensurepip --upgrade 2>/dev/null; \
+	fi
+	@backend/.venv/bin/pip install -q -r backend/requirements.txt 2>&1 | grep -v "already satisfied" || true
+	@echo "\033[32m  ✓ Python venv + dependencies\033[0m"
+
+_check-npm:
+	@if ! command -v node > /dev/null 2>&1; then \
+		echo "\033[31m  ✗ node not found.\033[0m Please install Node.js 18+"; \
+		exit 1; \
+	fi
+	@if ! command -v npm > /dev/null 2>&1; then \
+		echo "\033[31m  ✗ npm not found.\033[0m Please install Node.js 18+"; \
+		exit 1; \
+	fi
+	@echo "\033[32m  ✓ node\033[0m $$(node --version)"
+	@echo "\033[32m  ✓ npm\033[0m $$(npm --version)"
+	@if [ ! -d frontend/node_modules ]; then \
+		echo "  Installing frontend dependencies..."; \
+		cd frontend && npm install; \
+	else \
+		cd frontend && npm install --prefer-offline; \
+	fi
+	@echo "\033[32m  ✓ Frontend dependencies\033[0m"
+	@if [ ! -d node_modules ]; then \
+		echo "  Installing proxy dependencies..."; \
+		npm install --no-save; \
+	fi
+	@echo "\033[32m  ✓ Proxy dependencies\033[0m"
 
 ## 一键启动前后端 + 反向代理
 dev:
