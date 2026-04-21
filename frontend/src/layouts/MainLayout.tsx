@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap } from 'lucide-react';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, BookOpen } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
 const publicNavItems = [
@@ -12,6 +12,7 @@ const publicNavItems = [
   { path: '/yakumans', label: '役满列表', icon: Sparkles },
   { path: '/calculator', label: '点数计算', icon: Calculator },
   { path: '/practice', label: '点数练习', icon: GraduationCap },
+  // { path: '/yaku-practice', label: '役种练习', icon: BookOpen },
 ];
 
 const adminNavItems = [
