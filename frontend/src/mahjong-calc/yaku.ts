@@ -313,13 +313,13 @@ export class Chiihou implements Yaku {
   getName() { return '地和'; }
 }
 
-const ChanKan = flagYaku(1 << 13, '抢杠');
-const RinshanKaihou = flagYaku(1 << 12, '岭上开花');
-const HaiteiRaoyue = flagYaku(1 << 8, '海底捞月');
-const HouteiRaoyui = flagYaku(1 << 9, '河底摸鱼');
-const Riichi = flagYaku(1 << 14, '立直', true);
-const DoubleRiichi = flagYaku(1 << 15, '双立直', true);
-const Ippatsu = flagYaku(1 << 16, '一发', true);
+export const ChanKan = flagYaku(1 << 13, '抢杠');
+export const RinshanKaihou = flagYaku(1 << 12, '岭上开花');
+export const HaiteiRaoyue = flagYaku(1 << 8, '海底捞月');
+export const HouteiRaoyui = flagYaku(1 << 9, '河底摸鱼');
+export const Riichi = flagYaku(1 << 14, '立直', true);
+export const DoubleRiichi = flagYaku(1 << 15, '双立直', true);
+export const Ippatsu = flagYaku(1 << 16, '一发', true);
 
 export const YAKUMAN_LIST: Yaku[] = [
   new Daisangen(), new Suuankou(), new SuuankouTanki(), new Shousuushi(),

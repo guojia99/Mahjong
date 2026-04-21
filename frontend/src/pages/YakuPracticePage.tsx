@@ -12,7 +12,9 @@ import {
   IPPATSU,
   RIICHI,
   RINNSHANN_KAIHOU,
+  RON,
   TENHOU,
+  TSUMO,
   type Pai,
 } from '@/mahjong-calc/types';
 import { CheckCircle, XCircle, BookOpen } from 'lucide-react';
@@ -58,18 +60,28 @@ function cvtPai(p: Pai): string {
 }
 
 function getFlagTags(flag: number): string[] {
-  const checks: [number, string][] = [
+  const rt: string[] = [];
+  const fieldSeat: [number, string][] = [
     [1 << 0, '东一局'], [1 << 1, '南一局'], [1 << 2, '西一局'], [1 << 3, '北一局'],
     [1 << 4, '东家'], [1 << 5, '南家'], [1 << 6, '西家'], [1 << 7, '北家'],
-    [1 << 17, '自摸'], [1 << 18, '荣和'],
-    [1 << 14, '立直'], [1 << 15, '双立直'], [1 << 16, '一发'],
-    [1 << 8, '海底捞月'], [1 << 9, '河底摸鱼'], [1 << 12, '岭上开花'], [1 << 13, '抢杠'],
-    [1 << 10, '天和'], [1 << 11, '地和'],
   ];
-  const flags = [RIICHI, DOUBLE_RIICHI, IPPATSU, HAITEI_RAOYUE, HOUTEI_RAOYUI, RINNSHANN_KAIHOU, CHANKAN, TENHOU, CHIIHOU];
-  const rt: string[] = [];
-  for (const [f, name] of checks) {
-    if ((flag & f) === f && flags.some(y => (flag & y) === y)) rt.push(name);
+  for (const [f, name] of fieldSeat) {
+    if ((flag & f) === f) rt.push(name);
+  }
+  if ((flag & TSUMO) === TSUMO) rt.push('自摸');
+  else if ((flag & RON) === RON) rt.push('荣和');
+  if ((flag & DOUBLE_RIICHI) === DOUBLE_RIICHI) rt.push('双立直');
+  else if ((flag & RIICHI) === RIICHI) rt.push('立直');
+  else rt.push('未立直');
+  if ((flag & IPPATSU) === IPPATSU && ((flag & RIICHI) === RIICHI || (flag & DOUBLE_RIICHI) === DOUBLE_RIICHI)) {
+    rt.push('一发');
+  }
+  const extra: [number, string][] = [
+    [HAITEI_RAOYUE, '海底捞月'], [HOUTEI_RAOYUI, '河底摸鱼'], [RINNSHANN_KAIHOU, '岭上开花'], [CHANKAN, '抢杠'],
+    [TENHOU, '天和'], [CHIIHOU, '地和'],
+  ];
+  for (const [f, name] of extra) {
+    if ((flag & f) === f) rt.push(name);
   }
   return rt;
 }
@@ -272,7 +284,7 @@ export default function YakuPracticePage() {
               {tags.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.375rem' }}>
                   {tags.map((tag, i) => (
-                    <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '0.15rem 0.5rem', borderRadius: '0.375rem', fontSize: '0.65rem', fontWeight: 600 }}>{tag}</span>
+                    <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '0.4rem 0.85rem', borderRadius: '0.625rem', fontSize: '0.9375rem', fontWeight: 600 }}>{tag}</span>
                   ))}
                 </div>
               )}

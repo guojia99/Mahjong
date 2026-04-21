@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import PointsQuickReference from '@/components/PointsQuickReference';
 import { ProblemGenerator } from '@/mahjong-calc/problem';
 import type { Problem } from '@/mahjong-calc/problem';
 import { Rule, MAN_TYPE_NAMES } from '@/mahjong-calc/definition';
@@ -55,12 +56,18 @@ function formatTime(ms: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}.${centis.toString().padStart(2, '0')}`;
 }
 
+function getRiichiLabel(flag: number): string {
+  if (test(flag, DOUBLE_RIICHI)) return '双立直';
+  if (test(flag, RIICHI)) return '立直';
+  return '未立直';
+}
+
 function getFlagInfo(flag: number): string {
   let info = '';
   const checks: [number, string][] = [
     [FIELD_EAST, '东一局'], [FIELD_SOUTH, '南一局'], [FIELD_WEST, '西一局'], [FIELD_NORTH, '北一局'],
     [SEAT_EAST, '东家'], [SEAT_SOUTH, '南家'], [SEAT_WEST, '西家'], [SEAT_NORTH, '北家'],
-    [TSUMO, '自摸'], [RON, '荣和'], [RIICHI, '立直'], [DOUBLE_RIICHI, '双立直'],
+    [TSUMO, '自摸'], [RON, '荣和'],
     [IPPATSU, '一发'], [HAITEI_RAOYUE, '海底捞月'], [HOUTEI_RAOYUI, '河底摸鱼'],
     [RINNSHANN_KAIHOU, '岭上开花'], [CHANKAN, '抢杠'], [TENHOU, '天和'], [CHIIHOU, '地和'],
   ];
@@ -85,14 +92,19 @@ export default function PracticePage() {
   const inputRef2 = useRef<HTMLInputElement>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<number>(0);
+  /** 点击确认时的用时（ms），供记录与展示一致 */
+  const solveElapsedRef = useRef<number>(0);
 
   const newProblem = useCallback(() => {
+    clearInterval(timerRef.current);
+    timerRef.current = 0;
     const g = new ProblemGenerator(new Rule());
     const p = g.generate();
     setProblem(p);
     setPhase('input');
     setAns('');
     setAnsKo('');
+    setTimer(0);
     startTimeRef.current = Date.now();
     timerRef.current = window.setInterval(() => setTimer(Date.now() - startTimeRef.current), 50);
   }, []);
@@ -107,7 +119,11 @@ export default function PracticePage() {
   }, [phase, problem]);
 
   const handleCheck = () => {
+    const elapsed = Date.now() - startTimeRef.current;
     clearInterval(timerRef.current);
+    timerRef.current = 0;
+    solveElapsedRef.current = elapsed;
+    setTimer(elapsed);
     setPhase('show');
   };
 
@@ -120,7 +136,7 @@ export default function PracticePage() {
       if (r.pointType === 1 || r.pointType === 3) correct = x1 === r.point1;
       else if (r.pointType === 0) correct = x1 === r.point1;
       else correct = x1 === r.point1 && x2 === r.point2;
-      const record: PracticeRecord = { correct, timeMs: timer, timestamp: Date.now(), han: r.han, fu: r.fu, isYakuman: r.isYakuman, point1: r.point1, point2: r.point2 };
+      const record: PracticeRecord = { correct, timeMs: solveElapsedRef.current, timestamp: Date.now(), han: r.han, fu: r.fu, isYakuman: r.isYakuman, point1: r.point1, point2: r.point2 };
       const nr = [record, ...records].slice(0, 200);
       setRecords(nr);
       saveRecords(nr);
@@ -143,6 +159,7 @@ export default function PracticePage() {
   const doraTiles = [...problem.dora.map(cvtPai), ...Array(Math.max(0, 5 - problem.dora.length)).fill('B')];
   const uraTiles = [...problem.ura.map(cvtPai), ...Array(Math.max(0, 5 - problem.ura.length)).fill('B')];
   const flagInfo = getFlagInfo(problem.flag);
+  const riichiLabel = getRiichiLabel(problem.flag);
 
   const r = problem.ans;
   const isKotsumo = r.pointType === 2;
@@ -169,8 +186,9 @@ export default function PracticePage() {
   const avgTime = totalQuestions > 0 ? records.reduce((s, r) => s + r.timeMs, 0) / totalQuestions : 0;
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="flex flex-col items-center gap-5 w-full px-2">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <PointsQuickReference />
         <div style={{ background: '#fff8e1', padding: '0.25rem 0.75rem', borderRadius: '0.75rem', fontSize: '1.25rem', fontWeight: 700, fontFamily: 'monospace', color: '#e65100' }}>
           {formatTime(timer)}
         </div>
@@ -212,8 +230,16 @@ export default function PracticePage() {
 
       <div style={{ width: '100%', maxWidth: '40rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
-          {flagInfo.trim().split(/\s+/).map((tag, i) => (
-            <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '0.2rem 0.6rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 600 }}>{tag}</span>
+          <span style={{
+            background: riichiLabel === '未立直' ? '#eceff1' : '#fff3e0',
+            color: riichiLabel === '未立直' ? '#546e7a' : '#e65100',
+            padding: '0.4rem 0.85rem',
+            borderRadius: '0.625rem',
+            fontSize: '0.9375rem',
+            fontWeight: 600,
+          }}>{riichiLabel}</span>
+          {flagInfo.trim().split(/\s+/).filter(Boolean).map((tag, i) => (
+            <span key={i} style={{ background: '#e8f5e9', color: '#2e7d32', padding: '0.4rem 0.85rem', borderRadius: '0.625rem', fontSize: '0.9375rem', fontWeight: 600 }}>{tag}</span>
           ))}
         </div>
       </div>

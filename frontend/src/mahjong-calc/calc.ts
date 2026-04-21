@@ -1,6 +1,10 @@
 import { Result, Rule } from './definition';
-import { Block, BlockType, HandSet, MachiType, ManType, Pai, Pair, PointType, State, test, CHIIHOU, TENHOU, TSUMO, RON, MENZEN, SEAT_EAST } from './types';
-import { Pinfu, YAKU_LIST, YAKUMAN_LIST } from './yaku';
+import { Block, BlockType, HandSet, MachiType, ManType, Pai, Pair, PointType, State, test, CHIIHOU, TENHOU, TSUMO, RON, MENZEN, SEAT_EAST, pType2Int } from './types';
+import {
+  Pinfu, YAKU_LIST, YAKUMAN_LIST, MenzenTsumo, Tenhou, Chiihou,
+  Riichi, DoubleRiichi, Ippatsu, ChanKan, RinshanKaihou, HaiteiRaoyue, HouteiRaoyui,
+} from './yaku';
+import type { Yaku } from './yaku';
 
 export class Calculator {
   rule = new Rule();
@@ -62,6 +66,14 @@ export class Calculator {
     res.fu = fu;
   }
 
+  _takeBetterResult(nr: Result) {
+    if (!this.result || nr.point1 > this.result.point1 ||
+      (nr.point1 === this.result.point1 && nr.point2 > this.result.point2) ||
+      (nr.point1 === this.result.point1 && nr.point2 === this.result.point2 && nr.han > this.result.han)) {
+      this.result = nr;
+    }
+  }
+
   _calculatePoint(hand: HandSet, res: Result) {
     res.pointType = 0 | (+(!test(hand.flag, SEAT_EAST))) << 1 | +test(hand.flag, RON);
     let basePoint = 0;
@@ -89,6 +101,10 @@ export class Calculator {
     }
     if (res.point1 % 100 !== 0) res.point1 = Math.floor((res.point1 + 100) / 100) * 100;
     if (res.point2 % 100 !== 0) res.point2 = Math.floor((res.point2 + 100) / 100) * 100;
+    if (!res.isYakuman && res.han === 0 && test(hand.flag, RON)) {
+      res.point1 = -8000;
+      res.point2 = 0;
+    }
   }
 
   _calculateNormal(dep: number) {
@@ -97,37 +113,38 @@ export class Calculator {
       this._calculateFu(this.nowHandSet!, nr);
       this._calculateYaku(this.nowHandSet!, nr);
       this._calculatePoint(this.nowHandSet!, nr);
-      if (!this.result || nr.point1 > this.result.point1 ||
-        (nr.point1 === this.result.point1 && nr.point2 > this.result.point2) ||
-        (nr.point1 === this.result.point1 && nr.point2 === this.result.point2 && nr.han > this.result.han)) {
-        this.result = nr;
-      }
+      this._takeBetterResult(nr);
       return;
     }
     if (dep === 0) {
       for (let i = 0; i < this.nowP.length - 1; i++) {
         if (this.nowP[i].equalTo(this.nowP[i + 1])) {
           const a = this.nowP[i], b = this.nowP[i + 1];
+          const savedMachi = this.nowHandSet!.type;
           if (a.isAgari || b.isAgari) this.nowHandSet!.type = MachiType.DAN_QI;
+          else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
           this.nowHandSet!.pair = new Pair(a.type, a.num);
           this.nowP.splice(i, 2);
           this._calculateNormal(dep + 1);
           this.nowP.splice(i, 0, a, b);
+          this.nowHandSet!.type = savedMachi;
         }
       }
     } else {
       const a = this.nowP[0], b = this.nowP[1], c = this.nowP[2];
       if (a.equalTo(b) && b.equalTo(c)) {
+        const savedMachi = this.nowHandSet!.type;
         let open = false;
         if (a.isAgari || b.isAgari || c.isAgari) {
           this.nowHandSet!.type = MachiType.SHUANG_PENG;
           if (test(this.nowHandSet!.flag, RON)) open = true;
-        }
+        } else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
         this.nowHandSet!.blocks.push(new Block(BlockType.TRI, a.type, a.num, open));
         this.nowP.splice(0, 3);
         this._calculateNormal(dep + 1);
         this.nowP.splice(0, 0, a, b, c);
         this.nowHandSet!.blocks.pop();
+        this.nowHandSet!.type = savedMachi;
       }
       if (this.nowP[0].num > 7 || this.nowP[0].type === 'z') return;
       const a2 = a.next(), a3 = a2.next();
@@ -135,14 +152,17 @@ export class Calculator {
         for (let j = i + 1; j < this.nowP.length; j++) {
           if (this.nowP[i].equalTo(a2) && this.nowP[j].equalTo(a3)) {
             const b2 = this.nowP[i], b3 = this.nowP[j];
+            const savedMachi = this.nowHandSet!.type;
             this.nowHandSet!.blocks.push(new Block(BlockType.SEQ, a.type, a.num, false));
             if (a.isAgari) this.nowHandSet!.type = a.num === 7 ? MachiType.BIAN_ZHANG : MachiType.LIANG_MIAN;
             else if (b3.isAgari) this.nowHandSet!.type = b3.num === 3 ? MachiType.BIAN_ZHANG : MachiType.LIANG_MIAN;
             else if (b2.isAgari) this.nowHandSet!.type = MachiType.KAN_ZHANG;
+            else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
             this.nowP.splice(j, 1); this.nowP.splice(i, 1); this.nowP.splice(0, 1);
             this._calculateNormal(dep + 1);
             this.nowP.splice(0, 0, a); this.nowP.splice(i, 0, b2); this.nowP.splice(j, 0, b3);
             this.nowHandSet!.blocks.pop();
+            this.nowHandSet!.type = savedMachi;
           }
         }
       }
@@ -176,8 +196,35 @@ export class Calculator {
       if (!this.nowP[i * 2].equalTo(this.nowP[i * 2 + 1])) return;
       if (i > 0 && this.nowP[i * 2].equalTo(this.nowP[i * 2 - 1])) return;
     }
+
+    const h = this.nowHandSet!;
+    /** 七对子形但为役满牌型时只按役满计，不计「七对子」与 25 符（与常见规则及 mahjong-vue 役满分支一致） */
+    const finishChiitoiYakuman = (baseHan: number, names: string[]) => {
+      let yk = baseHan;
+      const yn = [...names];
+      if (new Tenhou().test(h, this.rule) > 0) { yk++; yn.push('天和'); }
+      if (new Chiihou().test(h, this.rule) > 0) { yk++; yn.push('地和'); }
+      const res = new Result();
+      res.isYakuman = true;
+      res.han = yk;
+      res.yaku = yn;
+      this._calculatePoint(h, res);
+      this._takeBetterResult(res);
+    };
+    if (this.nowP.every(p => p.type === 'z')) {
+      finishChiitoiYakuman(1, ['字一色']);
+      return;
+    }
+    if (this.nowP.every(p => p.isRyu())) {
+      finishChiitoiYakuman(1, ['绿一色']);
+      return;
+    }
+
     let cnt = 2;
     const yakuName: string[] = ['七对子: 2翻'];
+    let yakuman = 0;
+    const yakumanName: string[] = [];
+
     let dora = 0, ura = 0;
     const akadora = this.nowHandSet!.redCnt;
     for (const p of this.nowP) {
@@ -188,12 +235,63 @@ export class Calculator {
     if (ura > 0) yakuName.push(`里宝牌: ${ura}翻`);
     if (akadora > 0) yakuName.push(`赤宝牌: ${akadora}翻`);
     cnt += dora + ura + akadora;
-    this._calculatePoint(this.nowHandSet!, new Result());
+
+    const calcFlagYaku = (yaku: Yaku, asYakuman: boolean) => {
+      const x = yaku.test(h, this.rule);
+      if (x <= 0) return;
+      if (!asYakuman) {
+        cnt += x;
+        yakuName.push(`${yaku.getName()}: ${x}翻`);
+      } else {
+        yakuman += x;
+        yakumanName.push(yaku.getName());
+      }
+    };
+    calcFlagYaku(new Riichi(), false);
+    calcFlagYaku(new DoubleRiichi(), false);
+    calcFlagYaku(new MenzenTsumo(), false);
+    calcFlagYaku(new Ippatsu(), false);
+    calcFlagYaku(new ChanKan(), false);
+    calcFlagYaku(new RinshanKaihou(), false);
+    calcFlagYaku(new HouteiRaoyui(), false);
+    calcFlagYaku(new HaiteiRaoyue(), false);
+    calcFlagYaku(new Tenhou(), true);
+    calcFlagYaku(new Chiihou(), true);
+
+    const allNonYao = () => { for (const p of this.nowP) if (p.isYao()) return false; return true; };
+    if (allNonYao()) {
+      cnt += 1;
+      yakuName.push('断幺九: 1翻');
+    }
+    const typeCnt = [0, 0, 0, 0];
+    for (const p of this.nowP) typeCnt[pType2Int(p.type)] = 1;
+    if (typeCnt[0] + typeCnt[1] + typeCnt[2] === 1 && typeCnt[3] === 1) {
+      cnt += 3;
+      yakuName.push('混一色: 3翻');
+    }
+    if (typeCnt[0] + typeCnt[1] + typeCnt[2] === 1 && typeCnt[3] === 0) {
+      cnt += 6;
+      yakuName.push('清一色: 6翻');
+    }
+    const allYao = () => { for (const p of this.nowP) if (!p.isYao()) return false; return true; };
+    if (allYao()) {
+      cnt += 2;
+      yakuName.push('混老头: 2翻');
+    }
+
     const res = new Result();
-    res.han = cnt; res.fu = 25; res.yaku = yakuName;
+    if (yakuman > 0) {
+      res.han = yakuman;
+      res.yaku = yakumanName;
+      res.isYakuman = true;
+    } else {
+      res.han = cnt;
+      res.fu = 25;
+      res.yaku = yakuName;
+    }
     this._calculatePoint(this.nowHandSet!, res);
-    res.fuMessages.push('七对子：25符');
-    this.result = res;
+    if (!res.isYakuman) res.fuMessages.push('七对子：25符');
+    this._takeBetterResult(res);
   }
 
   calculate(state: State, rule = new Rule()): Result {
@@ -204,8 +302,8 @@ export class Calculator {
     this.nowP.sort();
     for (const b of state.furu) this.nowHandSet.blocks.push(b);
     this._calculateKokushi();
-    this._calculateChiitui();
     this._calculateNormal(0);
+    this._calculateChiitui();
     return this.result!;
   }
 }
