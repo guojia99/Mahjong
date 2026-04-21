@@ -57,7 +57,11 @@ function cvtWind(x: string): PositionType {
 }
 
 function cvtPai(s: string): Pai {
-    if (s.startsWith('0')) return new Pai(s.slice(1) as Pai['type'], 5);
+    if (s.startsWith('0') && 'msp'.includes(s[1]!)) {
+        const p = new Pai(s.slice(1) as Pai['type'], 5);
+        p.redCnt = 1;
+        return p;
+    }
     return new Pai(s.slice(1) as Pai['type'], parseInt(s[0]));
 }
 
@@ -704,7 +708,7 @@ export default function CalculatorPage() {
         setYakus(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
     };
 
-    const isTrueAgari = result && result.han > 0 && result.yaku.some(n => !n.startsWith('宝牌') && !n.startsWith('里宝牌') && !n.startsWith('赤宝牌'));
+    const isTrueAgari = result && result.hanRealYaku > 0;
     const needFu = result && (result.manType === 0 || (result.manType === 1 && result.han !== 5));
     const manName = result ? MAN_TYPE_NAMES[result.manType] : '';
 

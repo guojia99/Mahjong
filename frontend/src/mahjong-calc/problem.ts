@@ -1,6 +1,6 @@
 import { Calculator } from './calc';
 import { Rule } from './definition';
-import { Pai, Block, BlockType, TSUMO, RON, RIICHI, HAITEI_RAOYUE, HOUTEI_RAOYUI, RINNSHANN_KAIHOU, DOUBLE_RIICHI, IPPATSU, State, randInt, shuffle, choose } from './types';
+import { Pai, Block, BlockType, TSUMO, RON, RIICHI, HAITEI_RAOYUE, HOUTEI_RAOYUI, RINNSHANN_KAIHOU, DOUBLE_RIICHI, IPPATSU, State, comparePai, randInt, shuffle, choose } from './types';
 
 export interface Problem {
   hand: Pai[];
@@ -68,7 +68,7 @@ export class ProblemGenerator {
       hand.push(...pair);
     }
 
-    hand.sort();
+    hand.sort(comparePai);
     const agariIdx = randInt(0, hand.length);
     const agariPai = hand.splice(agariIdx, 1)[0];
 

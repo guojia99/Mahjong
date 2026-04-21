@@ -1,8 +1,9 @@
 import { Result, Rule } from './definition';
-import { Block, BlockType, HandSet, MachiType, ManType, Pai, Pair, PointType, State, test, CHIIHOU, TENHOU, TSUMO, RON, MENZEN, SEAT_EAST, pType2Int } from './types';
+import { Block, BlockType, HandSet, MachiType, ManType, Pai, Pair, PointType, State, test, CHIIHOU, TENHOU, TSUMO, RON, MENZEN, SEAT_EAST, comparePai, pType2Int } from './types';
 import {
   Pinfu, YAKU_LIST, YAKUMAN_LIST, MenzenTsumo, Tenhou, Chiihou,
   Riichi, DoubleRiichi, Ippatsu, ChanKan, RinshanKaihou, HaiteiRaoyue, HouteiRaoyui,
+  Dora, Ura, AkaDora,
 } from './yaku';
 import type { Yaku } from './yaku';
 
@@ -22,18 +23,27 @@ export class Calculator {
   _calculateYaku(hand: HandSet, res: Result) {
     res.yaku.splice(0);
     let cnt = 0;
+    let hanRealYaku = 0;
     for (const yaku of this.yakumanYakus) {
       const p = yaku.test(hand, this.rule);
       cnt += p;
       if (p > 0) { res.yaku.push(yaku.getName()); res.isYakuman = true; }
     }
-    if (res.isYakuman) { res.han = cnt; return; }
+    if (res.isYakuman) {
+      res.han = cnt;
+      res.hanRealYaku = cnt;
+      return;
+    }
     for (const x of this.yakus) {
       const p = x.test(hand, this.rule);
       cnt += p;
       if (p > 0) res.yaku.push(`${x.getName()}: ${p}翻`);
+      if (p > 0 && !(x instanceof Dora) && !(x instanceof Ura) && !(x instanceof AkaDora)) {
+        hanRealYaku += p;
+      }
     }
     res.han = cnt;
+    res.hanRealYaku = hanRealYaku;
   }
 
   _calculateFu(hand: HandSet, res: Result) {
@@ -75,6 +85,12 @@ export class Calculator {
   }
 
   _calculatePoint(hand: HandSet, res: Result) {
+    if (!res.isYakuman && res.hanRealYaku === 0) {
+      res.point1 = 0;
+      res.point2 = 0;
+      res.manType = ManType.NOMANGAN;
+      return;
+    }
     res.pointType = 0 | (+(!test(hand.flag, SEAT_EAST))) << 1 | +test(hand.flag, RON);
     let basePoint = 0;
     if (res.isYakuman) {
@@ -101,10 +117,6 @@ export class Calculator {
     }
     if (res.point1 % 100 !== 0) res.point1 = Math.floor((res.point1 + 100) / 100) * 100;
     if (res.point2 % 100 !== 0) res.point2 = Math.floor((res.point2 + 100) / 100) * 100;
-    if (!res.isYakuman && res.han === 0 && test(hand.flag, RON)) {
-      res.point1 = -8000;
-      res.point2 = 0;
-    }
   }
 
   _calculateNormal(dep: number) {
@@ -121,8 +133,8 @@ export class Calculator {
         if (this.nowP[i].equalTo(this.nowP[i + 1])) {
           const a = this.nowP[i], b = this.nowP[i + 1];
           const savedMachi = this.nowHandSet!.type;
+          // 与 mahjong-vue 一致：仅当雀头含和了牌时为单骑；勿将「非雀头和了」标为边张，否则副露层会误计听牌形并压掉平和解
           if (a.isAgari || b.isAgari) this.nowHandSet!.type = MachiType.DAN_QI;
-          else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
           this.nowHandSet!.pair = new Pair(a.type, a.num);
           this.nowP.splice(i, 2);
           this._calculateNormal(dep + 1);
@@ -138,7 +150,7 @@ export class Calculator {
         if (a.isAgari || b.isAgari || c.isAgari) {
           this.nowHandSet!.type = MachiType.SHUANG_PENG;
           if (test(this.nowHandSet!.flag, RON)) open = true;
-        } else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
+        }
         this.nowHandSet!.blocks.push(new Block(BlockType.TRI, a.type, a.num, open));
         this.nowP.splice(0, 3);
         this._calculateNormal(dep + 1);
@@ -157,7 +169,6 @@ export class Calculator {
             if (a.isAgari) this.nowHandSet!.type = a.num === 7 ? MachiType.BIAN_ZHANG : MachiType.LIANG_MIAN;
             else if (b3.isAgari) this.nowHandSet!.type = b3.num === 3 ? MachiType.BIAN_ZHANG : MachiType.LIANG_MIAN;
             else if (b2.isAgari) this.nowHandSet!.type = MachiType.KAN_ZHANG;
-            else this.nowHandSet!.type = MachiType.BIAN_ZHANG;
             this.nowP.splice(j, 1); this.nowP.splice(i, 1); this.nowP.splice(0, 1);
             this._calculateNormal(dep + 1);
             this.nowP.splice(0, 0, a); this.nowP.splice(i, 0, b2); this.nowP.splice(j, 0, b3);
@@ -182,10 +193,12 @@ export class Calculator {
     let yc = 1;
     for (let i = 1; i <= 13; i++) { if (cnt[i] === 0) return; if (cnt[i] === 2 && isAgari[i]) yc++; }
     const res = new Result();
-    res.han = yc; res.isYakuman = true;
+    res.han = yc;
+    res.hanRealYaku = yc;
+    res.isYakuman = true;
     res.yaku.push(yc === 1 ? '国士无双' : '国士无双十三面');
-    if (test(this.nowHandSet!.flag, TENHOU)) { res.yaku.push('天和'); res.han++; }
-    if (test(this.nowHandSet!.flag, CHIIHOU)) { res.yaku.push('地和'); res.han++; }
+    if (test(this.nowHandSet!.flag, TENHOU)) { res.yaku.push('天和'); res.han++; res.hanRealYaku++; }
+    if (test(this.nowHandSet!.flag, CHIIHOU)) { res.yaku.push('地和'); res.han++; res.hanRealYaku++; }
     this._calculatePoint(this.nowHandSet!, res);
     this.result = res;
   }
@@ -207,6 +220,7 @@ export class Calculator {
       const res = new Result();
       res.isYakuman = true;
       res.han = yk;
+      res.hanRealYaku = yk;
       res.yaku = yn;
       this._calculatePoint(h, res);
       this._takeBetterResult(res);
@@ -282,10 +296,12 @@ export class Calculator {
     const res = new Result();
     if (yakuman > 0) {
       res.han = yakuman;
+      res.hanRealYaku = yakuman;
       res.yaku = yakumanName;
       res.isYakuman = true;
     } else {
       res.han = cnt;
+      res.hanRealYaku = cnt - dora - ura - akadora;
       res.fu = 25;
       res.yaku = yakuName;
     }
@@ -299,11 +315,11 @@ export class Calculator {
     this.nowHandSet = new HandSet([], new Pair('m', 1), state.dora, state.ura, MachiType.BIAN_ZHANG, state.flag, state.agariPai, state.redCnt);
     this.result = new Result();
     this.nowP = [...state.pais, state.agariPai];
-    this.nowP.sort();
+    this.nowP.sort(comparePai);
     for (const b of state.furu) this.nowHandSet.blocks.push(b);
     this._calculateKokushi();
-    this._calculateNormal(0);
     this._calculateChiitui();
+    this._calculateNormal(0);
     return this.result!;
   }
 }

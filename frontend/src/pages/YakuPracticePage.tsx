@@ -415,7 +415,11 @@ export default function YakuPracticePage() {
                     </div>
                   )}
                   <div style={{ marginTop: '0.375rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>
-                    {p.ans.isYakuman ? `${p.ans.han}倍役满` : `${p.ans.han}翻${p.ans.fu}符 ${MAN_TYPE_NAMES[p.ans.manType]}`}
+                    {p.ans.isYakuman
+                      ? `${p.ans.han}倍役满`
+                      : p.ans.hanRealYaku === 0
+                        ? '无役（宝牌・里宝・赤宝不计役），0 点'
+                        : `${p.ans.han}翻${p.ans.fu}符 ${MAN_TYPE_NAMES[p.ans.manType]}`}
                   </div>
                   <div style={{ marginTop: '0.375rem', fontSize: '1.25rem', fontWeight: 800 }}>
                     <span style={{ color: isCorrect ? '#2d9d78' : '#e74c3c' }}>

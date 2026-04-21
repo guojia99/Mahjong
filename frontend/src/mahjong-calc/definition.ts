@@ -10,6 +10,8 @@ export class Rule {
 
 export class Result {
   han = 0;
+  /** 不含宝牌・里宝牌・赤宝牌番；为 0 时视为无役，点数为 0 */
+  hanRealYaku = 0;
   fu = 0;
   fuMessages: string[] = [];
   point1 = 0;

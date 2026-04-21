@@ -89,6 +89,14 @@ export class Pai {
   }
 }
 
+/** 排序：花色 → 数字 → 赤五在后，与 [mahjong-vue](https://github.com/llx07/mahjong-vue) 稳定解分拆一致 */
+export function comparePai(a: Pai, b: Pai): number {
+  const tc = a.type.localeCompare(b.type);
+  if (tc !== 0) return tc;
+  if (a.num !== b.num) return a.num - b.num;
+  return a.redCnt - b.redCnt;
+}
+
 export class Block {
   bType: BlockType;
   pType: PaiType;
