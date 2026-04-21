@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import PointsQuickReference from '@/components/PointsQuickReference';
 import { ProblemGenerator } from '@/mahjong-calc/problem';
 import type { Problem } from '@/mahjong-calc/problem';
+import { formatKifuTextFromProblem, parseKifuText, problemFromKifuSnapshot } from '@/mahjong-calc/kifuText';
+import { Copy, ClipboardPaste } from 'lucide-react';
 import { Rule, MAN_TYPE_NAMES } from '@/mahjong-calc/definition';
 import { Pai, Block, BlockType, test, TSUMO, RON, FIELD_EAST, FIELD_SOUTH, FIELD_WEST, FIELD_NORTH, SEAT_EAST, SEAT_SOUTH, SEAT_WEST, SEAT_NORTH, RIICHI, DOUBLE_RIICHI, IPPATSU, HAITEI_RAOYUE, HOUTEI_RAOYUI, RINNSHANN_KAIHOU, CHANKAN, TENHOU, CHIIHOU } from '@/mahjong-calc/types';
 
@@ -94,6 +96,9 @@ export default function PracticePage() {
   const timerRef = useRef<number>(0);
   /** 点击确认时的用时（ms），供记录与展示一致 */
   const solveElapsedRef = useRef<number>(0);
+  const [kifuPasteOpen, setKifuPasteOpen] = useState(false);
+  const [kifuPasteText, setKifuPasteText] = useState('');
+  const [kifuErr, setKifuErr] = useState<string | null>(null);
 
   const newProblem = useCallback(() => {
     clearInterval(timerRef.current);
@@ -125,6 +130,27 @@ export default function PracticePage() {
     solveElapsedRef.current = elapsed;
     setTimer(elapsed);
     setPhase('show');
+  };
+
+  const applyKifuFromText = (raw: string) => {
+    setKifuErr(null);
+    try {
+      const snap = parseKifuText(raw);
+      const p = problemFromKifuSnapshot(snap);
+      clearInterval(timerRef.current);
+      timerRef.current = 0;
+      setProblem(p);
+      setPhase('input');
+      setAns('');
+      setAnsKo('');
+      setTimer(0);
+      startTimeRef.current = Date.now();
+      timerRef.current = window.setInterval(() => setTimer(Date.now() - startTimeRef.current), 50);
+      setKifuPasteOpen(false);
+      setKifuPasteText('');
+    } catch (e) {
+      setKifuErr(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const handleNext = () => {
@@ -189,6 +215,22 @@ export default function PracticePage() {
     <div className="flex flex-col items-center gap-5 w-full px-2">
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
         <PointsQuickReference />
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+          onClick={() => void navigator.clipboard.writeText(formatKifuTextFromProblem(problem)).catch(() => {})}
+        >
+          <Copy size={14} /> 复制牌谱
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+          onClick={() => { setKifuPasteOpen(v => !v); setKifuErr(null); }}
+        >
+          <ClipboardPaste size={14} /> 粘贴牌谱
+        </button>
         <div style={{ background: '#fff8e1', padding: '0.25rem 0.75rem', borderRadius: '0.75rem', fontSize: '1.25rem', fontWeight: 700, fontFamily: 'monospace', color: '#e65100' }}>
           {formatTime(timer)}
         </div>
@@ -200,6 +242,23 @@ export default function PracticePage() {
           <span>已答: <b>{totalQuestions}</b></span>
         </div>
       </div>
+
+      {kifuPasteOpen && (
+        <div style={{ width: '100%', maxWidth: '40rem', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: '#fafafa' }}>
+          <textarea
+            value={kifuPasteText}
+            onChange={e => setKifuPasteText(e.target.value)}
+            placeholder="粘贴牌谱（场型/手牌/和牌/宝牌/里宝/副露）"
+            rows={8}
+            style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
+          />
+          {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>载入</button>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: 'white', borderRadius: '1rem', padding: '1rem 1.25rem', border: '1px solid var(--color-border)', width: '100%', maxWidth: '40rem' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', flexWrap: 'wrap', justifyContent: 'center' }}>
