@@ -17,9 +17,12 @@ import {
   TSUMO,
   type Pai,
 } from '@/mahjong-calc/types';
-import { CheckCircle, XCircle, BookOpen } from 'lucide-react';
+import { CheckCircle, XCircle, BookOpen, Copy, ClipboardPaste } from 'lucide-react';
+import { formatKifuTextFromYakuProblem, parseKifuText, yakuProblemFromKifuSnapshot } from '@/mahjong-calc/kifuText';
 
 const STORAGE_KEY = 'mahjong-yaku-practice';
+
+const IMPORT_YAKU: YakuDef = { id: '_kifu_import', name: '牌谱导入', category: '导入', han: '' };
 
 interface SolveRecord {
   yakuId: string;
@@ -94,6 +97,9 @@ export default function YakuPracticePage() {
   const [timer, setTimer] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [records, setRecords] = useState<SolveRecord[]>(loadRecords);
+  const [kifuPasteOpen, setKifuPasteOpen] = useState(false);
+  const [kifuPasteText, setKifuPasteText] = useState('');
+  const [kifuErr, setKifuErr] = useState<string | null>(null);
   const timerRef = useRef<number>(0);
   const startRef = useRef<number>(0);
 
@@ -152,6 +158,29 @@ export default function YakuPracticePage() {
     setRevealed(new Set());
     setUserAns({});
     setTimer(0);
+    setKifuPasteOpen(false);
+    setKifuPasteText('');
+    setKifuErr(null);
+  };
+
+  const applyKifuText = (raw: string) => {
+    setKifuErr(null);
+    try {
+      const snap = parseKifuText(raw);
+      const yp = yakuProblemFromKifuSnapshot(snap);
+      setSelectedYaku(IMPORT_YAKU);
+      setProblems([yp]);
+      setRevealed(new Set());
+      setUserAns({});
+      setTimerRunning(true);
+      startRef.current = Date.now();
+      clearInterval(timerRef.current);
+      timerRef.current = window.setInterval(() => setTimer(Date.now() - startRef.current), 50);
+      setKifuPasteOpen(false);
+      setKifuPasteText('');
+    } catch (e) {
+      setKifuErr(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const yakuDorRecord = useMemo(() => {
@@ -170,6 +199,33 @@ export default function YakuPracticePage() {
         <h2 style={{ color: 'var(--color-text)', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <BookOpen size={20} style={{ color: '#e65100' }} /> 役种专项练习
         </h2>
+
+        <div style={{ width: '100%' }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            onClick={() => { setKifuPasteOpen(v => !v); setKifuErr(null); }}
+          >
+            <ClipboardPaste size={14} /> 粘贴牌谱载入
+          </button>
+          {kifuPasteOpen && (
+            <div style={{ marginTop: '0.75rem', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: '#fafafa' }}>
+              <textarea
+                value={kifuPasteText}
+                onChange={e => setKifuPasteText(e.target.value)}
+                placeholder="粘贴牌谱文本（场型/手牌/和牌/宝牌/里宝/副露）"
+                rows={8}
+                style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
+              />
+              {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
+              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>载入练习</button>
+                <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {YAKU_CATEGORIES.map(cat => {
           const yakus = YAKU_PRACTICE_LIST.filter(y => y.category === cat);
@@ -216,6 +272,19 @@ export default function YakuPracticePage() {
           <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>{selectedYaku.name}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>{selectedYaku.han}</span>
         </div>
+        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}
+            onClick={() => {
+              setKifuPasteOpen(v => !v);
+              setKifuErr(null);
+            }}
+          >
+            <ClipboardPaste size={14} /> 粘贴牌谱
+          </button>
+        </div>
         <div style={{
           background: timerRunning ? '#fff8e1' : '#f5f5f5', padding: '0.25rem 0.75rem', borderRadius: '0.75rem',
           fontSize: '1.1rem', fontWeight: 700, fontFamily: 'monospace', color: '#e65100',
@@ -223,6 +292,23 @@ export default function YakuPracticePage() {
           {formatTime(timer)}
         </div>
       </div>
+
+      {kifuPasteOpen && (
+        <div style={{ width: '100%', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: '#fafafa' }}>
+          <textarea
+            value={kifuPasteText}
+            onChange={e => setKifuPasteText(e.target.value)}
+            placeholder="粘贴牌谱文本，载入后将替换本题组为导入的一道题"
+            rows={8}
+            style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
+          />
+          {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+            <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>载入练习</button>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+          </div>
+        </div>
+      )}
 
       <div style={{ width: '100%' }}>
         {problems.map((p, idx) => {
@@ -254,11 +340,21 @@ export default function YakuPracticePage() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', fontWeight: 600 }}>第 {idx + 1} 题</span>
-                {isRevealed && (
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', color: isCorrect ? '#2d9d78' : '#e74c3c' }}>
-                    {isCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                  </span>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', padding: '0.2rem 0.45rem' }}
+                    onClick={() => void navigator.clipboard.writeText(formatKifuTextFromYakuProblem(p)).catch(() => {})}
+                  >
+                    <Copy size={12} /> 复制牌谱
+                  </button>
+                  {isRevealed && (
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', color: isCorrect ? '#2d9d78' : '#e74c3c' }}>
+                      {isCorrect ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: '3px', flexWrap: 'wrap', marginBottom: '0.5rem' }}>

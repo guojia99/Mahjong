@@ -1,4 +1,6 @@
 import {useState, useMemo, useCallback} from 'react';
+import {Copy, ClipboardPaste} from 'lucide-react';
+import {formatKifuText, parseKifuText, snapshotFromCalculatorState} from '@/mahjong-calc/kifuText';
 import type {Dispatch, SetStateAction, MouseEventHandler} from 'react';
 import {Calculator} from '@/mahjong-calc/calc';
 import { Result, MAN_TYPE_NAMES} from '@/mahjong-calc/definition';
@@ -478,6 +480,9 @@ export default function CalculatorPage() {
     const [popup, setPopup] = useState<PopupTarget>(null);
     const [furuMode, setFuroMode] = useState('chi');
     const [chiRedPick, setChiRedPick] = useState<string | null>(null);
+    const [kifuPasteOpen, setKifuPasteOpen] = useState(false);
+    const [kifuPasteText, setKifuPasteText] = useState('');
+    const [kifuErr, setKifuErr] = useState<string | null>(null);
 
     const paiLeft = useMemo(() => {
         const allTiles = TILE_ROWS.flat();
@@ -660,6 +665,38 @@ export default function CalculatorPage() {
         setPonba(0);
         setPopup(null);
         setChiRedPick(null);
+        setKifuPasteOpen(false);
+        setKifuPasteText('');
+        setKifuErr(null);
+    };
+
+    const copyKifu = () => {
+        const text = formatKifuText(snapshotFromCalculatorState({
+            field, seat, agariWay, yakus, hand, furo, dora, ura, ponba,
+        }));
+        void navigator.clipboard.writeText(text).catch(() => {});
+    };
+
+    const applyKifuFromText = (raw: string) => {
+        setKifuErr(null);
+        try {
+            const snap = parseKifuText(raw);
+            setHand([...snap.hand14]);
+            setFuro(snap.furo.map(f => ({...f})));
+            setDora([...snap.dora]);
+            setUra([...snap.ura]);
+            setYakus([...snap.yakus]);
+            setAgariWay(snap.agariWay);
+            setField(snap.field);
+            setSeat(snap.seat);
+            setPonba(snap.ponba);
+            setPopup(null);
+            setChiRedPick(null);
+            setKifuPasteOpen(false);
+            setKifuPasteText('');
+        } catch (e) {
+            setKifuErr(e instanceof Error ? e.message : String(e));
+        }
     };
 
     const toggleYaku = (v: string) => {
@@ -783,7 +820,53 @@ export default function CalculatorPage() {
                         ))}
                     </div>
                 </div>
-                <button onClick={clearAll} className="btn btn-sm btn-outline">清空</button>
+                <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center'}}>
+                    <button type="button" onClick={copyKifu} className="btn btn-sm btn-outline"
+                            style={{display: 'inline-flex', alignItems: 'center', gap: '0.25rem'}}>
+                        <Copy size={14}/> 复制牌谱
+                    </button>
+                    <button type="button" onClick={() => {
+                        setKifuPasteOpen(v => !v);
+                        setKifuErr(null);
+                    }} className="btn btn-sm btn-outline" style={{display: 'inline-flex', alignItems: 'center', gap: '0.25rem'}}>
+                        <ClipboardPaste size={14}/> 粘贴牌谱
+                    </button>
+                    <button onClick={clearAll} className="btn btn-sm btn-outline">清空</button>
+                </div>
+
+                {kifuPasteOpen && (
+                    <div style={{
+                        width: '100%',
+                        marginTop: '0.5rem',
+                        padding: '0.75rem',
+                        borderRadius: '0.75rem',
+                        border: '1px solid var(--color-border)',
+                        background: '#fafafa'
+                    }}>
+                        <textarea value={kifuPasteText} onChange={e => setKifuPasteText(e.target.value)}
+                                  placeholder="粘贴牌谱文本"
+                                  rows={8}
+                                  style={{
+                                      width: '100%',
+                                      fontSize: '0.8rem',
+                                      fontFamily: 'monospace',
+                                      boxSizing: 'border-box',
+                                      borderRadius: '0.5rem',
+                                      padding: '0.5rem',
+                                      border: '1px solid var(--color-border)'
+                                  }}/>
+                        {kifuErr && <div style={{color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem'}}>{kifuErr}</div>}
+                        <div style={{marginTop: '0.5rem', display: 'flex', gap: '0.5rem'}}>
+                            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>载入</button>
+                            <button type="button" className="btn btn-sm btn-outline"
+                                    onClick={() => {
+                                        setKifuPasteOpen(false);
+                                        setKifuErr(null);
+                                    }}>取消
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {result && (
                     <div style={{
