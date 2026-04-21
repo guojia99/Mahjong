@@ -98,9 +98,9 @@ export default function PracticePage() {
   }, []);
 
   useEffect(() => {
-    newProblem();
+    void Promise.resolve().then(() => newProblem());
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [newProblem]);
 
   useEffect(() => {
     if (phase === 'input') { inputRef.current?.focus(); }
@@ -128,7 +128,12 @@ export default function PracticePage() {
     newProblem();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); phase === 'input' ? handleCheck() : handleNext(); } };
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (phase === 'input') handleCheck();
+    else handleNext();
+  };
 
   if (!problem) return null;
 

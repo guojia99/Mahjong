@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getRoom, addPlayerToRoom, removePlayerFromRoom, getRoomGames, createRoomGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
@@ -27,7 +27,7 @@ export default function RoomDetailPage() {
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!id) return;
     try {
       const [roomData, gamesData] = await Promise.all([getRoom(id), getRoomGames(id)]);
@@ -36,11 +36,11 @@ export default function RoomDetailPage() {
     } catch {
       showToast('加载房间数据失败');
     }
-  };
+  }, [id, showToast]);
 
   useEffect(() => {
-    loadData();
-  }, [id]);
+    void Promise.resolve().then(() => loadData());
+  }, [loadData]);
 
   useEffect(() => {
     if (showAddPlayer) {

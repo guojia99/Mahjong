@@ -13,10 +13,6 @@ export default function HomePage() {
   const [totalGames, setTotalGames] = useState(0);
   const [recentYakumans, setRecentYakumans] = useState<HandRecord[]>([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     try {
       const [rooms, players] = await Promise.all([
@@ -34,6 +30,10 @@ export default function HomePage() {
       // silently handle
     }
   };
+
+  useEffect(() => {
+    void Promise.resolve().then(() => loadData());
+  }, []);
 
   const stats = [
     { label: '雀士数', value: playerCount, icon: Users, color: 'var(--color-primary)' },

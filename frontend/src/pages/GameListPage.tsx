@@ -50,7 +50,7 @@ export default function GameListPage() {
     if (modeFilter) params.game_mode = modeFilter;
     if (typeFilter) params.game_type = typeFilter;
     getAllGames(params).then(setGames).catch(() => showToast('加载对局失败'));
-  }, [playerCountFilter, modeFilter, typeFilter]);
+  }, [playerCountFilter, modeFilter, typeFilter, showToast]);
 
   return (
     <div>

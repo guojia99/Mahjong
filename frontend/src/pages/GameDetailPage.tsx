@@ -56,11 +56,11 @@ export default function GameDetailPage() {
     } catch {
       showToast('加载对局数据失败');
     }
-  }, [gameId]);
+  }, [gameId, showToast]);
 
   useEffect(() => {
-    loadGame();
-    getPlayers().then(setAllPlayers);
+    void Promise.resolve().then(() => loadGame());
+    void getPlayers().then(setAllPlayers);
   }, [loadGame]);
 
   const handleScoreChange = (playerId: string, value: string) => {

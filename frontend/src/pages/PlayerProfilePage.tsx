@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getPlayer, getPlayerGames } from '@/api/players';
 import { getPlayerStats } from '@/api/games';
@@ -33,13 +33,13 @@ export default function PlayerProfilePage() {
   const [filterGameMode, setFilterGameMode] = useState<'' | 'east_wind' | 'half_match' | 'south_wind'>('');
   const { showToast, ToastComponent } = useToast();
 
-  const loadStats = (pc?: string, gm?: string) => {
+  const loadStats = useCallback((pc?: string, gm?: string) => {
     if (!id) return;
     const params: Record<string, string> = {};
     if (pc) params.player_count = pc;
     if (gm) params.game_mode = gm;
     getPlayerStats(id, params).then(setStats).catch(() => setStats(null));
-  };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -47,11 +47,11 @@ export default function PlayerProfilePage() {
     getPlayerGames(id).then(setGames).catch(() => showToast('加载对局失败'));
     loadStats();
     getPlayerYakumans(id).then(setYakumans).catch(() => setYakumans([]));
-  }, [id]);
+  }, [id, loadStats, showToast]);
 
   useEffect(() => {
     loadStats(filterPlayerCount, filterGameMode);
-  }, [filterPlayerCount, filterGameMode]);
+  }, [filterPlayerCount, filterGameMode, loadStats]);
 
   if (!player) {
     return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;

@@ -27,7 +27,7 @@ export default function PtRankingPage() {
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     getPtRanking(params).then(setRankings).catch(() => showToast('加载排名失败'));
-  }, [playerCount, gameMode]);
+  }, [playerCount, gameMode, showToast]);
 
   const maxPt = rankings.length > 0 ? Math.max(...rankings.map(r => r.total_pt)) : 1;
   const minPt = rankings.length > 0 ? Math.min(...rankings.map(r => r.total_pt)) : 0;
