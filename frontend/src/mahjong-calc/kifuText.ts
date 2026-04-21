@@ -308,7 +308,11 @@ export function parseKifuText(text: string): KifuSnapshot {
 }
 
 function cvtPaiStr(s: string): Pai {
-  if (s.startsWith('0')) return new Pai(s[1] as PaiType, 5);
+  if (s.startsWith('0') && 'msp'.includes(s[1]!)) {
+    const p = new Pai(s[1] as PaiType, 5);
+    p.redCnt = 1;
+    return p;
+  }
   return new Pai(s[1] as PaiType, parseInt(s[0]!, 10));
 }
 

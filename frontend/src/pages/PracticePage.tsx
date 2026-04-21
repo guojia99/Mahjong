@@ -192,9 +192,11 @@ export default function PracticePage() {
   const isYakuman = r.isYakuman;
   const resultText = isYakuman
     ? `${r.han}倍役满`
-    : r.manType === 1 && r.han === 5 ? `${r.han}翻 满贯`
-    : r.manType > 0 ? `${r.han}翻 ${MAN_TYPE_NAMES[r.manType]}`
-    : `${r.han}翻 ${r.fu}符`;
+    : r.hanRealYaku === 0
+      ? '无役（宝牌・里宝・赤宝不计役），0 点'
+      : r.manType === 1 && r.han === 5 ? `${r.han}翻 满贯`
+        : r.manType > 0 ? `${r.han}翻 ${MAN_TYPE_NAMES[r.manType]}`
+        : `${r.han}翻 ${r.fu}符`;
 
   const placeHolder = isKotsumo ? '子家点数'
     : r.pointType === 1 || r.pointType === 3 ? '荣和：直接输入点数'
