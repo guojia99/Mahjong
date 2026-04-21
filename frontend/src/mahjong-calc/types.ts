@@ -210,6 +210,10 @@ export class State {
       if (b.isOpen) { menzen = false; break; }
     }
     if (menzen) this.flag |= MENZEN;
+    else {
+      /* 与役判定一致：非门清时立直/双立直/一发标志无效，避免界面与点数矛盾 */
+      this.flag &= ~(RIICHI | DOUBLE_RIICHI | IPPATSU);
+    }
 
     this.pais = pais;
     this.dora = d;

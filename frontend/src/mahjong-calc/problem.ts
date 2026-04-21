@@ -61,7 +61,9 @@ export class ProblemGenerator {
       }
       for (let i = 0; i < callCount; i++) furu.push(wantTanyao ? this._genTanyaoFuru() : this._genRandomFuru());
 
-      if (!wantTanyao && Math.random() < 0.2) yakus.push(RIICHI);
+      /* 立直须门清：明吃/明碰/明杠后不可立直（暗杠仍算门清，isOpen=false） */
+      const canRiichi = !furu.some(b => b.isOpen);
+      if (!wantTanyao && canRiichi && Math.random() < 0.2) yakus.push(RIICHI);
       const pair = wantTanyao ? this._genTanyaoPair() : this._genRandomPair();
       hand.push(...pair);
     }
