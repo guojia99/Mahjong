@@ -23,10 +23,12 @@ export const MENZEN = 1 << 19;
 export enum BlockType { SEQ, TRI, QUAD }
 export enum PositionType { EAST, SOUTH, WEST, NORTH, EMPTY }
 export enum MachiType { LIANG_MIAN, KAN_ZHANG, BIAN_ZHANG, SHUANG_PENG, DAN_QI }
+/* eslint-disable @typescript-eslint/no-duplicate-enum-values -- 故意为同一数值提供多个别名，供计分分支使用 */
 export enum PointType {
   TSUMO = 0, RON = 1, OYA = 0, KO = 2,
   OYATSUMO = 0, OYARON = 1, KOTSUMO = 2, KORON = 3,
 }
+/* eslint-enable @typescript-eslint/no-duplicate-enum-values */
 export enum ManType { NOMANGAN, MANGAN, HANEMAN, BAIMAN, SANBAIMAN, KAZOEYAKUMAN }
 
 export type PaiType = 'm' | 's' | 'p' | 'z';

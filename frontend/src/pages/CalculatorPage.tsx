@@ -1,6 +1,7 @@
-import {useState, useMemo, useCallback, useEffect} from 'react';
+import {useState, useMemo, useCallback} from 'react';
+import type {Dispatch, SetStateAction, MouseEventHandler} from 'react';
 import {Calculator} from '@/mahjong-calc/calc';
-import {Rule, Result, MAN_TYPE_NAMES} from '@/mahjong-calc/definition';
+import { Result, MAN_TYPE_NAMES} from '@/mahjong-calc/definition';
 import {
     Pai,
     Block,
@@ -79,7 +80,7 @@ function cvtYaku(x: string): number {
 
 function TileImg({name, onClick, disabled, highlight, small}: {
     name: string;
-    onClick?: () => void;
+    onClick?: MouseEventHandler<HTMLButtonElement>;
     disabled?: boolean;
     highlight?: boolean;
     small?: boolean
@@ -107,7 +108,7 @@ function TileImg({name, onClick, disabled, highlight, small}: {
     );
 }
 
-function FuruBlock({item, onRemove}: { item: { type: string; name: string; red?: boolean }; onRemove: () => void }) {
+function FuruBlock({item, onRemove}: { item: { type: string; name: string; red?: boolean }; onRemove: MouseEventHandler<HTMLDivElement> }) {
     const tiles = useMemo(() => {
         const rt: string[] = [];
         if (item.type === 'pon') {
@@ -181,6 +182,285 @@ const inputStyle: React.CSSProperties = {
 type PopupTarget = 'hand' | 'furu' | 'dora' | 'ura' | null;
 type FuruItem = { type: string; name: string; red?: boolean };
 
+type CalculatorZoneBoxProps = {
+    label: string;
+    target: PopupTarget;
+    items: string[];
+    isFuru?: boolean;
+    hint?: string;
+    popup: PopupTarget;
+    setPopup: Dispatch<SetStateAction<PopupTarget>>;
+    furo: FuruItem[];
+    removeFuru: (idx: number) => void;
+    removeTile: (arr: string[], idx: number, setter: (v: string[]) => void) => void;
+    setHand: Dispatch<SetStateAction<string[]>>;
+    setDora: Dispatch<SetStateAction<string[]>>;
+    setUra: Dispatch<SetStateAction<string[]>>;
+};
+
+function CalculatorZoneBox({
+    label,
+    target,
+    items,
+    isFuru,
+    hint,
+    popup,
+    setPopup,
+    furo,
+    removeFuru,
+    removeTile,
+    setHand,
+    setDora,
+    setUra,
+}: CalculatorZoneBoxProps) {
+    const isEmpty = isFuru ? furo.length === 0 : items.length === 0;
+
+    return (
+        <div>
+            <div style={{
+                fontSize: '0.75rem',
+                color: 'var(--color-text-light)',
+                marginBottom: '0.25rem'
+            }}>{label}</div>
+            <div
+                onClick={() => setPopup(popup === target ? null : target)}
+                style={{
+                    display: 'flex', flexWrap: 'wrap', gap: '2px', alignItems: isEmpty ? 'center' : 'flex-end',
+                    justifyContent: isEmpty ? 'center' : 'flex-start',
+                    minHeight: '3.5rem', padding: '0.5rem', borderRadius: '0.75rem',
+                    border: popup === target ? '2px solid var(--color-primary)' : '1px dashed var(--color-border)',
+                    background: popup === target ? 'rgba(255,243,224,0.3)' : isEmpty ? 'rgba(0,0,0,0.02)' : 'transparent',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                }}
+            >
+                {isEmpty ? (
+                    <span style={{fontSize: '0.8rem', color: '#bbb', userSelect: 'none'}}>+ 点击添加{hint}</span>
+                ) : isFuru ? (
+                    furo.map((f, i) => (
+                        <FuruBlock
+                            key={i}
+                            item={f}
+                            onRemove={(e) => {
+                                e.stopPropagation();
+                                removeFuru(i);
+                            }}
+                        />
+                    ))
+                ) : (
+                    items.map((p, i) => (
+                        <TileImg
+                            key={i}
+                            name={p}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                removeTile(items, i, target === 'dora' ? setDora : target === 'ura' ? setUra : setHand);
+                            }}
+                            highlight={i === items.length - 1 && target === 'hand'}
+                        />
+                    ))
+                )}
+            </div>
+        </div>
+    );
+}
+
+type CalculatorTilePopupProps = {
+    popup: NonNullable<PopupTarget>;
+    setPopup: Dispatch<SetStateAction<PopupTarget>>;
+    furuMode: string;
+    setFuroMode: Dispatch<SetStateAction<string>>;
+    chiRedPick: string | null;
+    setChiRedPick: Dispatch<SetStateAction<string | null>>;
+    tileDisable: Record<string, boolean>;
+    paiLeft: Record<string, number>;
+    hasRed: Record<string, number>;
+    previewTiles: string[];
+    addTile: (target: PopupTarget, name: string) => void;
+    addChiRed: (redTile: string, startNum: number) => void;
+};
+
+function CalculatorTilePopup({
+    popup,
+    setPopup,
+    furuMode,
+    setFuroMode,
+    chiRedPick,
+    setChiRedPick,
+    tileDisable,
+    paiLeft,
+    hasRed,
+    previewTiles,
+    addTile,
+    addChiRed,
+}: CalculatorTilePopupProps) {
+    return (
+        <div style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+        }}
+             onClick={() => {
+                 setPopup(null);
+                 setChiRedPick(null);
+             }}>
+            <div style={{
+                background: 'white',
+                borderRadius: '1.25rem',
+                padding: '1rem 1.25rem',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+                maxWidth: '95vw',
+                minWidth: '20rem'
+            }}
+                 onClick={e => e.stopPropagation()}>
+
+                {chiRedPick && (
+                    <div style={{marginBottom: '0.75rem'}}>
+                        <div style={{
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            color: 'var(--color-text)',
+                            marginBottom: '0.5rem'
+                        }}>选择吃的顺子：
+                        </div>
+                        <div style={{display: 'flex', gap: '0.5rem'}}>
+                            {[3, 4, 5].map(n => {
+                                const tp = chiRedPick[1];
+                                const tileNums = [n, n + 1, n + 2];
+                                const avail = tileNums.every((t) =>
+                                    t === 5 ? (paiLeft['5' + tp] || 0) > 0 || (hasRed[tp] || 0) < 1 : (paiLeft[t + tp] || 0) > 0
+                                ) && (tileNums.includes(5) ? (hasRed[tp] || 0) < 1 : true);
+                                const displayTiles: number[] = [...tileNums];
+                                if (n === 5) {
+                                    [displayTiles[0], displayTiles[1]] = [displayTiles[1], displayTiles[0]];
+                                }
+                                return (
+                                    <button key={n} disabled={!avail} onClick={() => addChiRed(chiRedPick, n)}
+                                            style={{
+                                                padding: '0.3rem 0.5rem',
+                                                borderRadius: '0.5rem',
+                                                border: '1px solid var(--color-border)',
+                                                background: avail ? 'var(--color-primary-light)' : '#f5f5f5',
+                                                cursor: avail ? 'pointer' : 'not-allowed',
+                                                opacity: avail ? 1 : 0.4,
+                                                display: 'flex',
+                                                gap: '1px',
+                                                alignItems: 'center',
+                                                transition: 'all 0.15s',
+                                            }}>
+                                        {displayTiles.map(t => (
+                                            <TileImg key={t} name={t === 5 ? '0' + tp : t + tp} small/>
+                                        ))}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {popup === 'furu' && !chiRedPick && (
+                    <div style={{display: 'flex', gap: '0.5rem', marginBottom: '0.75rem'}}>
+                        {FURU_TYPES.map(o => (
+                            <button key={o.value} onClick={e => {
+                                e.stopPropagation();
+                                setFuroMode(o.value);
+                            }}
+                                    style={{
+                                        padding: '0.3rem 0.75rem',
+                                        borderRadius: '0.5rem',
+                                        border: furuMode === o.value ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                        background: furuMode === o.value ? 'var(--color-primary-light)' : 'transparent',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        color: furuMode === o.value ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                                        transition: 'all 0.15s',
+                                    }}>{o.label}</button>
+                        ))}
+                    </div>
+                )}
+
+                {previewTiles.length > 0 && !chiRedPick && (
+                    <div style={{
+                        marginBottom: '0.5rem',
+                        paddingBottom: '0.5rem',
+                        borderBottom: '1px dashed var(--color-border)'
+                    }}>
+                        <div style={{
+                            fontSize: '0.7rem',
+                            color: 'var(--color-text-light)',
+                            marginBottom: '0.25rem'
+                        }}>当前选择 ({previewTiles.length})
+                        </div>
+                        <div style={{display: 'flex', gap: '2px', flexWrap: 'wrap'}}>
+                            {previewTiles.map((p, i) => <TileImg key={i} name={p} small/>)}
+                        </div>
+                    </div>
+                )}
+
+                {!chiRedPick && (
+                    <div>
+                        {TILE_ROWS.map((row, ri) => (
+                            <div key={ri} style={{
+                                display: 'flex',
+                                gap: '2px',
+                                marginBottom: '2px',
+                                justifyContent: 'center'
+                            }}>
+                                {row.map(p => <TileImg key={p} name={p} onClick={() => addTile(popup, p)}
+                                                       disabled={tileDisable[p]}/>)}
+                            </div>
+                        ))}
+                        {popup === 'hand' && (
+                            <div style={{
+                                display: 'flex',
+                                gap: '2px',
+                                marginBottom: '2px',
+                                justifyContent: 'center'
+                            }}>
+                                {RED_TILES.map(p => <TileImg key={p} name={p} onClick={() => addTile(popup, p)}
+                                                             disabled={tileDisable[p]}/>)}
+                            </div>
+                        )}
+                        {popup === 'furu' && furuMode === 'chi' && (
+                            <div style={{
+                                display: 'flex',
+                                gap: '2px',
+                                marginBottom: '2px',
+                                justifyContent: 'center'
+                            }}>
+                                {RED_TILES.map(p => <TileImg key={p} name={p} onClick={() => setChiRedPick(p)}
+                                                             disabled={tileDisable[p]}/>)}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div style={{textAlign: 'center', marginTop: '0.5rem'}}>
+                    <button onClick={() => {
+                        setPopup(null);
+                        setChiRedPick(null);
+                    }}
+                            style={{
+                                padding: '0.25rem 1rem',
+                                borderRadius: '0.5rem',
+                                border: '1px solid var(--color-border)',
+                                background: 'transparent',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                                color: 'var(--color-text-light)'
+                            }}>
+                        {chiRedPick ? '返回' : '关闭'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function normalKey(s: string) {
     return s.startsWith('0') ? '5' + s[1] : s;
 }
@@ -195,7 +475,6 @@ export default function CalculatorPage() {
     const [field, setField] = useState('east');
     const [seat, setSeat] = useState('east');
     const [ponba, setPonba] = useState(0);
-    const [result, setResult] = useState<Result | null>(null);
     const [popup, setPopup] = useState<PopupTarget>(null);
     const [furuMode, setFuroMode] = useState('chi');
     const [chiRedPick, setChiRedPick] = useState<string | null>(null);
@@ -237,11 +516,11 @@ export default function CalculatorPage() {
         return cnt;
     }, [hand, furo]);
 
-    const getAvail = (key: string) => {
+    const getAvail = useCallback((key: string) => {
         let avail = paiLeft[key] || 0;
         if (key[1] && 'mps'.includes(key[1]) && parseInt(key[0]) === 5) avail += (hasRed[key[1]] || 0);
         return avail;
-    };
+    }, [paiLeft, hasRed]);
 
     const tileDisable = useMemo(() => {
         const allTiles = [...TILE_ROWS.flat(), ...RED_TILES];
@@ -294,7 +573,7 @@ export default function CalculatorPage() {
             }
         }
         return rt;
-    }, [hand, dora, ura, furo, popup, furuMode, paiLeft, hasRed]);
+    }, [hand, dora, ura, furo, popup, furuMode, paiLeft, hasRed, getAvail]);
 
     const yakuDisable = useMemo(() => {
         const s: Record<string, boolean> = {};
@@ -329,25 +608,22 @@ export default function CalculatorPage() {
 
     const canCalc = hand.length + furo.length * 3 === 14;
 
-    useEffect(() => {
-        if (canCalc) {
-            let totalRed = 0;
-            for (const p of hand) if (p.startsWith('0')) totalRed++;
-            for (const f of furo) if (f.red) totalRed++;
-            const tPai = hand.map(cvtPai);
-            const tAgariPai = tPai[tPai.length - 1];
-            tPai.pop();
-            const s = new State(cvtWind(field), cvtWind(seat), yakus.map(cvtYaku), agariWay === 'tsumo' ? TSUMO : RON, tPai, furo.map(cvtFuro), dora.map(cvtPai), ura.map(cvtPai), tAgariPai, totalRed);
-            const c = new Calculator();
-            const r = c.calculate(s);
-            if (agariWay === 'tsumo') {
-                r.point1 += 100 * ponba;
-                r.point2 += 100 * ponba;
-            } else r.point1 += 300 * ponba;
-            setResult(r);
-        } else {
-            setResult(null);
-        }
+    const result = useMemo((): Result | null => {
+        if (!canCalc) return null;
+        let totalRed = 0;
+        for (const p of hand) if (p.startsWith('0')) totalRed++;
+        for (const f of furo) if (f.red) totalRed++;
+        const tPai = hand.map(cvtPai);
+        const tAgariPai = tPai[tPai.length - 1];
+        tPai.pop();
+        const s = new State(cvtWind(field), cvtWind(seat), yakus.map(cvtYaku), agariWay === 'tsumo' ? TSUMO : RON, tPai, furo.map(cvtFuro), dora.map(cvtPai), ura.map(cvtPai), tAgariPai, totalRed);
+        const c = new Calculator();
+        const r = c.calculate(s);
+        if (agariWay === 'tsumo') {
+            r.point1 += 100 * ponba;
+            r.point2 += 100 * ponba;
+        } else r.point1 += 300 * ponba;
+        return r;
     }, [canCalc, hand, furo, dora, ura, yakus, agariWay, field, seat, ponba]);
 
     const addTile = useCallback((target: PopupTarget, name: string) => {
@@ -405,235 +681,24 @@ export default function CalculatorPage() {
         return [];
     }, [popup, hand, dora, ura]);
 
-    const ZoneBox = ({label, target, items, isFuru, hint}: {
-        label: string;
-        target: PopupTarget;
-        items: string[];
-        isFuru?: boolean;
-        hint?: string
-    }) => {
-        const isEmpty = isFuru ? furo.length === 0 : items.length === 0;
-
-
-        return (
-            <div>
-                <div style={{
-                    fontSize: '0.75rem',
-                    color: 'var(--color-text-light)',
-                    marginBottom: '0.25rem'
-                }}>{label}</div>
-                <div
-                    onClick={() => setPopup(popup === target ? null : target)}
-                    style={{
-                        display: 'flex', flexWrap: 'wrap', gap: '2px', alignItems: isEmpty ? 'center' : 'flex-end',
-                        justifyContent: isEmpty ? 'center' : 'flex-start',
-                        minHeight: '3.5rem', padding: '0.5rem', borderRadius: '0.75rem',
-                        border: popup === target ? '2px solid var(--color-primary)' : '1px dashed var(--color-border)',
-                        background: popup === target ? 'rgba(255,243,224,0.3)' : isEmpty ? 'rgba(0,0,0,0.02)' : 'transparent',
-                        cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                >
-
-                    {isEmpty ? (
-                        <span style={{fontSize: '0.8rem', color: '#bbb', userSelect: 'none'}}>+ 点击添加{hint}</span>
-                        // @ts-ignore
-                    ) : isFuru ? furo.map((f, i) => <FuruBlock key={i} item={f} onRemove={(e) => {
-                            e.stopPropagation();
-                            removeFuru(i);
-                        }}/>) :
-                        // @ts-ignore
-                        items.map((p, i) => <TileImg key={i} name={p} onClick={(e) => {
-                            e.stopPropagation();
-                            removeTile(items, i, target === 'dora' ? setDora : target === 'ura' ? setUra : setHand);
-                        }} highlight={i === items.length - 1 && target === 'hand'}/>)}
-                </div>
-            </div>
-        );
-    };
-
-    const TilePopup = () => {
-        const _popup = popup;
-        const _furoMode = furuMode;
-        const _chiRedPick = chiRedPick;
-        const _tileDisable = tileDisable;
-        const _paiLeft = paiLeft;
-        const _hasRed = hasRed;
-        const _previewTiles = previewTiles;
-        // const _getAvail = getAvail;
-
-        return (
-            <div style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 100,
-                background: 'rgba(0,0,0,0.3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}
-                 onClick={() => {
-                     setPopup(null);
-                     setChiRedPick(null);
-                 }}>
-                <div style={{
-                    background: 'white',
-                    borderRadius: '1.25rem',
-                    padding: '1rem 1.25rem',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-                    maxWidth: '95vw',
-                    minWidth: '20rem'
-                }}
-                     onClick={e => e.stopPropagation()}>
-
-                    {_chiRedPick && (
-                        <div style={{marginBottom: '0.75rem'}}>
-                            <div style={{
-                                fontSize: '0.8rem',
-                                fontWeight: 600,
-                                color: 'var(--color-text)',
-                                marginBottom: '0.5rem'
-                            }}>选择吃的顺子：
-                            </div>
-                            <div style={{display: 'flex', gap: '0.5rem'}}>
-                                {[3, 4, 5].map(n => {
-                                    const tp = _chiRedPick![1];
-                                    const tileNums = [n, n + 1, n + 2];
-                                    // @ts-ignore
-                                    const avail = tileNums.every((t, i) =>
-                                        t === 5 ? (_paiLeft['5' + tp] || 0) > 0 || (_hasRed[tp] || 0) < 1 : (_paiLeft[t + tp] || 0) > 0
-                                    ) && (tileNums.includes(5) ? (_hasRed[tp] || 0) < 1 : true);
-                                    // @ts-ignore
-                                    const displayTiles: string[] = [...tileNums];
-                                    if (n === 5) {
-                                        [displayTiles[0], displayTiles[1]] = [displayTiles[1], displayTiles[0]];
-                                    }
-                                    return (
-                                        <button key={n} disabled={!avail} onClick={() => addChiRed(_chiRedPick!, n)}
-                                                style={{
-                                                    padding: '0.3rem 0.5rem',
-                                                    borderRadius: '0.5rem',
-                                                    border: '1px solid var(--color-border)',
-                                                    background: avail ? 'var(--color-primary-light)' : '#f5f5f5',
-                                                    cursor: avail ? 'pointer' : 'not-allowed',
-                                                    opacity: avail ? 1 : 0.4,
-                                                    display: 'flex',
-                                                    gap: '1px',
-                                                    alignItems: 'center',
-                                                    transition: 'all 0.15s',
-                                                }}>
-                                            {displayTiles.map(t => (
-                                                <TileImg key={t} name={t === 5 ? '0' + tp : t + tp} small/>
-                                            ))}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-                    {_popup === 'furu' && !_chiRedPick && (
-                        <div style={{display: 'flex', gap: '0.5rem', marginBottom: '0.75rem'}}>
-                            {FURU_TYPES.map(o => (
-                                <button key={o.value} onClick={e => {
-                                    e.stopPropagation();
-                                    setFuroMode(o.value);
-                                }}
-                                        style={{
-                                            padding: '0.3rem 0.75rem',
-                                            borderRadius: '0.5rem',
-                                            border: _furoMode === o.value ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                            background: _furoMode === o.value ? 'var(--color-primary-light)' : 'transparent',
-                                            fontSize: '0.8rem',
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            color: _furoMode === o.value ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
-                                            transition: 'all 0.15s',
-                                        }}>{o.label}</button>
-                            ))}
-                        </div>
-                    )}
-
-                    {_previewTiles.length > 0 && !_chiRedPick && (
-                        <div style={{
-                            marginBottom: '0.5rem',
-                            paddingBottom: '0.5rem',
-                            borderBottom: '1px dashed var(--color-border)'
-                        }}>
-                            <div style={{
-                                fontSize: '0.7rem',
-                                color: 'var(--color-text-light)',
-                                marginBottom: '0.25rem'
-                            }}>当前选择 ({_previewTiles.length})
-                            </div>
-                            <div style={{display: 'flex', gap: '2px', flexWrap: 'wrap'}}>
-                                {_previewTiles.map((p, i) => <TileImg key={i} name={p} small/>)}
-                            </div>
-                        </div>
-                    )}
-
-                    {!_chiRedPick && (
-                        <div>
-                            {TILE_ROWS.map((row, ri) => (
-                                <div key={ri} style={{
-                                    display: 'flex',
-                                    gap: '2px',
-                                    marginBottom: '2px',
-                                    justifyContent: 'center'
-                                }}>
-                                    {row.map(p => <TileImg key={p} name={p} onClick={() => addTile(_popup!, p)}
-                                                           disabled={_tileDisable[p]}/>)}
-                                </div>
-                            ))}
-                            {_popup === 'hand' && (
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '2px',
-                                    marginBottom: '2px',
-                                    justifyContent: 'center'
-                                }}>
-                                    {RED_TILES.map(p => <TileImg key={p} name={p} onClick={() => addTile(_popup!, p)}
-                                                                 disabled={_tileDisable[p]}/>)}
-                                </div>
-                            )}
-                            {_popup === 'furu' && _furoMode === 'chi' && (
-                                <div style={{
-                                    display: 'flex',
-                                    gap: '2px',
-                                    marginBottom: '2px',
-                                    justifyContent: 'center'
-                                }}>
-                                    {RED_TILES.map(p => <TileImg key={p} name={p} onClick={() => setChiRedPick(p)}
-                                                                 disabled={_tileDisable[p]}/>)}
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    <div style={{textAlign: 'center', marginTop: '0.5rem'}}>
-                        <button onClick={() => {
-                            setPopup(null);
-                            setChiRedPick(null);
-                        }}
-                                style={{
-                                    padding: '0.25rem 1rem',
-                                    borderRadius: '0.5rem',
-                                    border: '1px solid var(--color-border)',
-                                    background: 'transparent',
-                                    fontSize: '0.75rem',
-                                    cursor: 'pointer',
-                                    color: 'var(--color-text-light)'
-                                }}>
-                            {_chiRedPick ? '返回' : '关闭'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="flex flex-col items-center gap-5">
-            {popup && <TilePopup/>}
+            {popup && (
+                <CalculatorTilePopup
+                    popup={popup}
+                    setPopup={setPopup}
+                    furuMode={furuMode}
+                    setFuroMode={setFuroMode}
+                    chiRedPick={chiRedPick}
+                    setChiRedPick={setChiRedPick}
+                    tileDisable={tileDisable}
+                    paiLeft={paiLeft}
+                    hasRed={hasRed}
+                    previewTiles={previewTiles}
+                    addTile={addTile}
+                    addChiRed={addChiRed}
+                />
+            )}
 
             <div style={{
                 display: 'flex',
@@ -790,15 +855,22 @@ export default function CalculatorPage() {
             </div>
 
             <div style={{width: '100%', maxWidth: '40rem', display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
-                <ZoneBox label={`手牌 (${hand.length}/${14 - furo.length * 3})`} target="hand" items={hand}
-                         hint="手牌"/>
-                <ZoneBox label="副露" target="furu" items={[]} isFuru hint="副露"/>
+                <CalculatorZoneBox label={`手牌 (${hand.length}/${14 - furo.length * 3})`} target="hand" items={hand}
+                    hint="手牌" popup={popup} setPopup={setPopup} furo={furo} removeFuru={removeFuru}
+                    removeTile={removeTile} setHand={setHand} setDora={setDora} setUra={setUra}/>
+                <CalculatorZoneBox label="副露" target="furu" items={[]} isFuru hint="副露" popup={popup}
+                    setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile} setHand={setHand}
+                    setDora={setDora} setUra={setUra}/>
                 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
                     <div style={{flex: 1}}>
-                        <ZoneBox label="宝牌指示牌" target="dora" items={dora} hint="宝牌"/>
+                        <CalculatorZoneBox label="宝牌指示牌" target="dora" items={dora} hint="宝牌" popup={popup}
+                            setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile}
+                            setHand={setHand} setDora={setDora} setUra={setUra}/>
                     </div>
                     <div style={{flex: 1}}>
-                        <ZoneBox label="里宝牌指示牌" target="ura" items={ura} hint="里宝牌"/>
+                        <CalculatorZoneBox label="里宝牌指示牌" target="ura" items={ura} hint="里宝牌" popup={popup}
+                            setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile}
+                            setHand={setHand} setDora={setDora} setUra={setUra}/>
                     </div>
                 </div>
             </div>

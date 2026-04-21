@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getRooms, createRoom, closeRoom } from '@/api/games';
 import { isAdmin } from '@/api/auth';
@@ -15,7 +15,7 @@ export default function RoomsPage() {
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
 
-  const loadRooms = async () => {
+  const loadRooms = useCallback(async () => {
     try {
       const params = filter !== 'all' ? filter : undefined;
       const data = await getRooms(params);
@@ -23,11 +23,11 @@ export default function RoomsPage() {
     } catch {
       showToast('加载房间失败');
     }
-  };
+  }, [filter, showToast]);
 
   useEffect(() => {
-    loadRooms();
-  }, [filter]);
+    void Promise.resolve().then(() => loadRooms());
+  }, [loadRooms]);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

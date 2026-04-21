@@ -1,9 +1,21 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { YAKU_PRACTICE_LIST, YAKU_CATEGORIES, generateYakuProblems } from '@/mahjong-calc/yakuPracticeGenerator';
 import type { YakuProblem, YakuDef } from '@/mahjong-calc/yakuPracticeGenerator';
 import { MAN_TYPE_NAMES } from '@/mahjong-calc/definition';
-import { RIICHI, DOUBLE_RIICHI, IPPATSU, HAITEI_RAOYUE, HOUTEI_RAOYUI, RINNSHANN_KAIHOU, CHANKAN, TENHOU, CHIIHOU, TSUMO, RON, PositionType } from '@/mahjong-calc/types';
-import { Clock, ChevronRight, CheckCircle, XCircle, BookOpen } from 'lucide-react';
+import {
+  BlockType,
+  CHANKAN,
+  CHIIHOU,
+  DOUBLE_RIICHI,
+  HAITEI_RAOYUE,
+  HOUTEI_RAOYUI,
+  IPPATSU,
+  RIICHI,
+  RINNSHANN_KAIHOU,
+  TENHOU,
+  type Pai,
+} from '@/mahjong-calc/types';
+import { CheckCircle, XCircle, BookOpen } from 'lucide-react';
 
 const STORAGE_KEY = 'mahjong-yaku-practice';
 
@@ -18,6 +30,10 @@ function loadRecords(): SolveRecord[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
 }
 function saveRecords(r: SolveRecord[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(r.slice(0, 500))); }
+
+function solveRecordTimestamp(): number {
+  return Date.now();
+}
 
 function formatTime(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -36,7 +52,7 @@ function TileImg({ name, small }: { name: string; small?: boolean }) {
   );
 }
 
-function cvtPai(p: any): string {
+function cvtPai(p: Pai): string {
   if (p.redCnt > 0) return '0' + p.type;
   return p.num + p.type;
 }
@@ -69,8 +85,6 @@ export default function YakuPracticePage() {
   const timerRef = useRef<number>(0);
   const startRef = useRef<number>(0);
 
-  useEffect(() => { setRecords(loadRecords()); }, []);
-
   const startPractice = useCallback((yaku: YakuDef) => {
     setSelectedYaku(yaku);
     const p = generateYakuProblems(yaku.id, 10);
@@ -93,7 +107,8 @@ export default function YakuPracticePage() {
     if (!p || !p.ans) return false;
     const input = userAns[idx] || '';
     const parts = input.split(/[\s;/]+/).filter(Boolean);
-    let x1 = parseInt(parts[0]) || 0, x2 = parseInt(parts[1]) || 0;
+    const x1 = parseInt(parts[0]) || 0;
+    const x2 = parseInt(parts[1]) || 0;
     let correct = false;
     const pt = p.ans.pointType;
     if (pt === 0 || pt === 1) correct = x1 === p.ans.point1;
@@ -103,36 +118,18 @@ export default function YakuPracticePage() {
 
   const submitAnswer = (idx: number) => {
     const correct = checkAnswer(idx);
-    setReveveled(prev => new Set([...prev, idx]));
-    const rec: SolveRecord = { yakuId: selectedYaku!.id, correct, timeMs: timer, timestamp: Date.now() };
-    setRecords(prev => [rec, ...prev]);
-    saveRecords([rec, ...records]);
-  };
-
-  const submitAll = () => {
-    const unanswered = problems.filter((_, i) => !revealed.has(i));
-    if (unanswered.length === 0) return;
-    let correctCount = 0;
-    const newRevealed = new Set(revealed);
-    const newRecords: SolveRecord[] = [];
-    for (const { ans } of unanswered) {
-      const idx = problems.indexOf(ans);
-      const input = userAns[idx] || '';
-      const parts = input.split(/[\s;/]+/).filter(Boolean);
-      let x1 = parseInt(parts[0]) || 0, x2 = parseInt(parts[1]) || 0;
-      let correct = false;
-      if (ans.ans.pointType === 0) correct = x1 === ans.ans.point1;
-      else if (ans.ans.pointType === 1 || ans.ans.pointType === 3) correct = x1 === ans.ans.point1;
-      else correct = x1 === ans.ans.point1 && x2 === ans.ans.point2;
-      newRevealed.add(idx);
-      if (correct) correctCount++;
-      newRecords.push({ yakuId: selectedYaku!.id, correct, timeMs: timer, timestamp: Date.now() });
-    }
-    setRevealed(newRevealed);
-    setRecords(prev => [...newRecords, ...prev]);
-    saveRecords([...newRecords, ...records]);
-    clearInterval(timerRef.current);
-    setTimerRunning(false);
+    setRevealed(prev => new Set([...prev, idx]));
+    const rec: SolveRecord = {
+      yakuId: selectedYaku!.id,
+      correct,
+      timeMs: timer,
+      timestamp: solveRecordTimestamp(),
+    };
+    setRecords(prev => {
+      const next = [rec, ...prev];
+      saveRecords(next);
+      return next;
+    });
   };
 
   const backToList = () => {
@@ -154,8 +151,6 @@ export default function YakuPracticePage() {
     }
     return m;
   }, [records]);
-
-  const categoryOrder: Record<string, number> = { '基本役': 0, '中級役': 1, '上級役': 2, '役満': 3 };
 
   if (!selectedYaku) {
     return (
@@ -222,12 +217,16 @@ export default function YakuPracticePage() {
           const handTiles = p.hand.map(cvtPai);
           const agariTile = cvtPai(p.agariPai);
           const furuTiles = p.furu.map(f => {
-            const n = f.num, tp = f.pType;
+            const n = f.num;
+            const tp = f.pType;
+            const base = String(n) + tp;
             const tiles: string[] = [];
-            if (f.bType === 0) tiles.push(f.name, (n + 1) + tp, (n + 2) + tp);
-            else if (f.bType === 1) { tiles.push(f.name, f.name, f.name); }
-            else if (f.bType === 2 && f.isOpen) { tiles.push(f.name, f.name, f.name, f.name); }
-            else tiles.push('B', f.name, f.name, 'B');
+            if (f.bType === BlockType.SEQ) tiles.push(base, (n + 1) + tp, (n + 2) + tp);
+            else if (f.bType === BlockType.TRI) {
+              tiles.push(base, base, base);
+            } else if (f.bType === BlockType.QUAD && f.isOpen) {
+              tiles.push(base, base, base, base);
+            } else tiles.push('B', base, base, 'B');
             return tiles;
           });
           const doraTiles = p.dora.map(d => d.num + d.type);

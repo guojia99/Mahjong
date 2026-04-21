@@ -1,6 +1,5 @@
-import { Pai, Block, BlockType, PositionType, TSUMO, RON, RIICHI, State } from './types';
+import { Pai, Block, BlockType, PositionType, RON, State } from './types';
 import { Calculator } from './calc';
-import { Rule } from './definition';
 
 export interface YakuDef {
   id: string;
@@ -29,7 +28,7 @@ interface Template {
   open?: { type: string; name: string }[];
 }
 
-const E = PositionType.EAST, S = PositionType.SOUTH, W = PositionType.WEST, N = PositionType.NORTH;
+const E = PositionType.EAST;
 
 function T(hand: string[], agari: string, extra: Partial<Template> = {}): Template {
   return { hand, agari, field: E, seat: E, agariWay: RON, yakus: [], open: [], ...extra };
@@ -180,7 +179,7 @@ function buildProblem(tpl: Template, yakuName: string): YakuProblem {
 
   const doraCount = Math.random() < 0.6 ? 1 : Math.random() < 0.4 ? 2 : 0;
   const doraPool = shuffle(DORA_POOL.filter(d => {
-    const usedTiles = [...tpl.hand, tpl.agari, ...tpl.open.map(f => f.name)].map(normalKey);
+    const usedTiles = [...tpl.hand, tpl.agari, ...(tpl.open ?? []).map(f => f.name)].map(normalKey);
     return !usedTiles.includes(normalKey(d[0]));
   }));
   const dora = doraPool.slice(0, doraCount).map(d => cvtPai(d[0]));

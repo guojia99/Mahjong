@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getPlayers, createPlayer, deletePlayer, updatePlayer, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
@@ -24,18 +24,18 @@ export default function PlayersPage() {
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
 
-  const loadPlayers = async () => {
+  const loadPlayers = useCallback(async () => {
     try {
       const data = await getPlayers(query);
       setPlayers(data);
     } catch {
       showToast('加载雀士列表失败');
     }
-  };
+  }, [query, showToast]);
 
   useEffect(() => {
-    loadPlayers();
-  }, [query]);
+    void Promise.resolve().then(() => loadPlayers());
+  }, [loadPlayers]);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
