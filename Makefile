@@ -1,4 +1,4 @@
-.PHONY: dev stop restart check init migrate env _check-python _check-npm
+.PHONY: dev stop restart check init migrate env _check-python _check-npm _build-frontend
 
 PIDDIR := .make-pids
 ADMIN_USER ?= admin
@@ -63,12 +63,13 @@ _check-npm:
 	fi
 	@echo "\033[32m  ✓ Proxy dependencies\033[0m"
 
-## 一键启动前后端 + 反向代理
+## 一键启动前后端 + 反向代理（前端先 build，再以静态方式在 9998 提供 dist/index.html）
 dev:
 	@$(MAKE) stop > /dev/null 2>&1; sleep 0.5
 	@mkdir -p $(PIDDIR)
 	@trap '$(MAKE) stop; exit 0' INT TERM; \
 	$(MAKE) _install-proxy; \
+	$(MAKE) _build-frontend; \
 	$(MAKE) _run-backend & \
 	$(MAKE) _run-frontend & \
 	$(MAKE) _wait-ready; \
@@ -110,7 +111,7 @@ check:
 		echo "  Proxy    (9999): \033[31mDOWN\033[0m"
 	@curl -so /dev/null -w "  Backend  (9997): %{http_code}\n" http://localhost:9997/api/v1/auth/me/ 2>/dev/null || \
 		echo "  Backend  (9997): \033[31mDOWN\033[0m"
-	@curl -so /dev/null -w "  Frontend (9998): %{http_code}\n" http://localhost:9998/ 2>/dev/null || \
+	@curl -so /dev/null -w "  Frontend (9998): %{http_code}\n" http://127.0.0.1:9998/ 2>/dev/null || \
 		echo "  Frontend (9998): \033[31mDOWN\033[0m"
 
 # ---------- internal ----------
@@ -124,8 +125,14 @@ _install-proxy:
 _run-backend:
 	@cd backend && .venv/bin/python manage.py runserver 9997 > /dev/null 2>&1 & echo $$! > ../$(PIDDIR)/backend.pid
 
+## 生产构建产物后由 Vite preview 提供静态资源（根路径即 index.html）
+_build-frontend:
+	@echo "\033[36mBuilding frontend (vite build)...\033[0m"
+	@cd frontend && npm run build
+	@echo "\033[32mFrontend build OK.\033[0m"
+
 _run-frontend:
-	@cd frontend && npm run dev > /dev/null 2>&1 & echo $$! > ../$(PIDDIR)/frontend.pid
+	@cd frontend && npm run preview > /dev/null 2>&1 & echo $$! > ../$(PIDDIR)/frontend.pid
 
 _run-proxy:
 	@node proxy.cjs > /dev/null 2>&1 & echo $$! > $(PIDDIR)/proxy.pid
@@ -133,7 +140,7 @@ _run-proxy:
 _wait-ready:
 	@echo "\033[33mWaiting for services to be ready...\033[0m"
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
-		FRONTEND=$$(curl -so /dev/null -w "%{http_code}" http://localhost:9998/ 2>/dev/null); \
+		FRONTEND=$$(curl -so /dev/null -w "%{http_code}" http://127.0.0.1:9998/ 2>/dev/null); \
 		if [ "$$FRONTEND" != "000" ]; then \
 			echo "  Frontend ready \033[32m✓\033[0m"; \
 			break; \

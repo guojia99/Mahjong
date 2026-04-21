@@ -13,7 +13,6 @@ import PtRankingPage from '@/pages/PtRankingPage';
 import YakumanListPage from '@/pages/YakumanListPage';
 import CalculatorPage from '@/pages/CalculatorPage';
 import PracticePage from '@/pages/PracticePage';
-import YakuPracticePage from '@/pages/YakuPracticePage';
 import { isAdmin } from '@/api/auth';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
