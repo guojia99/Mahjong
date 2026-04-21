@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
+import { useState, useEffect } from 'react';
 import {
   QUICK_TABLE_FU,
   MANGAN_ROW_LABELS,
@@ -192,96 +191,125 @@ function TablePanel({ dealer }: { dealer: boolean }) {
 
 export default function PointsQuickReference() {
   const [tab, setTab] = useState<'oya' | 'ko'>('ko');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger asChild>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all border"
-          style={{
-            borderColor: 'var(--color-border)',
-            background: 'linear-gradient(135deg, #e8f5e9, #fff8e1)',
-            color: 'var(--color-primary-dark)',
-            boxShadow: '0 2px 10px rgba(61,157,120,0.15)',
-          }}
-        >
-          <Table size={18} className="text-[#2d7d5e]" />
-          点数速查表
-        </button>
-      </Dialog.Trigger>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all border"
+        style={{
+          borderColor: 'var(--color-border)',
+          background: 'linear-gradient(135deg, #e8f5e9, #fff8e1)',
+          color: 'var(--color-primary-dark)',
+          boxShadow: '0 2px 10px rgba(61,157,120,0.15)',
+        }}
+      >
+        <Table size={18} className="text-[#2d7d5e]" />
+        点数速查表
+      </button>
 
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0" style={{ background: 'rgba(15, 23, 42, 0.55)' }} />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[200] w-[calc(100vw-1.5rem)] max-w-[58rem] max-h-[min(92vh,52rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border shadow-2xl flex flex-col overflow-hidden outline-none"
-          style={{
-            borderColor: 'var(--color-border)',
-            background: 'linear-gradient(165deg, #faf7f2 0%, #f0ebe3 42%, #e8f4ef 100%)',
-            boxShadow: '0 24px 48px rgba(0,0,0,0.2)',
-          }}
-        >
+      {open ? (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4" role="presentation">
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default border-0 p-0"
+            style={{ background: 'rgba(15, 23, 42, 0.55)' }}
+            aria-label="关闭对话框"
+            onClick={() => setOpen(false)}
+          />
           <div
-            className="flex items-center justify-between gap-3 px-4 py-3 shrink-0 border-b"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="points-quick-ref-title"
+            className="relative z-[1] w-[calc(100vw-1.5rem)] max-w-[58rem] max-h-[min(92vh,52rem)] rounded-2xl border shadow-2xl flex flex-col overflow-hidden outline-none"
             style={{
               borderColor: 'var(--color-border)',
-              background: 'linear-gradient(90deg, rgba(61,157,120,0.14), rgba(230, 81, 0, 0.08))',
+              background: 'linear-gradient(165deg, #faf7f2 0%, #f0ebe3 42%, #e8f4ef 100%)',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.2)',
             }}
+            onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <Table size={22} className="shrink-0 text-[#2d7d5e]" />
-              <Dialog.Title className="text-base font-bold truncate" style={{ color: 'var(--color-primary-dark)' }}>
-                点数速查表
-              </Dialog.Title>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="inline-flex rounded-full p-0.5 gap-0.5" style={{ background: 'rgba(0,0,0,0.06)' }}>
-                <button
-                  type="button"
-                  onClick={() => setTab('oya')}
-                  className="px-3 py-1 rounded-full text-xs font-semibold transition-all sm:text-sm sm:px-4 sm:py-1.5"
-                  style={{
-                    background: tab === 'oya' ? 'white' : 'transparent',
-                    color: tab === 'oya' ? '#b45309' : 'var(--color-text-light)',
-                    boxShadow: tab === 'oya' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                  }}
-                >
-                  亲家
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab('ko')}
-                  className="px-3 py-1 rounded-full text-xs font-semibold transition-all sm:text-sm sm:px-4 sm:py-1.5"
-                  style={{
-                    background: tab === 'ko' ? 'white' : 'transparent',
-                    color: tab === 'ko' ? '#2d7d5e' : 'var(--color-text-light)',
-                    boxShadow: tab === 'ko' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                  }}
-                >
-                  子家
-                </button>
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3 shrink-0 border-b"
+              style={{
+                borderColor: 'var(--color-border)',
+                background: 'linear-gradient(90deg, rgba(61,157,120,0.14), rgba(230, 81, 0, 0.08))',
+              }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Table size={22} className="shrink-0 text-[#2d7d5e]" />
+                <h2 id="points-quick-ref-title" className="text-base font-bold truncate" style={{ color: 'var(--color-primary-dark)' }}>
+                  点数速查表
+                </h2>
               </div>
-              <Dialog.Close asChild>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="inline-flex rounded-full p-0.5 gap-0.5" style={{ background: 'rgba(0,0,0,0.06)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTab('oya')}
+                    className="px-3 py-1 rounded-full text-xs font-semibold transition-all sm:text-sm sm:px-4 sm:py-1.5"
+                    style={{
+                      background: tab === 'oya' ? 'white' : 'transparent',
+                      color: tab === 'oya' ? '#b45309' : 'var(--color-text-light)',
+                      boxShadow: tab === 'oya' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    亲家
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTab('ko')}
+                    className="px-3 py-1 rounded-full text-xs font-semibold transition-all sm:text-sm sm:px-4 sm:py-1.5"
+                    style={{
+                      background: tab === 'ko' ? 'white' : 'transparent',
+                      color: tab === 'ko' ? '#2d7d5e' : 'var(--color-text-light)',
+                      boxShadow: tab === 'ko' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    子家
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="p-2 rounded-full transition-colors hover:bg-black/5 outline-none"
                   aria-label="关闭"
+                  onClick={() => setOpen(false)}
                 >
                   <X size={22} style={{ color: 'var(--color-text)' }} />
                 </button>
-              </Dialog.Close>
+              </div>
+            </div>
+
+            <p id="points-quick-ref-desc" className="sr-only">
+              日麻荣和与子家自摸时的点数对照，可按亲家或子家切换查看。
+            </p>
+
+            <div className="overflow-y-auto flex-1 px-3 sm:px-4 py-3 min-h-0" aria-describedby="points-quick-ref-desc">
+              <TablePanel dealer={tab === 'oya'} />
             </div>
           </div>
-
-          <Dialog.Description className="sr-only">
-            日麻荣和与子家自摸时的点数对照，可按亲家或子家切换查看。
-          </Dialog.Description>
-
-          <div className="overflow-y-auto flex-1 px-3 sm:px-4 py-3 min-h-0">
-            <TablePanel dealer={tab === 'oya'} />
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        </div>
+      ) : null}
+    </>
   );
 }

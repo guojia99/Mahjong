@@ -1,6 +1,7 @@
 .PHONY: dev stop restart check init migrate env _check-python _check-npm _build-frontend
 
-PIDDIR := .make-pids
+# 使用仓库根绝对路径，避免子 make / cd 后 `../.make-pids` 指错目录
+PIDDIR := $(CURDIR)/.make-pids
 ADMIN_USER ?= admin
 ADMIN_PASS ?= admin123
 
@@ -68,8 +69,8 @@ dev:
 	@$(MAKE) stop > /dev/null 2>&1; sleep 0.5
 	@mkdir -p $(PIDDIR)
 	@trap '$(MAKE) stop; exit 0' INT TERM; \
-	$(MAKE) _install-proxy; \
-	$(MAKE) _build-frontend; \
+	$(MAKE) _install-proxy || exit 1; \
+	$(MAKE) _build-frontend || exit 1; \
 	$(MAKE) _run-backend & \
 	$(MAKE) _run-frontend & \
 	$(MAKE) _wait-ready; \
@@ -123,16 +124,16 @@ _install-proxy:
 	fi
 
 _run-backend:
-	@cd backend && .venv/bin/python manage.py runserver 9997 > /dev/null 2>&1 & echo $$! > ../$(PIDDIR)/backend.pid
+	@cd backend && .venv/bin/python manage.py runserver 9997 > /dev/null 2>&1 & echo $$! > $(PIDDIR)/backend.pid
 
 ## 生产构建产物后由 Vite preview 提供静态资源（根路径即 index.html）
 _build-frontend:
 	@echo "\033[36mBuilding frontend (vite build)...\033[0m"
-	@cd frontend && npm run build
+	@cd frontend && npm install && npm run build
 	@echo "\033[32mFrontend build OK.\033[0m"
 
 _run-frontend:
-	@cd frontend && npm run preview > /dev/null 2>&1 & echo $$! > ../$(PIDDIR)/frontend.pid
+	@cd frontend && npm run preview > /dev/null 2>&1 & echo $$! > $(PIDDIR)/frontend.pid
 
 _run-proxy:
 	@node proxy.cjs > /dev/null 2>&1 & echo $$! > $(PIDDIR)/proxy.pid
