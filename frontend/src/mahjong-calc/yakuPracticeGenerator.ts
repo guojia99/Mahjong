@@ -13,6 +13,7 @@ export interface YakuProblem {
   agariPai: Pai;
   furu: Block[];
   dora: Pai[];
+  ura: Pai[];
   flag: number;
   ans: ReturnType<Calculator['calculate']>;
   yakuName: string;
