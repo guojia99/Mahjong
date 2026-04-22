@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { importOnlineGame, parseOnlineGameBatch, getRooms, createRoom, getRoom, type OnlineParseItem } from '@/api/games';
 import { getPlayers, createPlayer, addMajsoulAccount, deletePlayer } from '@/api/players';
@@ -46,7 +46,9 @@ export default function OnlineGamePage() {
   const [roomCreateLoading, setRoomCreateLoading] = useState(false);
 
   const [showBindModal, setShowBindModal] = useState(false);
-  const [bindContext, setBindContext] = useState<{ url: string; uid: number; nickname: string } | null>(null);
+  const [showBatchBindModal, setShowBatchBindModal] = useState(false);
+  const resumeBatchAfterSingleBind = useRef(false);
+  const [bindContext, setBindContext] = useState<{ uid: number; nickname: string } | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [playerQuery, setPlayerQuery] = useState('');
   const [newPlayerNickname, setNewPlayerNickname] = useState('');
@@ -91,6 +93,18 @@ export default function OnlineGamePage() {
     if (startTimeOverride.trim()) return startTimeOverride.trim();
     return roomDetail?.session_time || '';
   }, [startTimeOverride, roomDetail?.session_time]);
+
+  /** 多局里同一 UID 只出现一次；任一局未绑则视为待绑 */
+  const unboundUidList = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const row of rows) {
+      if (!row.ok || !row.data) continue;
+      for (const p of row.data.players) {
+        if (!row.bindings[p.uid] && !m.has(p.uid)) m.set(p.uid, p.nickname);
+      }
+    }
+    return [...m.entries()].map(([uid, nickname]) => ({ uid, nickname })).sort((a, b) => a.uid - b.uid);
+  }, [rows]);
 
   const setRoomAndQuery = (id: string) => {
     setRoomId(id);
@@ -161,6 +175,15 @@ export default function OnlineGamePage() {
         };
       });
       setRows(next);
+      const anyUnbound = next.some(
+        (row) => row.ok && row.data && row.data.players.some((p) => !row.bindings[p.uid])
+      );
+      if (anyUnbound) {
+        getPlayers().then(setAllPlayers);
+        setShowBatchBindModal(true);
+      } else {
+        setShowBatchBindModal(false);
+      }
       showToast(`已解析 ${next.filter((x) => x.ok).length} / ${next.length} 条`, 'success');
     } catch (err: unknown) {
       const msg =
@@ -174,17 +197,33 @@ export default function OnlineGamePage() {
     }
   };
 
-  const setBinding = (url: string, uid: number, playerId: string) => {
+  /** 同一雀魂 UID 在列表中多局复用时，一次绑定会写入所有出现该局 UID 的对局行 */
+  const setBindingForUid = (uid: number, playerId: string) => {
     setRows((prev) =>
       prev.map((row) => {
-        if (row.source_url !== url) return row;
+        if (!row.ok || !row.data) return row;
+        if (!row.data.players.some((p) => p.uid === uid)) return row;
         return { ...row, bindings: { ...row.bindings, [uid]: playerId } };
       })
     );
   };
 
-  const openBindModal = (url: string, uid: number, nickname: string) => {
-    setBindContext({ url, uid, nickname });
+  const closeBindModal = useCallback(() => {
+    setShowBindModal(false);
+    if (resumeBatchAfterSingleBind.current) {
+      resumeBatchAfterSingleBind.current = false;
+      setShowBatchBindModal(true);
+    }
+  }, []);
+
+  const openBindModal = (uid: number, nickname: string, options?: { fromBatch?: boolean }) => {
+    if (options?.fromBatch) {
+      resumeBatchAfterSingleBind.current = true;
+      setShowBatchBindModal(false);
+    } else {
+      resumeBatchAfterSingleBind.current = false;
+    }
+    setBindContext({ uid, nickname });
     setNewPlayerNickname(nickname);
     setNewPlayerRealName('');
     getPlayers().then(setAllPlayers);
@@ -193,8 +232,8 @@ export default function OnlineGamePage() {
 
   const selectPlayerForBind = (player: Player) => {
     if (!bindContext) return;
-    setBinding(bindContext.url, bindContext.uid, player.id);
-    setShowBindModal(false);
+    setBindingForUid(bindContext.uid, player.id);
+    closeBindModal();
     showToast('已绑定', 'success');
   };
 
@@ -229,9 +268,9 @@ export default function OnlineGamePage() {
         showToast(`${msg}。请从下方列表选择已有雀士。`, 'error');
         return;
       }
-      setBinding(bindContext.url, bindContext.uid, created.id);
+      setBindingForUid(bindContext.uid, created.id);
       setAllPlayers((prev) => (prev.some((p) => p.id === created!.id) ? prev : [created!, ...prev]));
-      setShowBindModal(false);
+      closeBindModal();
       showToast('已新建雀士并关联 UID', 'success');
     } catch (err) {
       const msg =
@@ -248,6 +287,8 @@ export default function OnlineGamePage() {
     return row.data.players.every((p) => row.bindings[p.uid]);
   };
 
+  const allUidsBound = unboundUidList.length === 0;
+
   const rowTotalOk = (row: RowState): boolean => {
     if (!row.ok || !row.data) return false;
     const sum = row.data.players.reduce((s, p) => s + p.score, 0);
@@ -255,10 +296,14 @@ export default function OnlineGamePage() {
     return sum === need;
   };
 
-  const canImportOne = (row: RowState) => row.ok && rowAllBound(row) && rowTotalOk(row);
+  const canImportOne = (row: RowState) =>
+    row.ok && allUidsBound && rowAllBound(row) && rowTotalOk(row);
 
   const canImportAll = () =>
-    rows.length > 0 && rows.filter((r) => r.ok).length > 0 && rows.filter((r) => r.ok).every((r) => canImportOne(r));
+    allUidsBound &&
+    rows.length > 0 &&
+    rows.filter((r) => r.ok).length > 0 &&
+    rows.filter((r) => r.ok).every((r) => canImportOne(r));
 
   const doImportOne = async (row: RowState) => {
     if (!row.ok || !row.data || !roomId) return;
@@ -403,7 +448,7 @@ export default function OnlineGamePage() {
           <h3 className="font-bold">2. 批量粘贴牌谱链接</h3>
         </div>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text-light)' }}>
-          每行一个链接；需先选择线上场。解析后逐条绑定雀士，可单条或一次性导入已就绪的牌谱。
+          每行一个链接；需先选择线上场。多局可能是同一批人，解析后会先弹出「待关联 UID」去重列表，全部关联到雀士后再允许导入；亦可在结果区单独调整。
         </p>
         <textarea
           className="form-input w-full font-mono text-sm"
@@ -437,7 +482,37 @@ https://game.maj-soul.com/1/?paipu=..."
 
       {rows.length > 0 && (
         <div className="card mb-6">
-          <h3 className="font-bold mb-4">解析结果与绑定</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+            <h3 className="font-bold m-0">解析结果与绑定</h3>
+            {unboundUidList.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className="text-sm px-2 py-1 rounded-lg"
+                  style={{ background: '#fff3e0', color: '#b45309', border: '1px solid #fed7aa' }}
+                >
+                  仍有 {unboundUidList.length} 个 UID 未关联
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    getPlayers().then(setAllPlayers);
+                    setShowBatchBindModal(true);
+                  }}
+                >
+                  打开关联窗口
+                </button>
+              </div>
+            )}
+          </div>
+          {unboundUidList.length > 0 && (
+            <div
+              className="p-3 rounded-xl mb-4 text-sm"
+              style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}
+            >
+              请先在弹窗中把本批牌谱里出现的待关联 UID（已去重）全部绑定到系统雀士，完成后即可使用「导入本局 / 导入全部已就绪」。
+            </div>
+          )}
           <div className="space-y-4">
             {rows.map((row) => {
               if (!row.ok) {
@@ -483,7 +558,7 @@ https://game.maj-soul.com/1/?paipu=..."
                           <button
                             type="button"
                             className="btn btn-sm btn-outline"
-                            onClick={() => openBindModal(row.source_url, p.uid, p.nickname)}
+                            onClick={() => openBindModal(p.uid, p.nickname)}
                           >
                             {bound ? '更换' : '绑定雀士'}
                           </button>
@@ -584,8 +659,51 @@ https://game.maj-soul.com/1/?paipu=..."
       </Modal>
 
       <Modal
+        open={showBatchBindModal}
+        onClose={() => setShowBatchBindModal(false)}
+        title={
+          unboundUidList.length > 0
+            ? `关联雀士（${unboundUidList.length} 个 UID 待关联）`
+            : '关联雀士（已全部完成）'
+        }
+      >
+        {unboundUidList.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+            本批牌谱中的雀魂账号均已关联到系统雀士，可关闭本窗口，在下方核对分数后导入对局。
+          </p>
+        ) : (
+          <ul className="space-y-2 max-h-72 overflow-y-auto">
+            {unboundUidList.map(({ uid, nickname }) => (
+              <li
+                key={uid}
+                className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl"
+                style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-border)' }}
+              >
+                <div>
+                  <div className="font-medium text-sm">{nickname || '（无昵称）'}</div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>UID {uid}</div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={() => openBindModal(uid, nickname, { fromBatch: true })}
+                >
+                  去关联
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-4 flex justify-end">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowBatchBindModal(false)}>
+            关闭
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
         open={showBindModal}
-        onClose={() => setShowBindModal(false)}
+        onClose={closeBindModal}
         title={bindContext ? `绑定雀士 - ${bindContext.nickname} (UID: ${bindContext.uid})` : '绑定'}
       >
         <form
