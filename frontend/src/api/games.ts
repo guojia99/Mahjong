@@ -188,6 +188,8 @@ export async function getAllYakumans(recordType?: string): Promise<HandRecord[]>
 export async function getPlayerStats(playerId: string, params?: {
   player_count?: number;
   game_mode?: string;
+  game_type?: 'offline' | 'online' | '';
+  recent_limit?: number;
 }): Promise<PlayerStats> {
   const { data } = await api.get(`/players/${playerId}/stats/`, { params });
   return data;
