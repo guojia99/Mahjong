@@ -2,6 +2,8 @@
 
 > 排除 `.git/`、`backend/.venv/`、`frontend/node_modules/`、`__pycache__/`、`frontend/dist/`、`.idea/` 等生成目录
 
+**产品概览**：日本立直麻将对局记录与 PT 统计助手；雀士详情页提供四麻半庄默认视角、一位～四位率、线上线下筛选、最近 N 局顺位折线与 PT 累计曲线等统计能力（详见根目录 `README.md` 与 `architecture.md`）。
+
 ```
 Mahjong/
 │
@@ -129,7 +131,7 @@ Mahjong/
 │   │       ├── models.py               # Room, RoomPlayer, Game, GamePlayer 领域模型
 │   │       ├── services.py             # RoomService (CRUD/开关房间/增删成员), GameService (创建/换人/录分/导入线上局)
 │   │       ├── serializers.py          # Room/Game/GamePlayer/Score/OnlineImport 序列化器
-│   │       ├── views.py                # Room/Game/OnlineGame 相关视图 (列表/详情/关闭/录分/换人/导入)
+│   │       ├── views.py                # Room/Game/OnlineGame 相关视图；含 PlayerStatsView（雀士统计：game_type、recent_limit、recent_series 等）
 │   │       ├── urls.py                 # /rooms/, /rooms/<uuid>/, /rooms/<uuid>/close/, /rooms/<uuid>/players/, /rooms/<uuid>/games/
 │   │       ├── game_urls.py            # /games/<uuid>/, /games/<uuid>/scores/, /games/<uuid>/players/, /games/online/
 │   │       ├── admin.py                # RoomAdmin, RoomPlayerAdmin, GameAdmin, GamePlayerAdmin
@@ -197,6 +199,8 @@ Mahjong/
         │   ├── RoomsPage.tsx           # 房间列表页 (筛选全部/进行中/已关闭, 创建/关闭房间)
         │   ├── RoomDetailPage.tsx      # 房间详情页 (成员管理, 新建对局:选选手+选模式+选时间)
         │   ├── GameDetailPage.tsx      # 对局详情页 (选手列表, 录入分数弹窗:4人=1000/3人=1050, 更换选手弹窗)
+        │   ├── PlayerListPage.tsx      # 雀士列表 (搜索/浏览)
+        │   ├── PlayerProfilePage.tsx   # 雀士详情 (统计/对局/役满/信息；统计含位率与曲线)
         │   └── OnlineGamePage.tsx      # 线上对局导入页 (牌谱链接, 手动添加选手+分数, 导入历史列表)
         │
         ├── assets/                     # 静态资源

@@ -102,17 +102,22 @@ export interface MeldInfo {
     type: 'chi' | 'pon' | 'kan';
 }
 
+export interface PlayerStatsRecentPoint {
+    game_id: string;
+    start_time: string;
+    rank: number;
+    pt: number;
+    score: number;
+    game_index?: number;
+    cumulative_pt?: number;
+}
+
 export interface PlayerStats {
     total_games: number;
     total_pt: number;
     rank_distribution: Record<string, number>;
-    recent_ranking: {
-        game_id: string;
-        start_time: string;
-        rank: number;
-        pt: number;
-        score: number;
-    }[];
+    recent_ranking: PlayerStatsRecentPoint[];
+    recent_series?: PlayerStatsRecentPoint[];
 }
 
 export interface PtRankingItem {

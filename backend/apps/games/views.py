@@ -431,6 +431,13 @@ class PlayerStatsView(APIView):
         player = get_object_or_404(Player, pk=pk)
         player_count = request.query_params.get('player_count')
         game_mode = request.query_params.get('game_mode')
+        game_type = request.query_params.get('game_type')
+        try:
+            recent_limit = int(request.query_params.get('recent_limit', '50'))
+        except (TypeError, ValueError):
+            recent_limit = 50
+        if recent_limit not in (10, 20, 50, 100):
+            recent_limit = 50
 
         gps = GamePlayer.objects.filter(
             player=player, score__isnull=False
@@ -440,6 +447,8 @@ class PlayerStatsView(APIView):
             gps = gps.filter(game__player_count=int(player_count))
         if game_mode:
             gps = gps.filter(game__game_mode=game_mode)
+        if game_type in ('offline', 'online'):
+            gps = gps.filter(game__game_type=game_type)
 
         total_games = gps.count()
         if total_games == 0:
@@ -448,11 +457,12 @@ class PlayerStatsView(APIView):
                 'total_pt': 0,
                 'rank_distribution': {},
                 'recent_ranking': [],
+                'recent_series': [],
             })
 
-        rank_distribution = {1: 0, 2: 0, 3: 0}
+        rank_distribution = {1: 0, 2: 0, 3: 0, 4: 0}
         total_pt = 0
-        recent_ranking = []
+        rows = []
 
         for gp in gps:
             game = gp.game
@@ -467,7 +477,7 @@ class PlayerStatsView(APIView):
             player_pt = pt.get(str(player.id), 0)
             total_pt += player_pt
 
-            recent_ranking.append({
+            rows.append({
                 'game_id': str(game.id),
                 'start_time': game.start_time.strftime('%Y-%m-%d %H:%M') if game.start_time else '',
                 'rank': rank,
@@ -479,11 +489,26 @@ class PlayerStatsView(APIView):
         for rank, count in rank_distribution.items():
             rank_rates[f'{rank}位率'] = round(count / total_games * 100, 1) if total_games > 0 else 0
 
+        recent_slice = rows[:recent_limit]
+        recent_ranking = recent_slice
+
+        chronological = list(reversed(recent_slice))
+        recent_series = []
+        cum = 0.0
+        for idx, r in enumerate(chronological):
+            cum += float(r['pt'])
+            recent_series.append({
+                **r,
+                'game_index': idx,
+                'cumulative_pt': round(cum, 2),
+            })
+
         return Response({
             'total_games': total_games,
             'total_pt': total_pt,
             'rank_distribution': rank_rates,
-            'recent_ranking': recent_ranking[:50],
+            'recent_ranking': recent_ranking,
+            'recent_series': recent_series,
         })
 
 

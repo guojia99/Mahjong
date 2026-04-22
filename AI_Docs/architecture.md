@@ -138,6 +138,7 @@ backend/
 | GET | /api/v1/players/ | 雀士列表 | 公开 |
 | POST | /api/v1/players/ | 创建雀士 | 管理员 |
 | GET | /api/v1/players/{id}/ | 雀士详情 | 公开 |
+| GET | /api/v1/players/{id}/stats/ | 雀士统计：总对局/总 PT/一位～四位率；`recent_series` 为时间正序的最近 N 局（含每局 `cumulative_pt`）。查询参数：`player_count`、`game_mode`、`game_type`（`offline`/`online` 可省表示全部）、`recent_limit`（`10`/`20`/`50`/`100`，默认 `50`） | 公开 |
 | PUT | /api/v1/players/{id}/ | 更新雀士 | 管理员 |
 | DELETE | /api/v1/players/{id}/ | 删除雀士 | 管理员 |
 | POST | /api/v1/players/{id}/majsoul-accounts/ | 添加雀魂账号 | 管理员 |
@@ -209,7 +210,7 @@ backend/
 | / | 首页/仪表盘 | 统计概览、最近役满列表 | 公开 |
 | /players | 雀士管理 | 雀士增删改 | 管理员 |
 | /player-list | 雀士列表 | 雀士搜索浏览 | 公开 |
-| /player-list/:id | 雀士详情 | 统计数据、对局记录、役满列表、个人信息 | 公开 |
+| /player-list/:id | 雀士详情 | 统计（默认四麻半庄；位率含四位率；线下/线上筛选；最近 10/20/50/100 局顺位折线与 PT 累计曲线）、对局记录、役满列表、个人信息 | 公开 |
 | /rooms | 房间列表 | 活跃房间列表 (含最早/最晚对局时间) | 公开 |
 | /rooms/:id | 房间详情 | 房间成员、对局列表 | 公开 |
 | /rooms/:id/games/:gameId | 对局详情 | 选手列表、录分、役满牌谱 | 公开 |
