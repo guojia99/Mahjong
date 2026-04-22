@@ -483,6 +483,9 @@ class PlayerStatsView(APIView):
                 'rank': rank,
                 'pt': player_pt,
                 'score': gp.score,
+                'player_count': game.player_count,
+                'game_mode': game.game_mode,
+                'game_type': game.game_type,
             })
 
         rank_rates = {}

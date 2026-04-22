@@ -110,6 +110,10 @@ export interface PlayerStatsRecentPoint {
     score: number;
     game_index?: number;
     cumulative_pt?: number;
+    /** 该局人数（3/4），用于区分三麻/四麻 */
+    player_count?: number;
+    game_mode?: string;
+    game_type?: string;
 }
 
 export interface PlayerStats {
