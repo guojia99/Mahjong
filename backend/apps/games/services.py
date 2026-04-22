@@ -139,6 +139,7 @@ class GameService:
                            paipu_data=None, start_time=None):
         from .models import Game, GamePlayer, RoomPlayer
         from apps.players.models import Player
+        from apps.players.services import PlayerService
         from datetime import datetime
         from django.db import transaction
 
@@ -168,6 +169,11 @@ class GameService:
                     player = Player.objects.get(pk=player_id)
                 except Player.DoesNotExist:
                     continue
+
+                uid = pdata.get('uid')
+                if uid is not None:
+                    maj_nick = pdata.get('majsoul_nickname') or pdata.get('nickname') or ''
+                    PlayerService.ensure_majsoul_uid_on_player(player, uid, maj_nick)
 
                 GamePlayer.objects.create(
                     game=game, player=player, seat_number=i,

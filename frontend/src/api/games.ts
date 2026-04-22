@@ -93,7 +93,15 @@ export async function createNextGame(roomId: string, fromGameId: string): Promis
 export async function importOnlineGame(payload: {
   room_id: string;
   source_url?: string;
-  player_data: { player_id: string; score?: number; is_dealer_start?: boolean }[];
+  player_data: {
+    player_id: string;
+    score?: number;
+    is_dealer_start?: boolean;
+    /** 牌谱中的雀魂 UID，导入后写入该雀士的雀魂账号表 */
+    uid?: number;
+    /** 牌谱昵称，写入 MahjongSoulAccount.nickname */
+    majsoul_nickname?: string;
+  }[];
   game_mode: string;
   player_count?: number;
   paipu_data?: Record<string, unknown>;
