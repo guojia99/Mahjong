@@ -98,6 +98,8 @@ export async function importOnlineGame(payload: {
   player_count?: number;
   paipu_data?: Record<string, unknown>;
   start_time?: string | null;
+  /** 与已有线上对局牌谱 URL 重复时须为 true，否则后端拒绝导入 */
+  allow_duplicate_url?: boolean;
 }): Promise<Game> {
   const { data } = await api.post('/games/online/', payload, { timeout: 120_000 });
   return data;
@@ -120,6 +122,7 @@ export async function parseOnlineGame(url: string): Promise<{
     is_bound: boolean;
   }[];
   source_url: string;
+  duplicate_in_db?: boolean;
   raw_data: Record<string, unknown>;
 }> {
   const { data } = await api.get('/games/online/parse/', {
@@ -133,7 +136,7 @@ export type OnlineParseItem = Awaited<ReturnType<typeof parseOnlineGame>>;
 
 export async function parseOnlineGameBatch(urls: string[]): Promise<{
   results: (
-    | { source_url: string; ok: true; data: OnlineParseItem }
+    | { source_url: string; ok: true; data: OnlineParseItem; duplicate_in_db: boolean }
     | { source_url: string; ok: false; error: string }
   )[];
 }> {

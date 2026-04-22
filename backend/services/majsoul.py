@@ -15,6 +15,24 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+def normalize_paipu_input_url(raw: str) -> str:
+    """
+    从整段剪贴文本中截取牌谱 URL：去掉「雀魂牌谱 :」等 https 之前的前缀，只保留以 http:// 或 https:// 开头的一段。
+    """
+    s = (raw or '').strip()
+    if not s:
+        return ''
+    lower = s.lower()
+    for needle in ('https://', 'http://'):
+        idx = lower.find(needle)
+        if idx != -1:
+            tail = s[idx:].strip()
+            parts = tail.split()
+            token = parts[0] if parts else tail
+            return token.rstrip('.,;；，。）)')
+    return s
+
+
 def extract_paipu_uuid(url: str) -> str | None:
     if not url:
         return None
@@ -69,10 +87,9 @@ def analyze_paipu_url(source_url: str) -> dict:
     返回:
       uuid, start_time, game_mode, player_count, players, raw_data(含 code/msg 与 data)
     """
-    if not (source_url or '').strip():
-        raise ValueError('空链接')
-
-    url = (source_url or '').strip()
+    url = normalize_paipu_input_url(source_url)
+    if not url:
+        raise ValueError('空链接或未识别到有效的 http(s) 牌谱链接')
     paipu_uuid = extract_paipu_uuid(url) or url
 
     api = getattr(

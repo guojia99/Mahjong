@@ -10,11 +10,20 @@ import { ROOM_TYPE_LABELS } from '@/types';
 import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus } from 'lucide-react';
 
 type RowState = {
+  id: string;
+  /** 用户粘贴的原始一行（用于与规范化后的 URL 对照） */
+  original_line: string;
   source_url: string;
   ok: boolean;
   data?: OnlineParseItem;
   error?: string;
   bindings: Record<number, string>;
+  /** 系统中是否已有相同牌谱 URL 的线上对局 */
+  duplicate_in_db?: boolean;
+  /** 本批粘贴中是否与前文某行 URL 相同（规范化后） */
+  duplicate_in_batch?: boolean;
+  /** 与已有或本批重复的牌谱默认不导入，需用户勾选后才允许导入 */
+  import_selected: boolean;
 };
 
 function toDatetimeLocalValue(iso: string | null | undefined): string {
@@ -54,6 +63,7 @@ export default function OnlineGamePage() {
   const [newPlayerNickname, setNewPlayerNickname] = useState('');
   const [newPlayerRealName, setNewPlayerRealName] = useState('');
   const [createPlayerLoading, setCreatePlayerLoading] = useState(false);
+  const [paipuOpenUrl, setPaipuOpenUrl] = useState<string | null>(null);
 
   const { showToast, ToastComponent } = useToast();
 
@@ -159,19 +169,40 @@ export default function OnlineGamePage() {
     setParseError('');
     try {
       const { results } = await parseOnlineGameBatch(lines);
-      const next: RowState[] = results.map((r) => {
+      const seenNorm = new Set<string>();
+      const next: RowState[] = results.map((r, idx) => {
+        const orig = lines[idx] ?? '';
+        const rid = crypto.randomUUID();
         if (r.ok && r.data) {
           const b: Record<number, string> = {};
           for (const p of r.data.players) {
             if (p.player_id) b[p.uid] = p.player_id;
           }
-          return { source_url: r.source_url, ok: true, data: r.data, bindings: b };
+          const norm = r.source_url;
+          const duplicate_in_batch = seenNorm.has(norm);
+          if (!duplicate_in_batch) seenNorm.add(norm);
+          const duplicate_in_db = r.duplicate_in_db;
+          const anyDup = duplicate_in_batch || duplicate_in_db;
+          return {
+            id: rid,
+            original_line: orig,
+            source_url: norm,
+            ok: true,
+            data: r.data,
+            bindings: b,
+            duplicate_in_db,
+            duplicate_in_batch,
+            import_selected: !anyDup,
+          };
         }
         return {
+          id: rid,
+          original_line: orig,
           source_url: (r as { source_url: string }).source_url,
           ok: false,
           error: (r as { error?: string }).error || '解析失败',
           bindings: {},
+          import_selected: false,
         };
       });
       setRows(next);
@@ -204,7 +235,7 @@ export default function OnlineGamePage() {
         if (!row.ok || !row.data) return row;
         if (!row.data.players.some((p) => p.uid === uid)) return row;
         return { ...row, bindings: { ...row.bindings, [uid]: playerId } };
-      })
+      }),
     );
   };
 
@@ -296,8 +327,21 @@ export default function OnlineGamePage() {
     return sum === need;
   };
 
+  const isDuplicateRow = (row: RowState) =>
+    Boolean(row.ok && (row.duplicate_in_db || row.duplicate_in_batch));
+
   const canImportOne = (row: RowState) =>
-    row.ok && allUidsBound && rowAllBound(row) && rowTotalOk(row);
+    row.ok &&
+    allUidsBound &&
+    rowAllBound(row) &&
+    rowTotalOk(row) &&
+    (!isDuplicateRow(row) || row.import_selected);
+
+  const toggleRowImportSelected = (rowId: string) => {
+    setRows((prev) =>
+      prev.map((r) => (r.id === rowId && r.ok ? { ...r, import_selected: !r.import_selected } : r)),
+    );
+  };
 
   const canImportAll = () =>
     allUidsBound &&
@@ -305,7 +349,7 @@ export default function OnlineGamePage() {
     rows.filter((r) => r.ok).length > 0 &&
     rows.filter((r) => r.ok).every((r) => canImportOne(r));
 
-  const doImportOne = async (row: RowState) => {
+  const doImportOne = async (row: RowState, urlsAlreadyImportedInRun: Set<string>) => {
     if (!row.ok || !row.data || !roomId) return;
     if (!canImportOne(row)) return;
     const player_data = row.data.players.map((p, i) => ({
@@ -314,7 +358,9 @@ export default function OnlineGamePage() {
       is_dealer_start: i === 0,
     }));
     const st = effectiveStartTime ? new Date(effectiveStartTime).toISOString() : null;
-    return importOnlineGame({
+    const seenInRun = urlsAlreadyImportedInRun.has(row.source_url);
+    const allow_duplicate_url = seenInRun || Boolean(row.duplicate_in_db);
+    const game = await importOnlineGame({
       room_id: roomId,
       source_url: row.source_url,
       player_data,
@@ -322,14 +368,17 @@ export default function OnlineGamePage() {
       player_count: row.data.player_count,
       paipu_data: row.data.raw_data,
       start_time: st,
+      allow_duplicate_url,
     });
+    urlsAlreadyImportedInRun.add(row.source_url);
+    return game;
   };
 
   const handleImportOne = async (row: RowState) => {
     if (!roomId || !canImportOne(row)) return;
     setImporting(true);
     try {
-      const game = await doImportOne(row);
+      const game = await doImportOne(row, new Set<string>());
       if (!game) return;
       setImportedGames((prev) => [
         {
@@ -340,7 +389,7 @@ export default function OnlineGamePage() {
         },
         ...prev,
       ]);
-      setRows((prev) => prev.filter((r) => r.source_url !== row.source_url));
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
       showToast('已导入 1 局', 'success');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '导入失败';
@@ -353,14 +402,15 @@ export default function OnlineGamePage() {
   const handleImportAll = async () => {
     if (!canImportAll() || !roomId) return;
     setImporting(true);
-    const doneUrls = new Set<string>();
+    const doneIds = new Set<string>();
+    const urlsInRun = new Set<string>();
     let n = 0;
     try {
       for (const row of rows) {
         if (row.ok && canImportOne(row)) {
-          const game = await doImportOne(row);
+          const game = await doImportOne(row, urlsInRun);
           if (game) {
-            doneUrls.add(row.source_url);
+            doneIds.add(row.id);
             n += 1;
             setImportedGames((prev) => [
               {
@@ -374,7 +424,7 @@ export default function OnlineGamePage() {
           }
         }
       }
-      setRows((prev) => prev.filter((r) => !doneUrls.has(r.source_url)));
+      setRows((prev) => prev.filter((r) => !doneIds.has(r.id)));
       showToast(`已导入 ${n} 局`, 'success');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '导入失败';
@@ -448,14 +498,15 @@ export default function OnlineGamePage() {
           <h3 className="font-bold">2. 批量粘贴牌谱链接</h3>
         </div>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text-light)' }}>
-          每行一个链接；需先选择线上场。多局可能是同一批人，解析后会先弹出「待关联 UID」去重列表，全部关联到雀士后再允许导入；亦可在结果区单独调整。
+          每行一个链接；需先选择线上场。支持整段粘贴（如「雀魂牌谱 :https://…」），解析时会自动截取以 http(s) 开头的链接。
+          若与已有对局或本列表中其他行 URL 重复，默认不导入，需手动勾选「仍导入本条」后再导入。
         </p>
         <textarea
           className="form-input w-full font-mono text-sm"
           rows={8}
           value={urlsText}
           onChange={(e) => setUrlsText(e.target.value)}
-          placeholder="https://game.maj-soul.com/1/?paipu=...
+          placeholder="雀魂牌谱 :https://game.maj-soul.com/1/?paipu=...
 https://game.maj-soul.com/1/?paipu=..."
         />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -518,11 +569,11 @@ https://game.maj-soul.com/1/?paipu=..."
               if (!row.ok) {
                 return (
                   <div
-                    key={row.source_url}
+                    key={row.id}
                     className="p-3 rounded-xl"
                     style={{ background: '#fde8e8', border: '1px solid #f5c6c6' }}
                   >
-                    <div className="text-sm font-mono break-all opacity-80">{row.source_url || '(空行)'}</div>
+                    <div className="text-sm font-mono break-all opacity-80">{row.original_line || row.source_url || '(空行)'}</div>
                     <div className="text-sm mt-1">{row.error}</div>
                   </div>
                 );
@@ -530,13 +581,32 @@ https://game.maj-soul.com/1/?paipu=..."
               const d = row.data!;
               const exp = d.player_count === 3 ? 1050 : 1000;
               const sum = d.players.reduce((s, p) => s + p.score, 0);
+              const dup = isDuplicateRow(row);
               return (
                 <div
-                  key={row.source_url}
+                  key={row.id}
                   className="p-3 rounded-xl"
                   style={{ border: '1px solid var(--color-border)', background: 'white' }}
                 >
+                  {row.original_line && row.original_line.trim() !== row.source_url.trim() && (
+                    <div className="text-xs mb-1 rounded px-2 py-1" style={{ background: '#f3f4f6', color: 'var(--color-text-light)' }}>
+                      原始：{row.original_line}
+                    </div>
+                  )}
                   <div className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{row.source_url}</div>
+                  {dup && (
+                    <div
+                      className="text-xs mb-2 p-2 rounded-lg flex items-start gap-2"
+                      style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}
+                    >
+                      <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                      <div>
+                        {row.duplicate_in_db && <div>该牌谱链接与<strong>系统中已有线上对局</strong>重复。</div>}
+                        {row.duplicate_in_batch && <div>该链接在本批粘贴中<strong>与上文重复</strong>。</div>}
+                        <div className="mt-1">默认不导入；若仍要导入，请勾选下方「仍导入本条」。</div>
+                      </div>
+                    </div>
+                  )}
                   <div className="text-sm mb-2">
                     模式 {d.game_mode === 'east_wind' ? '东风' : '半庄'} / {d.player_count} 人 · 分数和 {sum} / {exp}
                     {sum === exp ? ' ✓' : ' ✗'}
@@ -566,6 +636,17 @@ https://game.maj-soul.com/1/?paipu=..."
                       );
                     })}
                   </div>
+                  {dup && (
+                    <label className="mt-2 flex items-start gap-2 cursor-pointer text-sm select-none">
+                      <input
+                        type="checkbox"
+                        className="mt-1"
+                        checked={row.import_selected}
+                        onChange={() => toggleRowImportSelected(row.id)}
+                      />
+                      <span style={{ color: 'var(--color-text)' }}>仍导入本条（将写入一条新的线上对局记录）</span>
+                    </label>
+                  )}
                   <div className="mt-3 flex justify-end">
                     <button
                       type="button"
@@ -619,21 +700,40 @@ https://game.maj-soul.com/1/?paipu=..."
                   </div>
                 </div>
                 {game.source_url && (
-                  <a
-                    href={game.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
                     className="text-xs mt-1 inline-flex items-center gap-1"
-                    style={{ color: 'var(--color-secondary-dark)' }}
+                    style={{ color: 'var(--color-secondary-dark)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    onClick={() => setPaipuOpenUrl(game.source_url.trim())}
                   >
                     <ExternalLink size={10} /> 查看牌谱
-                  </a>
+                  </button>
                 )}
               </div>
             ))}
           </div>
         </div>
       )}
+
+      <Modal open={Boolean(paipuOpenUrl)} onClose={() => setPaipuOpenUrl(null)} title="打开雀魂牌谱">
+        <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>即将在新标签页打开外部网站，是否继续？</p>
+        {paipuOpenUrl && (
+          <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>{paipuOpenUrl}</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuOpenUrl(null)}>取消</button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm inline-flex items-center gap-1"
+            onClick={() => {
+              if (paipuOpenUrl) window.open(paipuOpenUrl, '_blank', 'noopener,noreferrer');
+              setPaipuOpenUrl(null);
+            }}
+          >
+            <ExternalLink size={14} /> 打开
+          </button>
+        </div>
+      </Modal>
 
       <Modal open={showCreateRoom} onClose={() => setShowCreateRoom(false)} title="新建线上场">
         <form onSubmit={(e) => { void handleCreateOnlineRoom(e); }}>
