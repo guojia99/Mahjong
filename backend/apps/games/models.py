@@ -12,7 +12,6 @@ GAME_TYPE_CHOICES = [
 GAME_MODE_CHOICES = [
     ('east_wind', '东风'),
     ('half_match', '半庄'),
-    ('south_wind', '南风'),
 ]
 
 PLAYER_COUNT_CHOICES = [
@@ -25,11 +24,20 @@ ROOM_STATUS_CHOICES = [
     ('closed', '已关闭'),
 ]
 
+ROOM_TYPE_CHOICES = [
+    ('offline', '线下场'),
+    ('online', '线上场'),
+]
+
 
 class Room(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, verbose_name='房间名称')
     location = models.CharField(max_length=100, blank=True, default='', verbose_name='地点/雀庄')
+    room_type = models.CharField(
+        max_length=20, choices=ROOM_TYPE_CHOICES, default='offline', verbose_name='房间类型',
+    )
+    session_time = models.DateTimeField(null=True, blank=True, verbose_name='场次时间')
     status = models.CharField(max_length=20, choices=ROOM_STATUS_CHOICES, default='open', verbose_name='状态')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
@@ -68,6 +76,7 @@ class Game(models.Model):
     player_count = models.SmallIntegerField(choices=PLAYER_COUNT_CHOICES, default=4, verbose_name='人数(3三麻/4四麻)')
     start_time = models.DateTimeField(verbose_name='对局时间')
     source_url = models.URLField(blank=True, default='', verbose_name='牌谱链接')
+    paipu_data = models.JSONField(default=dict, blank=True, verbose_name='雀魂牌谱详细数据')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
         related_name='created_games', verbose_name='创建者'

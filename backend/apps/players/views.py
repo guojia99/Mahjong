@@ -14,6 +14,34 @@ from .serializers import (
 from .services import PlayerService
 
 
+class PlayerAvatarBatchView(APIView):
+    """
+    批量获取雀士头像数据（id -> avatar），供列表等场景复用，避免在每条业务接口里重复塞大字段。
+    支持 POST body: {"ids": ["uuid", ...]} 或 GET query: ?ids=uuid,uuid
+    """
+    permission_classes = [IsAdminUserOrReadOnly]
+    _MAX = 200
+
+    def get(self, request):
+        raw = request.query_params.get('ids', '')
+        ids = [s.strip() for s in raw.split(',') if s.strip()][: self._MAX]
+        return Response(self._build_map(ids))
+
+    def post(self, request):
+        ids = request.data.get('ids')
+        if not isinstance(ids, list):
+            return Response({'error': '需要 ids 数组'}, status=status.HTTP_400_BAD_REQUEST)
+        ids = [str(x) for x in ids if x][: self._MAX]
+        return Response(self._build_map(ids))
+
+    @staticmethod
+    def _build_map(ids):
+        if not ids:
+            return {}
+        found = {str(p.id): (p.avatar or '') for p in Player.objects.filter(id__in=ids).only('id', 'avatar')}
+        return {i: found.get(i, '') for i in ids}
+
+
 class PlayerListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 

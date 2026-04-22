@@ -16,18 +16,22 @@ const SELECT_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+type PtScope = '' | 'offline' | 'online';
+
 export default function PtRankingPage() {
   const [rankings, setRankings] = useState<PtRankingItem[]>([]);
   const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
-  const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match' | 'south_wind'>('half_match');
+  const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
+  const [ptScope, setPtScope] = useState<PtScope>('');
   const { showToast, ToastComponent } = useToast();
 
   useEffect(() => {
     const params: Record<string, string> = {};
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
+    if (ptScope) params.game_type = ptScope;
     getPtRanking(params).then(setRankings).catch(() => showToast('加载排名失败'));
-  }, [playerCount, gameMode, showToast]);
+  }, [playerCount, gameMode, ptScope, showToast]);
 
   const maxPt = rankings.length > 0 ? Math.max(...rankings.map(r => r.total_pt)) : 1;
   const minPt = rankings.length > 0 ? Math.min(...rankings.map(r => r.total_pt)) : 0;
@@ -42,6 +46,32 @@ export default function PtRankingPage() {
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6 items-center">
+        <div
+          className="flex rounded-lg overflow-hidden"
+          style={{ border: '2px solid var(--color-border)' }}
+        >
+          {(
+            [
+              { v: '' as const, label: '全部对局' },
+              { v: 'offline' as const, label: '仅线下' },
+              { v: 'online' as const, label: '仅线上' },
+            ] as const
+          ).map(({ v, label }, i) => (
+            <button
+              key={v || 'all'}
+              type="button"
+              onClick={() => setPtScope(v)}
+              className="px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                background: ptScope === v ? 'var(--color-primary-light)' : 'white',
+                color: ptScope === v ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                borderRight: i < 2 ? '1px solid var(--color-border)' : undefined,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <select value={playerCount} onChange={(e) => setPlayerCount(e.target.value as typeof playerCount)} style={SELECT_STYLE}>
           <option value="">全部人数</option>
           <option value="4">四麻</option>
@@ -51,7 +81,6 @@ export default function PtRankingPage() {
           <option value="">全部模式</option>
           <option value="east_wind">东风</option>
           <option value="half_match">半庄</option>
-          <option value="south_wind">南风</option>
         </select>
       </div>
 

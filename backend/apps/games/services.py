@@ -135,31 +135,48 @@ class GameService:
         return GameService.create_game(room, user, player_ids, **kwargs)
 
     @staticmethod
-    def create_online_game(user, source_url, player_data, game_mode='half_match', player_count=None):
-        from .models import Game, GamePlayer
+    def create_online_game(user, source_url, player_data, room, game_mode='half_match', player_count=None,
+                           paipu_data=None, start_time=None):
+        from .models import Game, GamePlayer, RoomPlayer
         from apps.players.models import Player
-        import re
         from datetime import datetime
+        from django.db import transaction
 
         if player_count is None:
             player_count = len(player_data)
 
-        game = Game.objects.create(
-            game_type='online',
-            game_mode=game_mode,
-            player_count=player_count,
-            start_time=datetime.now(),
-            source_url=source_url,
-            created_by=user,
-        )
+        if start_time is None:
+            start_time = room.session_time or datetime.now()
 
-        for i, pdata in enumerate(player_data):
-            player = Player.objects.get(pk=pdata['player_id'])
-            GamePlayer.objects.create(
-                game=game, player=player, seat_number=i,
-                score=pdata.get('score'),
-                is_dealer_start=pdata.get('is_dealer_start', False),
+        with transaction.atomic():
+            game = Game.objects.create(
+                room=room,
+                game_type='online',
+                game_mode=game_mode,
+                player_count=player_count,
+                start_time=start_time,
+                source_url=source_url,
+                paipu_data=paipu_data or {},
+                created_by=user,
             )
+
+            for i, pdata in enumerate(player_data):
+                player_id = pdata.get('player_id')
+                if not player_id:
+                    continue
+                try:
+                    player = Player.objects.get(pk=player_id)
+                except Player.DoesNotExist:
+                    continue
+
+                GamePlayer.objects.create(
+                    game=game, player=player, seat_number=i,
+                    score=pdata.get('score'),
+                    is_dealer_start=pdata.get('is_dealer_start', False),
+                )
+
+                if not room.room_players.filter(player=player).exists():
+                    RoomPlayer.objects.create(room=room, player=player)
 
         return game
 

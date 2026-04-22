@@ -1,12 +1,13 @@
 from django.urls import path
 from apps.games.views import PlayerStatsView, PlayerYakumanListView
 from .views import (
-    PlayerListView, PlayerDetailView,
+    PlayerListView, PlayerDetailView, PlayerAvatarBatchView,
     PlayerMajsoulAccountListView, MajsoulAccountDetailView,
     PlayerGamesView,
 )
 
 urlpatterns = [
+    path('batch-avatars/', PlayerAvatarBatchView.as_view(), name='player-batch-avatars'),
     path('', PlayerListView.as_view(), name='player-list'),
     path('<uuid:pk>/', PlayerDetailView.as_view(), name='player-detail'),
     path('<uuid:pk>/games/', PlayerGamesView.as_view(), name='player-games'),

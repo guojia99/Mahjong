@@ -33,6 +33,19 @@ class PlayerService:
         account.delete()
 
     @staticmethod
+    def bind_majsoul_account(account_id, player):
+        from .models import MahjongSoulAccount
+        try:
+            account = MahjongSoulAccount.objects.get(pk=account_id)
+        except MahjongSoulAccount.DoesNotExist:
+            raise BusinessException('雀魂账号不存在')
+        if account.player_id and account.player_id != player.id:
+            raise BusinessException('该账号已绑定其他雀士', code=409)
+        account.player = player
+        account.save()
+        return account
+
+    @staticmethod
     def get_player_by_majsoul_uid(uid):
         from .models import MahjongSoulAccount
         try:

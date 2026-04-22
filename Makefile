@@ -99,9 +99,11 @@ stop:
 	@-rm -rf $(PIDDIR)
 	@echo "\033[32mDone.\033[0m"
 
-## 重启所有服务
+## 重启所有服务（先停止 → 自动 migrate → 再 dev）
 restart:
 	@$(MAKE) stop
+	@echo "\033[36mApplying database migrations...\033[0m"
+	@$(MAKE) migrate
 	@echo "\033[33mRestarting...\033[0m"
 	@$(MAKE) dev
 

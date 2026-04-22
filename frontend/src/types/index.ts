@@ -29,6 +29,8 @@ export interface Room {
     id: string;
     name: string;
     location: string;
+    room_type: 'offline' | 'online';
+    session_time: string | null;
     status: 'open' | 'closed';
     player_count: number;
     game_count: number;
@@ -49,10 +51,11 @@ export interface Game {
     id: string;
     room?: { id: string; name: string } | null;
     game_type: 'offline' | 'online';
-    game_mode: 'east_wind' | 'half_match' | 'south_wind';
+    game_mode: 'east_wind' | 'half_match';
     player_count: number;
     start_time: string;
     source_url: string;
+    paipu_data?: Record<string, unknown>;
     players: GamePlayerInfo[];
     is_scored: boolean;
     created_at: string;
@@ -128,13 +131,11 @@ export const SEAT_WIND_LABELS: Record<number, string> = {
 export const GAME_MODE_LABELS: Record<string, string> = {
     east_wind: '东风',
     half_match: '半庄',
-    south_wind: '南风',
 };
 
 export const GAME_MODE_FULL_LABELS: Record<string, string> = {
     east_wind: '东风局',
     half_match: '半庄',
-    south_wind: '南风局',
 };
 
 export const GAME_TYPE_LABELS: Record<string, string> = {
@@ -145,6 +146,11 @@ export const GAME_TYPE_LABELS: Record<string, string> = {
 export const ROOM_STATUS_LABELS: Record<string, string> = {
     open: '进行中',
     closed: '已关闭',
+};
+
+export const ROOM_TYPE_LABELS: Record<string, string> = {
+    offline: '线下场',
+    online: '线上场',
 };
 
 export const PLAYER_COUNT_LABELS: Record<number, string> = {

@@ -1,8 +1,10 @@
 import random
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Min, Max
+from django.db.models import Min, Max, DateTimeField
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from common.permissions import IsAdminUserOrReadOnly
 from .models import Room, Game, GamePlayer, HandRecord
@@ -11,9 +13,12 @@ from .serializers import (
     RoomPlayerSerializer, GameListSerializer, GameDetailSerializer,
     GameCreateSerializer, GameUpdateSerializer, ScoreSubmitSerializer,
     HandRecordCreateSerializer, HandRecordListSerializer,
+    OnlineGameImportSerializer,
 )
 from .services import RoomService, GameService, HandRecordService, calculate_pt
-from apps.players.models import Player
+from apps.players.models import Player, MahjongSoulAccount
+
+logger = logging.getLogger(__name__)
 
 
 class RoomListView(APIView):
@@ -21,12 +26,21 @@ class RoomListView(APIView):
 
     def get(self, request):
         status_filter = request.query_params.get('status')
+        room_type = request.query_params.get('room_type')
         rooms = Room.objects.all()
         if status_filter:
             rooms = rooms.filter(status=status_filter)
-        rooms = rooms.prefetch_related('room_players__player').annotate(
-            earliest_game_time=Min('games__start_time'),
-            latest_game_time=Max('games__start_time'),
+        if room_type in ('offline', 'online'):
+            rooms = rooms.filter(room_type=room_type)
+        # 有场次时间按场次，否则按创建时间；与列表时间含义一致
+        rooms = (
+            rooms.prefetch_related('room_players__player')
+            .annotate(
+                sort_time=Coalesce('session_time', 'created_at', output_field=DateTimeField()),
+                earliest_game_time=Min('games__start_time'),
+                latest_game_time=Max('games__start_time'),
+            )
+            .order_by('-sort_time', '-created_at')
         )
         serializer = RoomListSerializer(rooms, many=True)
         return Response(serializer.data)
@@ -209,19 +223,179 @@ class GameShuffleSeatsView(APIView):
         return Response(GameDetailSerializer(game).data)
 
 
+class OnlineGameParseView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        source_url = request.query_params.get('url', '')
+        if not source_url:
+            return Response({'error': '请提供牌谱链接'}, status=400)
+
+        from services.majsoul import analyze_paipu_url
+
+        try:
+            result = analyze_paipu_url(source_url)
+        except Exception as e:
+            logger.error(f"解析牌谱失败: {e}", exc_info=True)
+            return Response({'error': f'解析牌谱失败: {str(e)}'}, status=500)
+
+        if not result:
+            return Response({'error': '未找到牌谱数据，请检查链接是否有效'}, status=404)
+
+        uid_list = [p['uid'] for p in result['players']]
+        bound_accounts = MahjongSoulAccount.objects.filter(uid__in=uid_list).select_related('player')
+        uid_to_account = {acc.uid: acc for acc in bound_accounts}
+
+        players_info = []
+        for p in result['players']:
+            account = uid_to_account.get(p['uid'])
+            players_info.append({
+                'seat': p['seat'],
+                'uid': p['uid'],
+                'nickname': p['nickname'],
+                'score': p['score'],
+                'player_id': str(account.player_id) if account and account.player_id else None,
+                'account_id': str(account.id) if account else None,
+                'is_bound': bool(account and account.player_id),
+            })
+
+        return Response({
+            'uuid': result['uuid'],
+            'start_time': result['start_time'],
+            'game_mode': result['game_mode'],
+            'player_count': result['player_count'],
+            'players': players_info,
+            'source_url': source_url,
+            'raw_data': result.get('raw_data', {}),
+        })
+
+
+class OnlineGameParseBatchView(APIView):
+    """批量解析牌谱（每行一链接，顺序与请求一致）。"""
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def post(self, request):
+        urls = request.data.get('urls')
+        if not isinstance(urls, list) or not urls:
+            return Response({'error': '请提供 urls 数组'}, status=400)
+        from services.majsoul import analyze_paipu_url
+
+        results = []
+        for u in urls:
+            line = (u or '').strip() if isinstance(u, str) else ''
+            if not line:
+                results.append({'source_url': '', 'ok': False, 'error': '空行'})
+                continue
+            try:
+                result = analyze_paipu_url(line)
+                uid_list = [p['uid'] for p in result['players']]
+                bound_accounts = MahjongSoulAccount.objects.filter(uid__in=uid_list).select_related('player')
+                uid_to_account = {acc.uid: acc for acc in bound_accounts}
+                players_info = []
+                for p in result['players']:
+                    account = uid_to_account.get(p['uid'])
+                    players_info.append({
+                        'seat': p['seat'],
+                        'uid': p['uid'],
+                        'nickname': p['nickname'],
+                        'score': p['score'],
+                        'player_id': str(account.player_id) if account and account.player_id else None,
+                        'account_id': str(account.id) if account else None,
+                        'is_bound': bool(account and account.player_id),
+                    })
+                results.append({
+                    'source_url': line,
+                    'ok': True,
+                    'data': {
+                        'uuid': result['uuid'],
+                        'start_time': result['start_time'],
+                        'game_mode': result['game_mode'],
+                        'player_count': result['player_count'],
+                        'players': players_info,
+                        'source_url': line,
+                        'raw_data': result.get('raw_data', {}),
+                    },
+                })
+            except Exception as e:
+                logger.warning('批量解析行失败: %s %s', line, e)
+                results.append({'source_url': line, 'ok': False, 'error': str(e)})
+
+        return Response({'results': results})
+
+
 class OnlineGameImportView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
     def post(self, request):
-        source_url = request.data.get('source_url', '')
-        player_data = request.data.get('player_data', [])
-        game_mode = request.data.get('game_mode', 'half_match')
-        player_count = request.data.get('player_count', len(player_data))
+        serializer = OnlineGameImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-        game = GameService.create_online_game(
-            request.user, source_url, player_data, game_mode, player_count
-        )
+        room_id = data['room_id']
+        room = get_object_or_404(Room, pk=room_id)
+        if room.room_type != 'online':
+            return Response({'error': '请选择「线上场」房间'}, status=400)
+        if room.status != 'open':
+            return Response({'error': '房间已关闭，无法导入'}, status=400)
+
+        source_url = data.get('source_url', '') or ''
+        player_data = data.get('player_data', [])
+        game_mode = data.get('game_mode', 'half_match')
+        player_count = data.get('player_count', len(player_data))
+        paipu_data = data.get('paipu_data', {}) or {}
+        start_time = data.get('start_time')
+
+        try:
+            game = GameService.create_online_game(
+                request.user, source_url, player_data, room, game_mode=game_mode, player_count=player_count,
+                paipu_data=paipu_data, start_time=start_time,
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
         return Response(GameDetailSerializer(game).data, status=status.HTTP_201_CREATED)
+
+
+class BindMajsoulAccountView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def post(self, request):
+        from apps.players.services import PlayerService
+        from apps.players.serializers import MahjongSoulAccountSerializer
+
+        account_id = request.data.get('account_id')
+        player_id = request.data.get('player_id')
+        if not account_id or not player_id:
+            return Response({'error': '请提供account_id和player_id'}, status=400)
+
+        try:
+            player = Player.objects.get(pk=player_id)
+        except Player.DoesNotExist:
+            return Response({'error': '雀士不存在'}, status=404)
+
+        try:
+            account = PlayerService.bind_majsoul_account(account_id, player)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+        return Response(MahjongSoulAccountSerializer(account).data)
+
+
+class UnboundMajsoulAccountsView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        from apps.players.serializers import MahjongSoulAccountSerializer
+        uid_list = request.query_params.getlist('uid')
+        if not uid_list:
+            return Response([])
+
+        accounts = MahjongSoulAccount.objects.filter(
+            uid__in=[int(u) for u in uid_list],
+            player__isnull=True,
+        )
+        serializer = MahjongSoulAccountSerializer(accounts, many=True)
+        return Response(serializer.data)
 
 
 class HandRecordListView(APIView):
@@ -328,6 +502,9 @@ class PtRankingView(APIView):
             games = games.filter(player_count=int(player_count))
         if game_mode:
             games = games.filter(game_mode=game_mode)
+        game_type = request.query_params.get('game_type')
+        if game_type in ('offline', 'online'):
+            games = games.filter(game_type=game_type)
 
         pt_totals = {}
 
@@ -347,7 +524,7 @@ class PtRankingView(APIView):
                     'player': PlayerListSerializer(player).data,
                     'total_pt': total_pt,
                     'game_count': GamePlayer.objects.filter(
-                        player_id=player_id, score__isnull=False
+                        player_id=player_id, score__isnull=False, game__in=games,
                     ).count(),
                 })
             except Player.DoesNotExist:
