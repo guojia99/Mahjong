@@ -32,6 +32,17 @@ function toDatetimeLocalValue(iso: string | null | undefined): string {
   return t.length >= 16 ? t.slice(0, 16) : t;
 }
 
+/** 从当前雀士列表构建 UID → 雀士 id（列表接口含 majsoul_uids） */
+function buildUidToPlayerIdMap(players: Player[]): Map<number, string> {
+  const m = new Map<number, string>();
+  for (const pl of players) {
+    for (const u of pl.majsoul_uids ?? []) {
+      if (!m.has(u)) m.set(u, pl.id);
+    }
+  }
+  return m;
+}
+
 export default function OnlineGamePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const roomIdFromQuery = searchParams.get('room') || '';
@@ -64,8 +75,16 @@ export default function OnlineGamePage() {
   const [newPlayerRealName, setNewPlayerRealName] = useState('');
   const [createPlayerLoading, setCreatePlayerLoading] = useState(false);
   const [paipuOpenUrl, setPaipuOpenUrl] = useState<string | null>(null);
+  /** 全量雀士（用于解析后按 UID 预填绑定、展示已关联头像昵称） */
+  const [playersDirectory, setPlayersDirectory] = useState<Player[]>([]);
 
   const { showToast, ToastComponent } = useToast();
+
+  const refreshPlayersDirectory = useCallback(async () => {
+    const list = await getPlayers();
+    setPlayersDirectory(list);
+    setAllPlayers(list);
+  }, []);
 
   const loadOnlineRooms = useCallback(async () => {
     const list = await getRooms({ status: 'open', room_type: 'online' });
@@ -168,6 +187,11 @@ export default function OnlineGamePage() {
     setParsing(true);
     setParseError('');
     try {
+      const playersList = await getPlayers();
+      setPlayersDirectory(playersList);
+      setAllPlayers(playersList);
+      const uidToPlayerId = buildUidToPlayerIdMap(playersList);
+
       const { results } = await parseOnlineGameBatch(lines);
       const seenNorm = new Set<string>();
       const next: RowState[] = results.map((r, idx) => {
@@ -176,7 +200,10 @@ export default function OnlineGamePage() {
         if (r.ok && r.data) {
           const b: Record<number, string> = {};
           for (const p of r.data.players) {
-            if (p.player_id) b[p.uid] = p.player_id;
+            const fromApi = p.player_id ? String(p.player_id) : '';
+            const fromList = uidToPlayerId.get(p.uid);
+            const pid = fromApi || fromList;
+            if (pid) b[p.uid] = pid;
           }
           const norm = r.source_url;
           const duplicate_in_batch = seenNorm.has(norm);
@@ -210,7 +237,6 @@ export default function OnlineGamePage() {
         (row) => row.ok && row.data && row.data.players.some((p) => !row.bindings[p.uid])
       );
       if (anyUnbound) {
-        getPlayers().then(setAllPlayers);
         setShowBatchBindModal(true);
       } else {
         setShowBatchBindModal(false);
@@ -257,13 +283,14 @@ export default function OnlineGamePage() {
     setBindContext({ uid, nickname });
     setNewPlayerNickname(nickname);
     setNewPlayerRealName('');
-    getPlayers().then(setAllPlayers);
+    void refreshPlayersDirectory();
     setShowBindModal(true);
   };
 
   const selectPlayerForBind = (player: Player) => {
     if (!bindContext) return;
     setBindingForUid(bindContext.uid, player.id);
+    void refreshPlayersDirectory();
     closeBindModal();
     showToast('已绑定', 'success');
   };
@@ -300,7 +327,7 @@ export default function OnlineGamePage() {
         return;
       }
       setBindingForUid(bindContext.uid, created.id);
-      setAllPlayers((prev) => (prev.some((p) => p.id === created!.id) ? prev : [created!, ...prev]));
+      await refreshPlayersDirectory();
       closeBindModal();
       showToast('已新建雀士并关联 UID', 'success');
     } catch (err) {
@@ -354,6 +381,8 @@ export default function OnlineGamePage() {
     if (!canImportOne(row)) return;
     const player_data = row.data.players.map((p, i) => ({
       player_id: row.bindings[p.uid],
+      uid: p.uid,
+      majsoul_nickname: p.nickname,
       score: p.score,
       is_dealer_start: i === 0,
     }));
@@ -547,7 +576,7 @@ https://game.maj-soul.com/1/?paipu=..."
                   type="button"
                   className="btn btn-sm btn-primary"
                   onClick={() => {
-                    getPlayers().then(setAllPlayers);
+                    void refreshPlayersDirectory();
                     setShowBatchBindModal(true);
                   }}
                 >
@@ -614,24 +643,59 @@ https://game.maj-soul.com/1/?paipu=..."
                   <div className="space-y-2">
                     {d.players.map((p) => {
                       const bound = Boolean(row.bindings[p.uid]);
+                      const boundPid = row.bindings[p.uid];
+                      const boundPlayer = boundPid ? playersDirectory.find((pl) => pl.id === boundPid) : undefined;
                       return (
                         <div
                           key={p.uid}
                           className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg"
                           style={{ background: bound ? '#e8f8f0' : '#fff3e0' }}
                         >
-                          <div className="text-sm">
+                          <div className="text-sm min-w-0 flex-1">
                             <span className="font-medium">{p.nickname}</span>
                             <span className="text-xs ml-2" style={{ color: 'var(--color-text-light)' }}>UID {p.uid}</span>
                             <span className="ml-2" style={{ color: p.score > 0 ? '#2d9d78' : '#e74c3c' }}>{p.score > 0 ? `+${p.score}` : p.score}</span>
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline"
-                            onClick={() => openBindModal(p.uid, p.nickname)}
-                          >
-                            {bound ? '更换' : '绑定雀士'}
-                          </button>
+                          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                            {bound && boundPlayer && (
+                              <div className="flex items-center gap-2 px-2 py-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid var(--color-border)' }}>
+                                {boundPlayer.avatar ? (
+                                  <img
+                                    src={boundPlayer.avatar}
+                                    alt=""
+                                    className="rounded-full object-cover flex-shrink-0"
+                                    style={{ width: '1.75rem', height: '1.75rem' }}
+                                  />
+                                ) : (
+                                  <div
+                                    className="rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                    style={{
+                                      width: '1.75rem',
+                                      height: '1.75rem',
+                                      background: 'var(--color-primary-light)',
+                                      color: 'var(--color-primary-dark)',
+                                    }}
+                                  >
+                                    {boundPlayer.nickname.charAt(0)}
+                                  </div>
+                                )}
+                                <div className="text-left min-w-0">
+                                  <div className="text-sm font-medium truncate" style={{ maxWidth: '8rem' }}>{boundPlayer.nickname}</div>
+                                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>系统雀士</div>
+                                </div>
+                              </div>
+                            )}
+                            {bound && !boundPlayer && (
+                              <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>已关联雀士（加载中…）</span>
+                            )}
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline"
+                              onClick={() => openBindModal(p.uid, p.nickname)}
+                            >
+                              {bound ? '更换' : '绑定雀士'}
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
