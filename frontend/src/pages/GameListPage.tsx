@@ -2,9 +2,11 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllGames } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
+import Modal from '@/components/Modal';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import type { Game } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS } from '@/types';
+import { ExternalLink } from 'lucide-react';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
@@ -127,6 +129,7 @@ export default function GameListPage() {
   const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [typeFilter, setTypeFilter] = useState<'' | 'offline' | 'online'>('');
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
+  const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
   const { showToast, ToastComponent } = useToast();
 
   const playerIds = useMemo(
@@ -160,6 +163,31 @@ export default function GameListPage() {
   return (
     <div>
       {ToastComponent}
+      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title="打开雀魂牌谱">
+        <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>
+          即将在新标签页打开外部网站（雀魂牌谱）。若为误触可取消。
+        </p>
+        {paipuConfirmUrl && (
+          <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>
+            {paipuConfirmUrl}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuConfirmUrl(null)}>
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm inline-flex items-center gap-1"
+            onClick={() => {
+              if (paipuConfirmUrl) window.open(paipuConfirmUrl, '_blank', 'noopener,noreferrer');
+              setPaipuConfirmUrl(null);
+            }}
+          >
+            <ExternalLink size={14} /> 打开牌谱
+          </button>
+        </div>
+      </Modal>
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <select
           value={playerCountFilter}
@@ -218,6 +246,18 @@ export default function GameListPage() {
                     <span className="badge badge-mode">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
                     <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{game.start_time}</span>
+                    {game.game_type === 'online' && Boolean(game.source_url?.trim()) && (
+                      <button
+                        type="button"
+                        className="text-xs font-medium underline-offset-2 hover:underline"
+                        style={{ color: 'var(--color-secondary-dark)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
+                      >
+                        <span className="inline-flex items-center gap-0.5">
+                          <ExternalLink size={12} /> 牌谱
+                        </span>
+                      </button>
+                    )}
                   </div>
                   {game.room && (
                     <Link

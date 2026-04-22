@@ -9,7 +9,7 @@ import HandRecordModal from '@/components/HandRecordModal';
 import SortablePlayerList, { type SortableItem } from '@/components/SortablePlayerList';
 import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
-import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink } from 'lucide-react';
 
 function gpToSortable(gp: GamePlayerInfo): SortableItem {
   return { id: gp.player.id, nickname: gp.player.nickname, avatar: gp.player.avatar };
@@ -37,6 +37,7 @@ export default function GameDetailPage() {
   const [scoreItems, setScoreItems] = useState<SortableItem[]>([]);
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
 
   const loadGame = useCallback(async () => {
     if (!gameId) return;
@@ -441,11 +442,40 @@ export default function GameDetailPage() {
       {game.source_url && (
         <div className="card mt-4">
           <h3 className="font-bold mb-2">牌谱链接</h3>
-          <a href={game.source_url} target="_blank" rel="noopener noreferrer" className="text-sm break-all" style={{ color: 'var(--color-secondary-dark)' }}>
-            {game.source_url}
-          </a>
+          <p className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{game.source_url}</p>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline inline-flex items-center gap-1"
+            onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
+          >
+            <ExternalLink size={14} /> 在浏览器中打开牌谱
+          </button>
         </div>
       )}
+
+      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title="打开雀魂牌谱">
+        <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>
+          即将在新标签页打开外部网站。若为误触可取消。
+        </p>
+        {paipuConfirmUrl && (
+          <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>
+            {paipuConfirmUrl}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuConfirmUrl(null)}>取消</button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm inline-flex items-center gap-1"
+            onClick={() => {
+              if (paipuConfirmUrl) window.open(paipuConfirmUrl, '_blank', 'noopener,noreferrer');
+              setPaipuConfirmUrl(null);
+            }}
+          >
+            <ExternalLink size={14} /> 打开
+          </button>
+        </div>
+      </Modal>
 
       <Modal open={showScoreInput} onClose={() => setShowScoreInput(false)} title="录入分数">
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-light)' }}>

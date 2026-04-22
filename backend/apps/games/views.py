@@ -227,11 +227,12 @@ class OnlineGameParseView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
-        source_url = request.query_params.get('url', '')
-        if not source_url:
-            return Response({'error': '请提供牌谱链接'}, status=400)
+        from services.majsoul import analyze_paipu_url, normalize_paipu_input_url
 
-        from services.majsoul import analyze_paipu_url
+        raw = request.query_params.get('url', '')
+        source_url = normalize_paipu_input_url(raw)
+        if not source_url:
+            return Response({'error': '请提供牌谱链接（需包含 https:// 或 http://）'}, status=400)
 
         try:
             result = analyze_paipu_url(source_url)
@@ -259,6 +260,8 @@ class OnlineGameParseView(APIView):
                 'is_bound': bool(account and account.player_id),
             })
 
+        duplicate_in_db = Game.objects.filter(game_type='online', source_url=source_url).exists()
+
         return Response({
             'uuid': result['uuid'],
             'start_time': result['start_time'],
@@ -266,6 +269,7 @@ class OnlineGameParseView(APIView):
             'player_count': result['player_count'],
             'players': players_info,
             'source_url': source_url,
+            'duplicate_in_db': duplicate_in_db,
             'raw_data': result.get('raw_data', {}),
         })
 
@@ -278,7 +282,7 @@ class OnlineGameParseBatchView(APIView):
         urls = request.data.get('urls')
         if not isinstance(urls, list) or not urls:
             return Response({'error': '请提供 urls 数组'}, status=400)
-        from services.majsoul import analyze_paipu_url
+        from services.majsoul import analyze_paipu_url, normalize_paipu_input_url
 
         results = []
         for u in urls:
@@ -286,8 +290,12 @@ class OnlineGameParseBatchView(APIView):
             if not line:
                 results.append({'source_url': '', 'ok': False, 'error': '空行'})
                 continue
+            normalized = normalize_paipu_input_url(line)
+            if not normalized:
+                results.append({'source_url': line, 'ok': False, 'error': '未识别到有效的 http(s) 牌谱链接'})
+                continue
             try:
-                result = analyze_paipu_url(line)
+                result = analyze_paipu_url(normalized)
                 uid_list = [p['uid'] for p in result['players']]
                 bound_accounts = MahjongSoulAccount.objects.filter(uid__in=uid_list).select_related('player')
                 uid_to_account = {acc.uid: acc for acc in bound_accounts}
@@ -303,22 +311,24 @@ class OnlineGameParseBatchView(APIView):
                         'account_id': str(account.id) if account else None,
                         'is_bound': bool(account and account.player_id),
                     })
+                duplicate_in_db = Game.objects.filter(game_type='online', source_url=normalized).exists()
                 results.append({
-                    'source_url': line,
+                    'source_url': normalized,
                     'ok': True,
+                    'duplicate_in_db': duplicate_in_db,
                     'data': {
                         'uuid': result['uuid'],
                         'start_time': result['start_time'],
                         'game_mode': result['game_mode'],
                         'player_count': result['player_count'],
                         'players': players_info,
-                        'source_url': line,
+                        'source_url': normalized,
                         'raw_data': result.get('raw_data', {}),
                     },
                 })
             except Exception as e:
-                logger.warning('批量解析行失败: %s %s', line, e)
-                results.append({'source_url': line, 'ok': False, 'error': str(e)})
+                logger.warning('批量解析行失败: %s %s', normalized, e)
+                results.append({'source_url': normalized, 'ok': False, 'error': str(e)})
 
         return Response({'results': results})
 
@@ -338,12 +348,25 @@ class OnlineGameImportView(APIView):
         if room.status != 'open':
             return Response({'error': '房间已关闭，无法导入'}, status=400)
 
-        source_url = data.get('source_url', '') or ''
+        from services.majsoul import normalize_paipu_input_url
+
+        source_url = normalize_paipu_input_url(data.get('source_url', '') or '')
+        allow_duplicate_url = bool(data.get('allow_duplicate_url', False))
         player_data = data.get('player_data', [])
         game_mode = data.get('game_mode', 'half_match')
         player_count = data.get('player_count', len(player_data))
         paipu_data = data.get('paipu_data', {}) or {}
         start_time = data.get('start_time')
+
+        if source_url:
+            exists = Game.objects.filter(game_type='online', source_url=source_url).exists()
+            if exists and not allow_duplicate_url:
+                return Response(
+                    {
+                        'error': '该牌谱链接已在系统中存在对局。若仍要再导入一条记录，请在导入页勾选「仍导入本条」后重试。',
+                    },
+                    status=400,
+                )
 
         try:
             game = GameService.create_online_game(
