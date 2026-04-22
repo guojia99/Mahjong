@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import type { CSSProperties, MouseEvent, ReactNode, SVGProps } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getPlayer, getPlayerGames } from '@/api/players';
 import { getPlayerStats } from '@/api/games';
@@ -26,38 +27,78 @@ const RANK_RATE_ORDER = ['1位率', '2位率', '3位率', '4位率'] as const;
 
 const RECENT_LIMIT_OPTIONS = [10, 20, 50, 100] as const;
 
-function StatsSvgLineChart({
+function fmtSignedPt(v: number) {
+  const x = Math.round(v * 100) / 100;
+  if (x > 0) return `+${x}`;
+  return String(x);
+}
+
+function resolvePlayerCountForTip(row: PlayerStatsRecentPoint, filterPc: '' | '3' | '4'): number | undefined {
+  if (row.player_count === 3 || row.player_count === 4) return row.player_count;
+  if (filterPc === '3' || filterPc === '4') return parseInt(filterPc, 10);
+  return undefined;
+}
+
+function buildStatLineLayout(
+  points: { x: number; y: number }[],
+  width: number,
+  height: number,
+  pad: { t: number; r: number; b: number; l: number },
+  fixedYDomain?: { min: number; max: number },
+  yTickValues?: number[],
+) {
+  if (points.length < 2) return null;
+  const innerW = width - pad.l - pad.r;
+  const innerH = height - pad.t - pad.b;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const dataMinY = Math.min(...ys);
+  const dataMaxY = Math.max(...ys);
+  const minY = fixedYDomain ? fixedYDomain.min : dataMinY;
+  const maxY = fixedYDomain ? fixedYDomain.max : dataMaxY;
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const toSvg = (x: number, y: number) => {
+    const px = pad.l + ((x - minX) / spanX) * innerW;
+    const py = pad.t + innerH - ((y - minY) / spanY) * innerH;
+    return { px, py };
+  };
+  const tickVals: number[] =
+    yTickValues ??
+    (() => {
+      const n = 4;
+      const out: number[] = [];
+      for (let i = 0; i <= n; i += 1) {
+        out.push(minY + (spanY * i) / n);
+      }
+      return out;
+    })();
+  return { innerW, innerH, minX, maxX, spanX, minY, maxY, spanY, tickVals, toSvg };
+}
+
+type StatLineLayout = NonNullable<ReturnType<typeof buildStatLineLayout>>;
+
+function StatLineSvgCore({
   width,
   height,
   pad,
   points,
   yLabel,
+  layout,
+  svgProps,
 }: {
   width: number;
   height: number;
   pad: { t: number; r: number; b: number; l: number };
   points: { x: number; y: number }[];
   yLabel: (v: number) => string;
+  layout: StatLineLayout;
+  svgProps?: SVGProps<SVGSVGElement>;
 }) {
-  const innerW = width - pad.l - pad.r;
-  const innerH = height - pad.t - pad.b;
-  if (points.length < 2) return null;
-
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const spanX = maxX - minX || 1;
-  const spanY = maxY - minY || 1;
-
-  const toSvg = (x: number, y: number) => {
-    const px = pad.l + ((x - minX) / spanX) * innerW;
-    const py = pad.t + innerH - ((y - minY) / spanY) * innerH;
-    return { px, py };
-  };
-
+  const { style: svgStyle, ...svgRest } = svgProps ?? {};
+  const { minX, tickVals, toSvg } = layout;
   const d = points
     .map((p, i) => {
       const { px, py } = toSvg(p.x, p.y);
@@ -65,18 +106,17 @@ function StatsSvgLineChart({
     })
     .join(' ');
 
-  const yTicks = 4;
-  const tickVals: number[] = [];
-  for (let i = 0; i <= yTicks; i += 1) {
-    tickVals.push(minY + (spanY * i) / yTicks);
-  }
-
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: height }}>
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full"
+      style={{ maxHeight: height, ...svgStyle }}
+      {...svgRest}
+    >
       {tickVals.map((tv, i) => {
         const { py } = toSvg(minX, tv);
         return (
-          <g key={i}>
+          <g key={`${tv}-${i}`}>
             <line x1={pad.l} x2={width - pad.r} y1={py} y2={py} stroke="var(--color-border)" strokeWidth={0.5} strokeDasharray="4 3" />
             <text x={4} y={py + 3} fontSize="9" fill="var(--color-text-light)">{yLabel(tv)}</text>
           </g>
@@ -88,6 +128,198 @@ function StatsSvgLineChart({
         return <circle key={i} cx={px} cy={py} r={3} fill="var(--color-primary)" stroke="white" strokeWidth={1} />;
       })}
     </svg>
+  );
+}
+
+function nearestRankSeriesIndex(xData: number, n: number): number {
+  if (n <= 0) return -1;
+  if (n === 1) return 0;
+  return Math.max(0, Math.min(n - 1, Math.round(xData)));
+}
+
+function nearestCumTooltipAnchor(
+  xData: number,
+  seriesLen: number,
+): { type: 'origin' } | { type: 'game'; index: number } {
+  if (seriesLen <= 0) return { type: 'origin' };
+  const anchors: Array<{ x: number; kind: 'origin' } | { x: number; kind: 'game'; index: number }> = [{ x: 0, kind: 'origin' }];
+  for (let i = 0; i < seriesLen; i += 1) {
+    anchors.push({ x: i + 1, kind: 'game', index: i });
+  }
+  let best = anchors[0];
+  let bestD = Math.abs(xData - best.x);
+  for (let k = 1; k < anchors.length; k += 1) {
+    const a = anchors[k];
+    const d = Math.abs(xData - a.x);
+    if (d < bestD) {
+      bestD = d;
+      best = a;
+    }
+  }
+  return best.kind === 'origin' ? { type: 'origin' } : { type: 'game', index: best.index };
+}
+
+function StatGameTooltipBody({
+  row,
+  chartKind,
+  filterPlayerCount,
+}: {
+  row: PlayerStatsRecentPoint | null;
+  chartKind: 'rank' | 'cum_pt';
+  filterPlayerCount: '' | '3' | '4';
+}) {
+  const cardStyle: CSSProperties = {
+    minWidth: '200px',
+    maxWidth: '260px',
+    padding: '0.5rem 0.65rem',
+    borderRadius: '0.5rem',
+    background: 'white',
+    border: '1px solid var(--color-border)',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+    fontSize: '0.75rem',
+    lineHeight: 1.45,
+  };
+
+  if (chartKind === 'cum_pt' && !row) {
+    return (
+      <div style={cardStyle}>
+        <div className="font-bold" style={{ marginBottom: '0.25rem' }}>起点</div>
+        <div style={{ color: 'var(--color-text-light)' }}>累计 PT 为 0，尚未计入任何对局。</div>
+      </div>
+    );
+  }
+  if (!row) return null;
+
+  const pc = resolvePlayerCountForTip(row, filterPlayerCount);
+  const modeLabel = row.game_mode
+    ? (GAME_MODE_FULL_LABELS[row.game_mode] || GAME_MODE_LABELS[row.game_mode] || row.game_mode)
+    : '—';
+  const typeLabel = row.game_type ? (GAME_TYPE_LABELS[row.game_type] || row.game_type) : '—';
+  const scoreDisp = row.score === null || row.score === undefined ? '—' : String(row.score);
+
+  return (
+    <div style={cardStyle}>
+      <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+        {pc === 3 && <span className="badge badge-sanma">三麻</span>}
+        {pc === 4 && <span className="badge badge-yonma">四麻</span>}
+        {pc !== 3 && pc !== 4 && (
+          <span className="badge" style={{ background: '#ececec', color: '#666', fontSize: '0.625rem' }}>三麻/四麻未标</span>
+        )}
+        <span className="badge badge-mode" style={{ fontSize: '0.625rem' }}>{modeLabel}</span>
+        <span
+          className={`badge ${row.game_type === 'online' ? 'badge-online' : row.game_type === 'offline' ? 'badge-offline' : ''}`}
+          style={{
+            fontSize: '0.625rem',
+            ...(row.game_type !== 'online' && row.game_type !== 'offline' ? { background: '#ececec', color: '#666' } : {}),
+          }}
+        >
+          {typeLabel}
+        </span>
+      </div>
+      <div style={{ color: 'var(--color-text-light)', marginBottom: '0.35rem' }}>{row.start_time || '—'}</div>
+      <div><strong>顺位</strong>　第 {row.rank} 位</div>
+      <div><strong>得点</strong>　{scoreDisp}</div>
+      <div><strong>本局 PT</strong>　{fmtSignedPt(row.pt)} pt</div>
+      {chartKind === 'cum_pt' && row.cumulative_pt !== undefined && (
+        <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed var(--color-border)' }}>
+          <strong>至本局累计 PT</strong>　{fmtSignedPt(row.cumulative_pt)} pt
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatLineChartWithTooltip({
+  width,
+  height,
+  pad,
+  points,
+  yLabel,
+  fixedYDomain,
+  yTickValues,
+  chartSeries,
+  chartKind,
+  filterPlayerCount,
+}: {
+  width: number;
+  height: number;
+  pad: { t: number; r: number; b: number; l: number };
+  points: { x: number; y: number }[];
+  yLabel: (v: number) => string;
+  fixedYDomain?: { min: number; max: number };
+  yTickValues?: number[];
+  chartSeries: PlayerStatsRecentPoint[];
+  chartKind: 'rank' | 'cum_pt';
+  filterPlayerCount: '' | '3' | '4';
+}) {
+  const [tip, setTip] = useState<{ ox: number; oy: number; node: ReactNode } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const layout = useMemo(
+    () => buildStatLineLayout(points, width, height, pad, fixedYDomain, yTickValues),
+    [points, width, height, pad, fixedYDomain, yTickValues],
+  );
+
+  const onMouseMove = (e: MouseEvent<SVGSVGElement>) => {
+    if (!layout || !wrapRef.current) return;
+    const svg = e.currentTarget;
+    const srect = svg.getBoundingClientRect();
+    const vx = ((e.clientX - srect.left) / srect.width) * width;
+    const xData = layout.minX + ((vx - pad.l) / layout.innerW) * layout.spanX;
+
+    const wrect = wrapRef.current.getBoundingClientRect();
+    const ox = e.clientX - wrect.left;
+    const oy = e.clientY - wrect.top;
+
+    const n = chartSeries.length;
+    let node: ReactNode;
+    if (chartKind === 'rank') {
+      const idx = nearestRankSeriesIndex(xData, n);
+      node = idx >= 0 ? (
+        <StatGameTooltipBody row={chartSeries[idx]} chartKind="rank" filterPlayerCount={filterPlayerCount} />
+      ) : null;
+    } else {
+      const hit = nearestCumTooltipAnchor(xData, n);
+      node = hit.type === 'origin' ? (
+        <StatGameTooltipBody row={null} chartKind="cum_pt" filterPlayerCount={filterPlayerCount} />
+      ) : (
+        <StatGameTooltipBody row={chartSeries[hit.index]} chartKind="cum_pt" filterPlayerCount={filterPlayerCount} />
+      );
+    }
+    setTip(node ? { ox, oy, node } : null);
+  };
+
+  if (!layout) return null;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <StatLineSvgCore
+        width={width}
+        height={height}
+        pad={pad}
+        points={points}
+        yLabel={yLabel}
+        layout={layout}
+        svgProps={{
+          onMouseMove,
+          onMouseLeave: () => setTip(null),
+          style: { maxHeight: height, cursor: 'crosshair' },
+        }}
+      />
+      {tip && (
+        <div
+          className="pointer-events-none"
+          style={{
+            position: 'absolute',
+            left: Math.min(tip.ox + 10, (wrapRef.current?.clientWidth ?? 360) - 220),
+            top: tip.oy + 10,
+            zIndex: 20,
+          }}
+        >
+          {tip.node}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -128,6 +360,31 @@ export default function PlayerProfilePage() {
     loadStats(filterPlayerCount || undefined, filterGameMode || undefined, filterGameType, recentLimit);
   }, [filterPlayerCount, filterGameMode, filterGameType, recentLimit, loadStats]);
 
+  const chartSeries: PlayerStatsRecentPoint[] = useMemo(() => {
+    const enrich = (r: PlayerStatsRecentPoint): PlayerStatsRecentPoint => {
+      const g = games.find((x) => x.id === r.game_id);
+      if (!g) return r;
+      return {
+        ...r,
+        player_count: r.player_count ?? g.player_count,
+        game_mode: r.game_mode ?? g.game_mode,
+        game_type: r.game_type ?? g.game_type,
+      };
+    };
+    if (stats?.recent_series?.length) {
+      return stats.recent_series.map(enrich);
+    }
+    if (stats?.recent_ranking?.length) {
+      const chrono = [...stats.recent_ranking].reverse();
+      return chrono.map((r, idx, arr) => {
+        let cum = 0;
+        for (let j = 0; j <= idx; j += 1) cum += arr[j].pt;
+        return enrich({ ...r, game_index: idx, cumulative_pt: Math.round(cum * 100) / 100 });
+      });
+    }
+    return [];
+  }, [stats, games]);
+
   if (!player) {
     return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
   }
@@ -148,16 +405,6 @@ export default function PlayerProfilePage() {
   const currentTab = GAME_TABS.find(
     (t) => t.player_count === parseInt(filterPlayerCount || '0') && t.game_mode === filterGameMode
   );
-
-  const chartSeries: PlayerStatsRecentPoint[] = stats?.recent_series?.length
-    ? stats.recent_series
-    : (stats?.recent_ranking?.length
-      ? [...stats.recent_ranking].reverse().map((r, idx, arr) => {
-          let cum = 0;
-          for (let j = 0; j <= idx; j += 1) cum += arr[j].pt;
-          return { ...r, game_index: idx, cumulative_pt: Math.round(cum * 100) / 100 };
-        })
-      : []);
 
   const maxRankForChart =
     filterPlayerCount === '3'
@@ -398,13 +645,20 @@ export default function PlayerProfilePage() {
                 <>
                   <div className="card">
                     <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>最近对局排名折线</h3>
-                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>纵轴为顺位（靠上为高位）；横轴为时间正序的局序号</p>
-                    <StatsSvgLineChart
+                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
+                      纵轴为顺位（靠上为高位）；横轴为时间正序的局序号。悬停查看每局得点、PT、三麻/四麻、场别与来源。
+                    </p>
+                    <StatLineChartWithTooltip
                       width={360}
                       height={140}
                       pad={{ t: 10, r: 12, b: 14, l: 30 }}
                       points={rankLinePoints}
-                      yLabel={(v) => `${Math.round(maxRankForChart + 1 - v)}位`}
+                      yLabel={(v) => `${maxRankForChart + 1 - Math.round(v)}位`}
+                      fixedYDomain={{ min: 1, max: maxRankForChart }}
+                      yTickValues={Array.from({ length: maxRankForChart }, (_, j) => j + 1)}
+                      chartSeries={chartSeries}
+                      chartKind="rank"
+                      filterPlayerCount={filterPlayerCount}
                     />
                     <div className="flex justify-between mt-1">
                       <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
@@ -417,13 +671,18 @@ export default function PlayerProfilePage() {
                   </div>
                   <div className="card">
                     <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>PT 累计曲线</h3>
-                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>从第 0 局 0pt 起按对局顺序累加本页所选「最近 N 局」的 PT</p>
-                    <StatsSvgLineChart
+                    <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
+                      从第 0 局 0pt 起按时间顺序累加所选「最近 N 局」的 PT。悬停查看每局及累计详情（含三麻/四麻区分）。
+                    </p>
+                    <StatLineChartWithTooltip
                       width={360}
                       height={140}
                       pad={{ t: 10, r: 12, b: 14, l: 36 }}
                       points={cumPtLinePoints}
                       yLabel={(v) => (Math.abs(v) >= 10 ? v.toFixed(0) : v.toFixed(1))}
+                      chartSeries={chartSeries}
+                      chartKind="cum_pt"
+                      filterPlayerCount={filterPlayerCount}
                     />
                     <div className="flex justify-between mt-1">
                       <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>起点 0pt</span>
