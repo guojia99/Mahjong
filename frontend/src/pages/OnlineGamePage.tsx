@@ -7,7 +7,7 @@ import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
 import type { Player, Room } from '@/types';
 import { ROOM_TYPE_LABELS } from '@/types';
-import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus } from 'lucide-react';
+import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus, Trash2 } from 'lucide-react';
 
 type RowState = {
   id: string;
@@ -370,6 +370,11 @@ export default function OnlineGamePage() {
     );
   };
 
+  /** 从当前解析列表中移除本行（不写入数据库，仅放弃本次录入） */
+  const removeParsedRow = (rowId: string) => {
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+  };
+
   const canImportAll = () =>
     allUidsBound &&
     rows.length > 0 &&
@@ -593,6 +598,9 @@ https://game.maj-soul.com/1/?paipu=..."
               请先在弹窗中把本批牌谱里出现的待关联 UID（已去重）全部绑定到系统雀士，完成后即可使用「导入本局 / 导入全部已就绪」。
             </div>
           )}
+          <p className="text-xs mb-3" style={{ color: 'var(--color-text-light)' }}>
+            不需要录入的对局可点「移除」，仅从本页列表删除，不影响已导入记录。
+          </p>
           <div className="space-y-4">
             {rows.map((row) => {
               if (!row.ok) {
@@ -602,6 +610,17 @@ https://game.maj-soul.com/1/?paipu=..."
                     className="p-3 rounded-xl"
                     style={{ background: '#fde8e8', border: '1px solid #f5c6c6' }}
                   >
+                    <div className="flex justify-end mb-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                        style={{ fontSize: '0.6875rem' }}
+                        onClick={() => removeParsedRow(row.id)}
+                        title="从列表移除"
+                      >
+                        <Trash2 size={14} /> 移除
+                      </button>
+                    </div>
                     <div className="text-sm font-mono break-all opacity-80">{row.original_line || row.source_url || '(空行)'}</div>
                     <div className="text-sm mt-1">{row.error}</div>
                   </div>
@@ -617,6 +636,17 @@ https://game.maj-soul.com/1/?paipu=..."
                   className="p-3 rounded-xl"
                   style={{ border: '1px solid var(--color-border)', background: 'white' }}
                 >
+                  <div className="flex justify-end mb-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                      style={{ fontSize: '0.6875rem' }}
+                      onClick={() => removeParsedRow(row.id)}
+                      title="本局不导入，从列表移除"
+                    >
+                      <Trash2 size={14} /> 移除
+                    </button>
+                  </div>
                   {row.original_line && row.original_line.trim() !== row.source_url.trim() && (
                     <div className="text-xs mb-1 rounded px-2 py-1" style={{ background: '#f3f4f6', color: 'var(--color-text-light)' }}>
                       原始：{row.original_line}
