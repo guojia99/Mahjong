@@ -1,9 +1,8 @@
 import api from './client';
 import type { Room, Game, GameScore, HandRecord, PlayerStats, PtRankingItem } from '@/types';
 
-export async function getRooms(status?: string): Promise<Room[]> {
-  const params = status ? { status } : {};
-  const { data } = await api.get('/rooms/', { params });
+export async function getRooms(params?: { status?: string; room_type?: 'offline' | 'online' }): Promise<Room[]> {
+  const { data } = await api.get('/rooms/', { params: params || {} });
   return data;
 }
 
@@ -12,12 +11,19 @@ export async function getRoom(id: string): Promise<Room> {
   return data;
 }
 
-export async function createRoom(payload: { name: string; location?: string }): Promise<Room> {
+export async function createRoom(payload: {
+  name: string;
+  location?: string;
+  room_type?: 'offline' | 'online';
+  session_time?: string | null;
+}): Promise<Room> {
   const { data } = await api.post('/rooms/', payload);
   return data;
 }
 
-export async function updateRoom(id: string, payload: { name?: string; location?: string }): Promise<Room> {
+export async function updateRoom(id: string, payload: {
+  name?: string; location?: string; room_type?: 'offline' | 'online'; session_time?: string | null;
+}): Promise<Room> {
   const { data } = await api.put(`/rooms/${id}/`, payload);
   return data;
 }
@@ -85,12 +91,53 @@ export async function createNextGame(roomId: string, fromGameId: string): Promis
 }
 
 export async function importOnlineGame(payload: {
-  source_url: string;
+  room_id: string;
+  source_url?: string;
   player_data: { player_id: string; score?: number; is_dealer_start?: boolean }[];
   game_mode: string;
   player_count?: number;
+  paipu_data?: Record<string, unknown>;
+  start_time?: string | null;
 }): Promise<Game> {
-  const { data } = await api.post('/games/online/', payload);
+  const { data } = await api.post('/games/online/', payload, { timeout: 120_000 });
+  return data;
+}
+
+const PARSE_ONLINE_TIMEOUT_MS = 120_000;
+
+export async function parseOnlineGame(url: string): Promise<{
+  uuid: string;
+  start_time: string;
+  game_mode: string;
+  player_count: number;
+  players: {
+    seat: number;
+    uid: number;
+    nickname: string;
+    score: number;
+    player_id: string | null;
+    account_id: string | null;
+    is_bound: boolean;
+  }[];
+  source_url: string;
+  raw_data: Record<string, unknown>;
+}> {
+  const { data } = await api.get('/games/online/parse/', {
+    params: { url },
+    timeout: PARSE_ONLINE_TIMEOUT_MS,
+  });
+  return data;
+}
+
+export type OnlineParseItem = Awaited<ReturnType<typeof parseOnlineGame>>;
+
+export async function parseOnlineGameBatch(urls: string[]): Promise<{
+  results: (
+    | { source_url: string; ok: true; data: OnlineParseItem }
+    | { source_url: string; ok: false; error: string }
+  )[];
+}> {
+  const { data } = await api.post('/games/online/parse-batch/', { urls }, { timeout: PARSE_ONLINE_TIMEOUT_MS });
   return data;
 }
 
@@ -149,6 +196,7 @@ export async function getPlayerStats(playerId: string, params?: {
 export async function getPtRanking(params?: {
   player_count?: number;
   game_mode?: string;
+  game_type?: 'offline' | 'online';
 }): Promise<PtRankingItem[]> {
   const { data } = await api.get('/games/pt-ranking/', { params });
   return data;

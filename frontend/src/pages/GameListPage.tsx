@@ -1,28 +1,112 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllGames } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import type { Game } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS } from '@/types';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
-  const cls = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
-  return <span className={cls}>{score}</span>;
+  const tone = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
+  return <span className={`score-tag ${tone}`}>{score}</span>;
 }
 
 function PtTag({ pt }: { pt: number | undefined }) {
   if (pt === undefined || pt === null) return null;
   const val = Math.round(pt * 100) / 100;
-  const color = val > 0 ? '#2d9d78' : val < 0 ? '#e74c3c' : '#999';
+  const tone = val > 0 ? 'pt-tag--pos' : val < 0 ? 'pt-tag--neg' : 'pt-tag--zero';
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      padding: '0.125rem 0.5rem', borderRadius: '0.375rem',
-      fontSize: '0.75rem', fontWeight: 700, color, background: val > 0 ? '#e8f8f0' : val < 0 ? '#fde8e8' : '#f0f0f0',
-    }}>
+    <span className={`pt-tag ${tone}`}>
       {val > 0 ? `+${val}` : val}pt
     </span>
+  );
+}
+
+function GamePlayerCell({
+  rank,
+  game,
+  playerId,
+  nickname,
+  avatar,
+  score,
+  isDealer,
+}: {
+  rank: number;
+  game: Game;
+  playerId: string;
+  nickname: string;
+  avatar: string;
+  score: number | null;
+  isDealer: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2 min-w-0 p-2.5 rounded-2xl border border-white/60"
+      style={{
+        background: 'linear-gradient(145deg, #fdfcfd 0%, #f5f0f7 100%)',
+        boxShadow: '0 1px 3px rgba(120, 100, 140, 0.08)',
+      }}
+    >
+      <span
+        className="text-xs font-bold flex-shrink-0 w-4 text-center"
+        style={{ color: rank === 1 ? '#f0b830' : 'var(--color-text-light)' }}
+      >
+        {rank}
+      </span>
+      {avatar ? (
+        <img
+          src={avatar}
+          alt=""
+          loading="lazy"
+          className="flex-shrink-0 rounded-full object-cover"
+          style={{ width: '3rem', height: '3rem' }}
+        />
+      ) : (
+        <div
+          className="flex-shrink-0 rounded-full flex items-center justify-center text-sm font-bold"
+          style={{
+            width: '3rem',
+            height: '3rem',
+            background: 'var(--color-primary-light)',
+            color: 'var(--color-primary-dark)',
+          }}
+        >
+          {nickname.charAt(0)}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1 flex-wrap text-sm min-w-0">
+          <Link
+            to={`/player-list/${playerId}`}
+            className="font-medium truncate"
+            style={{ color: 'inherit', textDecoration: 'none' }}
+          >
+            {nickname}
+          </Link>
+          {isDealer && (
+            <span
+              className="flex-shrink-0 font-extrabold"
+              style={{
+                fontSize: '0.5625rem',
+                padding: '0.125rem 0.4rem',
+                borderRadius: '9999px',
+                background: 'linear-gradient(180deg, #fff4e0 0%, #ffe7c4 100%)',
+                color: '#c97700',
+                border: '1px solid rgba(230, 160, 40, 0.25)',
+                boxShadow: '0 1px 1px rgba(200, 140, 0, 0.12)',
+              }}
+            >
+              东
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <ScoreTag score={score} />
+          <PtTag pt={game.pt?.[playerId]} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -40,9 +124,15 @@ const SELECT_STYLE: React.CSSProperties = {
 export default function GameListPage() {
   const [games, setGames] = useState<Game[]>([]);
   const [playerCountFilter, setPlayerCountFilter] = useState<'' | '3' | '4'>('4');
-  const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match' | 'south_wind'>('half_match');
+  const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [typeFilter, setTypeFilter] = useState<'' | 'offline' | 'online'>('');
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const { showToast, ToastComponent } = useToast();
+
+  const playerIds = useMemo(
+    () => [...new Set(games.flatMap((g) => g.players.map((p) => p.player.id)))],
+    [games]
+  );
 
   useEffect(() => {
     const params: Record<string, string> = {};
@@ -51,6 +141,21 @@ export default function GameListPage() {
     if (typeFilter) params.game_type = typeFilter;
     getAllGames(params).then(setGames).catch(() => showToast('加载对局失败'));
   }, [playerCountFilter, modeFilter, typeFilter, showToast]);
+
+  useEffect(() => {
+    if (playerIds.length === 0) {
+      setPlayerAvatars({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const map = await loadPlayerAvatarsForList(playerIds);
+      if (!cancelled) setPlayerAvatars(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [playerIds]);
 
   return (
     <div>
@@ -73,7 +178,6 @@ export default function GameListPage() {
           <option value="">全部模式</option>
           <option value="east_wind">东风</option>
           <option value="half_match">半庄</option>
-          <option value="south_wind">南风</option>
         </select>
         <select
           value={typeFilter}
@@ -94,11 +198,18 @@ export default function GameListPage() {
           <p className="text-sm">暂无对局记录</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {games.map((game) => {
             const ranked = [...game.players].sort((a, b) => (b.score || 0) - (a.score || 0));
             return (
-              <div key={game.id} className="card p-4">
+              <div
+                key={game.id}
+                className="card p-4 rounded-2xl"
+                style={{
+                  border: '1px solid rgba(200, 180, 220, 0.35)',
+                  boxShadow: '0 2px 12px rgba(100, 80, 120, 0.06)',
+                }}
+              >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`badge ${game.player_count === 3 ? 'badge-sanma' : 'badge-yonma'}`}>
@@ -118,22 +229,22 @@ export default function GameListPage() {
                     </Link>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                  {ranked.map((gp, idx) => (
-                    <div key={gp.player.id} className="flex items-center gap-2 text-sm">
-                      <span className="font-bold" style={{ color: idx === 0 ? '#f0b830' : 'var(--color-text-light)', minWidth: '1rem' }}>
-                        {idx + 1}
-                      </span>
-                      <Link to={`/player-list/${gp.player.id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                        {gp.player.nickname}
-                      </Link>
-                      <ScoreTag score={gp.score} />
-                      <PtTag pt={game.pt?.[gp.player.id]} />
-                      {gp.is_dealer_start && (
-                        <span className="badge" style={{ background: '#fff3e0', color: '#e68a00', fontSize: '0.5rem', padding: '0.0625rem 0.375rem' }}>东</span>
-                      )}
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-2">
+                  {ranked.map((gp, idx) => {
+                    const pid = gp.player.id;
+                    return (
+                      <GamePlayerCell
+                        key={pid}
+                        rank={idx + 1}
+                        game={game}
+                        playerId={pid}
+                        nickname={gp.player.nickname}
+                        avatar={playerAvatars[pid] ?? ''}
+                        score={gp.score}
+                        isDealer={gp.is_dealer_start}
+                      />
+                    );
+                  })}
                 </div>
                 {game.hand_records && game.hand_records.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">

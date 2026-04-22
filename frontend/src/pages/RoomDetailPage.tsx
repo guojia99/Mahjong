@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getRoom, addPlayerToRoom, removePlayerFromRoom, getRoomGames, createRoomGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
 import { isAdmin } from '@/api/auth';
@@ -8,8 +8,8 @@ import Modal from '@/components/Modal';
 import PlayerCard from '@/components/PlayerCard';
 import SearchBar from '@/components/SearchBar';
 import type { Room, Player, Game } from '@/types';
-import { GAME_MODE_LABELS, GAME_TYPE_LABELS, ROOM_STATUS_LABELS } from '@/types';
-import { Plus, MapPin, Clock, Play } from 'lucide-react';
+import { GAME_MODE_LABELS, GAME_TYPE_LABELS, ROOM_STATUS_LABELS, ROOM_TYPE_LABELS } from '@/types';
+import { Plus, MapPin, Clock, Play, Globe } from 'lucide-react';
 
 export default function RoomDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -122,7 +122,15 @@ export default function RoomDetailPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold">{room.name}</h2>
-            <div className="flex items-center gap-3 text-sm mt-1" style={{ color: 'var(--color-text-light)' }}>
+            <div className="flex items-center gap-3 text-sm mt-1 flex-wrap" style={{ color: 'var(--color-text-light)' }}>
+              {room.room_type && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary-light)' }}>
+                  {ROOM_TYPE_LABELS[room.room_type] ?? room.room_type}
+                </span>
+              )}
+              {room.session_time && (
+                <span className="flex items-center gap-1"><Clock size={14} /> 场次 {room.session_time}</span>
+              )}
               {room.location && (
                 <span className="flex items-center gap-1"><MapPin size={14} /> {room.location}</span>
               )}
@@ -132,7 +140,16 @@ export default function RoomDetailPage() {
             </div>
           </div>
           {admin && room.status === 'open' && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {room.room_type === 'online' && (
+                <Link
+                  to={`/games/online?room=${id}`}
+                  className="btn btn-sm"
+                  style={{ textDecoration: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}
+                >
+                  <Globe size={14} /> 线上牌谱导入
+                </Link>
+              )}
               <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
                 <Plus size={14} /> 添加雀士
               </button>
@@ -287,7 +304,6 @@ export default function RoomDetailPage() {
             >
               <option value="east_wind">东风局</option>
               <option value="half_match">半庄</option>
-              <option value="south_wind">南风局</option>
             </select>
           </div>
           <div className="form-group">

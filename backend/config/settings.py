@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -112,3 +113,51 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 AUTH_USER_MODEL = 'users.User'
+
+# 雀魂牌谱解析：第三方 HTTP 接口（POST paipuList，见 services.majsoul）
+MAJSOUL_PAI_PU_API_URL = os.environ.get(
+    'MAJSOUL_PAI_PU_API_URL',
+    'http://manage.followyourheart.cn/backend/api/majsoul/paipu/analysis',
+)
+MAJSOUL_PAI_PU_API_TIMEOUT = int(os.environ.get('MAJSOUL_PAI_PU_API_TIMEOUT', '90'))
+
+# 后端处理日志：统一写入 /tmp/marjong.log（与 apps、services 等业务模块）
+_MARJONG_LOG_PATH = '/tmp/marjong.log'
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'marjong': {
+            'format': '[{levelname}] {asctime} {name} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'marjong_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': _MARJONG_LOG_PATH,
+            'maxBytes': 20 * 1024 * 1024,
+            'backupCount': 3,
+            'formatter': 'marjong',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['marjong_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['marjong_file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['marjong_file'],
+        'level': 'INFO',
+    },
+}

@@ -11,8 +11,8 @@ import YakumanCard from '@/components/YakumanCard';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
-  const cls = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
-  return <span className={cls}>{score}</span>;
+  const tone = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
+  return <span className={`score-tag ${tone}`}>{score}</span>;
 }
 
 const GAME_TABS = [
@@ -30,7 +30,7 @@ export default function PlayerProfilePage() {
   const [yakumans, setYakumans] = useState<HandRecord[]>([]);
   const [tab, setTab] = useState<'stats' | 'games' | 'yakumans' | 'info'>('stats');
   const [filterPlayerCount, setFilterPlayerCount] = useState<'' | '3' | '4'>('');
-  const [filterGameMode, setFilterGameMode] = useState<'' | 'east_wind' | 'half_match' | 'south_wind'>('');
+    const [filterGameMode, setFilterGameMode] = useState<'' | 'east_wind' | 'half_match'>('');
   const { showToast, ToastComponent } = useToast();
 
   const loadStats = useCallback((pc?: string, gm?: string) => {
@@ -174,7 +174,7 @@ export default function PlayerProfilePage() {
                 color: currentTab?.label === t.label ? '#4a4a4a' : 'var(--color-text-light)',
                 border: currentTab?.label === t.label ? '1px solid var(--color-accent-dark)' : '1px solid var(--color-border)',
               }}
-              onClick={() => { setFilterPlayerCount(String(t.player_count) as '' | '3' | '4'); setFilterGameMode(t.game_mode as '' | 'east_wind' | 'half_match' | 'south_wind'); }}
+              onClick={() => { setFilterPlayerCount(String(t.player_count) as '' | '3' | '4'); setFilterGameMode(t.game_mode as '' | 'east_wind' | 'half_match'); }}
             >
               {t.label}
             </button>

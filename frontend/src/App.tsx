@@ -13,6 +13,7 @@ import PtRankingPage from '@/pages/PtRankingPage';
 import YakumanListPage from '@/pages/YakumanListPage';
 import CalculatorPage from '@/pages/CalculatorPage';
 import PracticePage from '@/pages/PracticePage';
+import OnlineGamePage from '@/pages/OnlineGamePage';
 import { isAdmin } from '@/api/auth';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -36,12 +37,12 @@ function App() {
           <Route path="rooms/:id" element={<RoomDetailPage />} />
           <Route path="rooms/:roomId/games/:gameId" element={<GameDetailPage />} />
           <Route path="games" element={<GameListPage />} />
+          <Route path="games/online" element={<AdminRoute><OnlineGamePage /></AdminRoute>} />
           <Route path="pt-ranking" element={<PtRankingPage />} />
           <Route path="yakumans" element={<YakumanListPage />} />
           <Route path="calculator" element={<CalculatorPage />} />
           <Route path="practice" element={<PracticePage />} />
           {/* <Route path="yaku-practice" element={<YakuPracticePage />} /> */}
-          {/* <Route path="games/online" element={<OnlineGamePage />} /> */}
         </Route>
       </Routes>
     </BrowserRouter>

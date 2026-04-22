@@ -17,8 +17,8 @@ function gpToSortable(gp: GamePlayerInfo): SortableItem {
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
-  const cls = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
-  return <span className={cls}>{score < 0 ? score : score}</span>;
+  const tone = score > 0 ? 'score-tag-positive' : score < 0 ? 'score-tag-negative' : 'score-tag-zero';
+  return <span className={`score-tag ${tone}`}>{score < 0 ? score : score}</span>;
 }
 
 

@@ -16,7 +16,7 @@ export default function HomePage() {
   const loadData = async () => {
     try {
       const [rooms, players] = await Promise.all([
-        getRooms('open'),
+        getRooms({ status: 'open' }),
         getPlayers(),
       ]);
       setOpenRooms(rooms);

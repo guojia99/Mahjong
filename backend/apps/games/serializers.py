@@ -21,7 +21,7 @@ class RoomListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
         fields = [
-            'id', 'name', 'location', 'status', 'player_count', 'game_count',
+            'id', 'name', 'location', 'room_type', 'session_time', 'status', 'player_count', 'game_count',
             'created_at', 'closed_at', 'earliest_game_time', 'latest_game_time',
         ]
 
@@ -38,7 +38,7 @@ class RoomDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
         fields = [
-            'id', 'name', 'location', 'status',
+            'id', 'name', 'location', 'room_type', 'session_time', 'status',
             'room_players', 'created_at', 'closed_at',
         ]
         read_only_fields = ['id', 'created_at', 'closed_at']
@@ -47,7 +47,7 @@ class RoomDetailSerializer(serializers.ModelSerializer):
 class RoomCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Room
-        fields = ['name', 'location']
+        fields = ['name', 'location', 'room_type', 'session_time']
 
 
 class GamePlayerSerializer(serializers.ModelSerializer):
@@ -84,7 +84,7 @@ class GameListSerializer(serializers.ModelSerializer):
         model = Game
         fields = [
             'id', 'game_type', 'game_mode', 'player_count', 'start_time',
-            'source_url', 'players', 'is_scored', 'created_at', 'hand_records',
+            'source_url', 'paipu_data', 'players', 'is_scored', 'created_at', 'hand_records',
         ]
 
     def get_players(self, obj):
@@ -158,11 +158,19 @@ class ScoreSubmitSerializer(serializers.Serializer):
 
 
 class OnlineGameImportSerializer(serializers.Serializer):
-    source_url = serializers.URLField()
-    player_mappings = serializers.ListField(
+    room_id = serializers.UUIDField()
+    source_url = serializers.CharField(required=False, default='', allow_blank=True)
+    player_data = serializers.ListField(
         child=serializers.DictField(),
-        required=False,
     )
+    game_mode = serializers.CharField(default='half_match')
+    player_count = serializers.IntegerField(required=False)
+    paipu_data = serializers.DictField(required=False, default=dict)
+    start_time = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class OnlineGameParseSerializer(serializers.Serializer):
+    url = serializers.CharField()
 
 
 class HandRecordListSerializer(serializers.ModelSerializer):

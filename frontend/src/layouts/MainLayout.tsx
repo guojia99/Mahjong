@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap } from 'lucide-react';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
 const publicNavItems = [
@@ -12,11 +12,11 @@ const publicNavItems = [
   { path: '/yakumans', label: '役满列表', icon: Sparkles },
   { path: '/calculator', label: '点数计算', icon: Calculator },
   { path: '/practice', label: '点数练习', icon: GraduationCap },
-  // { path: '/yaku-practice', label: '役种练习', icon: BookOpen },
 ];
 
 const adminNavItems = [
   { path: '/players', label: '雀士管理', icon: Users },
+  { path: '/games/online', label: '线上对局导入', icon: Globe },
 ];
 
 export default function MainLayout() {
@@ -60,8 +60,9 @@ export default function MainLayout() {
           <nav className="flex-1 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const exactPaths = ['/', '/player-list', '/games', '/games/online', '/pt-ranking', '/yakumans', '/calculator', '/practice'];
               const isActive = location.pathname === item.path ||
-                (item.path !== '/' && location.pathname.startsWith(item.path));
+                (item.path !== '/' && !exactPaths.includes(item.path) && location.pathname.startsWith(item.path));
               return (
                 <Link
                   key={item.path}

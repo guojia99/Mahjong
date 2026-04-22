@@ -7,6 +7,13 @@ export async function getPlayers(query = ''): Promise<Player[]> {
   return data;
 }
 
+/** 批量取头像（id -> 头像 URL 或空串，可能为 data: 或 http(s)） */
+export async function getPlayerAvatarsBatch(ids: string[]): Promise<Record<string, string>> {
+  if (!ids.length) return {};
+  const { data } = await api.post<Record<string, string>>('/players/batch-avatars/', { ids });
+  return data ?? {};
+}
+
 export async function getPlayer(id: string): Promise<Player> {
   const { data } = await api.get(`/players/${id}/`);
   return data;
