@@ -217,4 +217,5 @@ backend/*.pyc
 
 # Proxy
 node_modules/
-.make-pids
+.make-pids/
+.make-pids/*
