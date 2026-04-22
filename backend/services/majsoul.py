@@ -3,11 +3,13 @@
 
 环境变量可覆盖接口地址与超时：MAJSOUL_PAI_PU_API_URL、MAJSOUL_PAI_PU_API_TIMEOUT
 """
+import json
 import logging
 import re
+import urllib.error
+import urllib.request
 from typing import Any
 
-import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -80,26 +82,42 @@ def analyze_paipu_url(source_url: str) -> dict:
     )
     timeout = getattr(settings, 'MAJSOUL_PAI_PU_API_TIMEOUT', 90)
 
+    payload = json.dumps({'paipuList': [url]}).encode('utf-8')
+    http_req = urllib.request.Request(
+        api,
+        data=payload,
+        method='POST',
+        headers={
+            'Content-Type': 'application/json; charset=utf-8',
+            'Accept': 'application/json',
+        },
+    )
     try:
-        resp = requests.post(
-            api,
-            json={'paipuList': [url]},
-            timeout=timeout,
-            headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
-        )
-    except requests.RequestException as e:
+        with urllib.request.urlopen(http_req, timeout=timeout) as http_resp:
+            status = http_resp.getcode() or 200
+            raw = http_resp.read().decode('utf-8')
+    except urllib.error.HTTPError as e:
+        status = e.code
+        try:
+            raw = e.read().decode('utf-8')
+        except OSError:
+            raw = e.reason or ''
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
         logger.error('牌谱分析接口网络错误: %s', e, exc_info=True)
         raise RuntimeError(f'牌谱分析服务不可用: {e}') from e
 
     try:
-        body = resp.json()
-    except ValueError:
-        logger.error('牌谱分析接口非 JSON, status=%s, text=%.500s', resp.status_code, resp.text)
+        body = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
+        logger.error('牌谱分析接口非 JSON, status=%s, text=%.500s', status, raw)
+        raise RuntimeError('牌谱分析服务返回了无效数据') from None
+    if not isinstance(body, dict):
+        logger.error('牌谱分析接口 JSON 非对象, status=%s, text=%.500s', status, raw)
         raise RuntimeError('牌谱分析服务返回了无效数据') from None
 
-    if resp.status_code >= 400:
-        err = (body or {}).get('msg') or (body or {}).get('message') or resp.text
-        raise RuntimeError(f'牌谱分析服务错误 ({resp.status_code}): {err}')
+    if status >= 400:
+        err = (body or {}).get('msg') or (body or {}).get('message') or raw
+        raise RuntimeError(f'牌谱分析服务错误 ({status}): {err}')
 
     try:
         c = int((body or {}).get('code', 0) or 0)
