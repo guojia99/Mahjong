@@ -143,7 +143,7 @@ export default function RoomDetailPage() {
             <div className="flex flex-wrap gap-2">
               {room.room_type === 'online' && (
                 <Link
-                  to={`/games/online?room=${id}`}
+                  to={`/rooms/online?room=${id}`}
                   className="btn btn-sm"
                   style={{ textDecoration: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}
                 >

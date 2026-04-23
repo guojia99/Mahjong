@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe } from 'lucide-react';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe, Crown, Settings } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
 const publicNavItems = [
@@ -9,6 +9,7 @@ const publicNavItems = [
   { path: '/rooms', label: '房间', icon: Gamepad2 },
   { path: '/games', label: '对局列表', icon: Gamepad2 },
   { path: '/pt-ranking', label: 'PT排名', icon: Trophy },
+  { path: '/ranking', label: '天梯排位', icon: Crown },
   { path: '/yakumans', label: '役满列表', icon: Sparkles },
   { path: '/calculator', label: '点数计算', icon: Calculator },
   { path: '/practice', label: '点数练习', icon: GraduationCap },
@@ -16,8 +17,10 @@ const publicNavItems = [
 
 const adminNavItems = [
   { path: '/players', label: '雀士管理', icon: Users },
-  { path: '/games/online', label: '线上对局导入', icon: Globe },
+  { path: '/ranking-admin', label: '排位配置', icon: Settings },
 ];
+
+const roomsAdminSubItem = { path: '/rooms/online', label: '线上对局导入', icon: Globe };
 
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,6 +30,38 @@ export default function MainLayout() {
   const admin = isAdmin();
 
   const navItems = admin ? [...publicNavItems, ...adminNavItems] : publicNavItems;
+
+              const exactPaths = ['/', '/player-list', '/games', '/pt-ranking', '/ranking', '/rooms/online', '/ranking-admin', '/yakumans', '/calculator', '/practice'];
+
+  const renderNavItem = (item: typeof navItems[number]) => {
+    const Icon = item.icon;
+    const isActive = location.pathname === item.path ||
+      (item.path !== '/' && !exactPaths.includes(item.path) && location.pathname.startsWith(item.path));
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        onClick={() => setSidebarOpen(false)}
+        className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150"
+        style={{
+          background: isActive ? 'var(--color-primary-light)' : 'transparent',
+          color: isActive ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+        }}
+      >
+        <Icon size={18} />
+        {item.label}
+      </Link>
+    );
+  };
+
+  const headerLabel = (() => {
+    if (location.pathname === roomsAdminSubItem.path) return roomsAdminSubItem.label;
+    return navItems.find(
+      (item) =>
+        item.path === location.pathname ||
+        (item.path !== '/' && location.pathname.startsWith(item.path))
+    )?.label || '嘉の雀桩';
+  })();
 
   const handleLogout = async () => {
     await logoutApi();
@@ -59,25 +94,26 @@ export default function MainLayout() {
 
           <nav className="flex-1 space-y-1">
             {navItems.map((item) => {
-              const Icon = item.icon;
-              const exactPaths = ['/', '/player-list', '/games', '/games/online', '/pt-ranking', '/yakumans', '/calculator', '/practice'];
-              const isActive = location.pathname === item.path ||
-                (item.path !== '/' && !exactPaths.includes(item.path) && location.pathname.startsWith(item.path));
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150"
-                  style={{
-                    background: isActive ? 'var(--color-primary-light)' : 'transparent',
-                    color: isActive ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
-                  }}
-                >
-                  <Icon size={18} />
-                  {item.label}
-                </Link>
-              );
+              if (item.path === '/rooms' && admin) {
+                return (
+                  <div key={item.path}>
+                    {renderNavItem(item)}
+                    <Link
+                      to={roomsAdminSubItem.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className="flex items-center gap-3 pl-10 pr-4 py-2 rounded-lg text-xs font-medium transition-all duration-150"
+                      style={{
+                        background: location.pathname === roomsAdminSubItem.path ? 'var(--color-primary-light)' : 'transparent',
+                        color: location.pathname === roomsAdminSubItem.path ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                      }}
+                    >
+                      <roomsAdminSubItem.icon size={14} />
+                      {roomsAdminSubItem.label}
+                    </Link>
+                  </div>
+                );
+              }
+              return renderNavItem(item);
             })}
           </nav>
 
@@ -136,11 +172,7 @@ export default function MainLayout() {
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>
-            {navItems.find(
-              (item) =>
-                item.path === location.pathname ||
-                (item.path !== '/' && location.pathname.startsWith(item.path))
-            )?.label || '嘉の雀桩'}
+            {headerLabel}
           </h1>
         </header>
 

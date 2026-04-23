@@ -1,26 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Gamepad2, Users, TrendingUp, Sparkles } from 'lucide-react';
+import { Gamepad2, Users, TrendingUp, Sparkles, Info, Trophy } from 'lucide-react';
 import { getRooms } from '@/api/games';
 import { getRecentYakumans } from '@/api/games';
 import { getPlayers } from '@/api/players';
-import type { Room, HandRecord } from '@/types';
+import { getRankTiers, getUmaConfigs } from '@/api/ranking';
+import type { Room, HandRecord, RankTier, UmaConfig } from '@/types';
 import YakumanCard from '@/components/YakumanCard';
+import RankTierBadge from '@/components/RankTierBadge';
 
 export default function HomePage() {
   const [openRooms, setOpenRooms] = useState<Room[]>([]);
   const [playerCount, setPlayerCount] = useState(0);
   const [totalGames, setTotalGames] = useState(0);
   const [recentYakumans, setRecentYakumans] = useState<HandRecord[]>([]);
+  const [tiers, setTiers] = useState<RankTier[]>([]);
+  const [umaConfigs, setUmaConfigs] = useState<UmaConfig[]>([]);
+  const [showRules, setShowRules] = useState(false);
 
   const loadData = async () => {
     try {
-      const [rooms, players] = await Promise.all([
+      const [rooms, players, t, u] = await Promise.all([
         getRooms({ status: 'open' }),
         getPlayers(),
+        getRankTiers(),
+        getUmaConfigs(),
       ]);
       setOpenRooms(rooms);
       setPlayerCount(players.length);
+      setTiers(t);
+      setUmaConfigs(u);
       const allRooms = await getRooms();
       const games = allRooms.reduce((sum, r) => sum + r.game_count, 0);
       setTotalGames(games);
@@ -43,6 +52,13 @@ export default function HomePage() {
 
   return (
     <div>
+      <style>{`
+        @keyframes huntianGlow {
+          from { filter: brightness(1); }
+          to { filter: brightness(1.15); }
+        }
+      `}</style>
+
       <div className="mb-8">
         <h2 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>欢迎使用嘉の雀桩</h2>
         <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>日本立麻雀对局记录助手</p>
@@ -66,6 +82,132 @@ export default function HomePage() {
             </div>
           );
         })}
+      </div>
+
+      <div className="card mb-6">
+        <button
+          className="w-full flex items-center justify-between"
+          onClick={() => setShowRules(!showRules)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span className="font-bold flex items-center gap-2">
+            <Info size={16} style={{ color: 'var(--color-primary)' }} /> 天梯排位计分说明
+          </span>
+          <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+            {showRules ? '收起' : '展开'}
+          </span>
+        </button>
+
+        {showRules && (
+          <div className="mt-4 space-y-4">
+            <div>
+              <h4 className="font-bold mb-2 text-sm">排位计分规则</h4>
+              <div className="text-xs space-y-1" style={{ color: 'var(--color-text-light)', lineHeight: 1.8 }}>
+                <p>排位分仅记录<b>四麻半庄</b>对局成绩，不分线上线下。</p>
+                <p>
+                  计算公式：
+                  <code style={{ background: '#f5f5f5', padding: '0.125rem 0.375rem', borderRadius: '0.25rem' }}>
+                    (终局分 - 返点) / 10 + 马点 + 打点分 - 扣点分
+                  </code>
+                </p>
+                <p>打点分：一位时额外加分（一位且终局分超过450分时再加一次打点分）</p>
+                <p>扣点分：四位时根据当前段位扣除额外分数</p>
+                <p>入门～雀士段位为保护段，到达后不再掉段</p>
+                <p>超过雀神-赤木鬼神境后，从7000分开始完整排位；低于6000分自动回到赤木鬼神境(5000分)</p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-bold mb-2 text-sm">段位一览</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                      <th className="text-left py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>段位</th>
+                      <th className="text-right py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>初始分</th>
+                      <th className="text-right py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>升级pt</th>
+                      <th className="text-right py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>打点分</th>
+                      <th className="text-right py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>四位扣点</th>
+                      <th className="text-center py-2 px-2 font-semibold" style={{ color: 'var(--color-text-light)' }}>保护</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tiers.map((tier) => (
+                      <tr key={tier.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                        <td className="py-2 px-2">
+                          <RankTierBadge tier={tier} showScore={false} size="sm" />
+                        </td>
+                        <td className="text-right py-2 px-2 font-mono">{tier.initial_score}</td>
+                        <td className="text-right py-2 px-2 font-mono">{tier.promotion_score || '-'}</td>
+                        <td className="text-right py-2 px-2 font-mono">+{tier.dajiang_score}</td>
+                        <td className="text-right py-2 px-2 font-mono" style={{ color: tier.fourth_penalty > 0 ? '#e74c3c' : 'inherit' }}>
+                          {tier.fourth_penalty > 0 ? `-${tier.fourth_penalty}` : '0'}
+                        </td>
+                        <td className="text-center py-2 px-2">
+                          {tier.is_protected ? (
+                            <span className="text-xs" style={{ color: '#2d9d78' }}>&#10003;</span>
+                          ) : (
+                            <span style={{ color: '#ccc' }}>-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {umaConfigs.length > 0 && (
+              <div>
+                <h4 className="font-bold mb-2 text-sm">马点配置</h4>
+                <div className="space-y-3">
+                  {umaConfigs.map((config) => (
+                    <div key={config.id} className="p-3 rounded-xl" style={{ background: '#f9f9f9' }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-semibold text-xs">{config.name}</span>
+                        {config.is_active && (
+                          <span className="badge badge-open" style={{ fontSize: '0.5rem', padding: '0.0625rem 0.375rem' }}>启用</span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 text-xs">
+                        <div>
+                          <span style={{ color: 'var(--color-text-light)' }}>返点：</span>
+                          <span className="font-mono font-semibold">{config.base_score}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--color-text-light)' }}>一位：</span>
+                          <span className="font-mono" style={{ color: '#2d9d78' }}>+{config.uma_1st}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--color-text-light)' }}>二位：</span>
+                          <span className="font-mono" style={{ color: '#2d9d78' }}>+{config.uma_2nd}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--color-text-light)' }}>三位：</span>
+                          <span className="font-mono" style={{ color: config.uma_3rd < 0 ? '#e74c3c' : '#2d9d78' }}>
+                            {config.uma_3rd > 0 ? '+' : ''}{config.uma_3rd}
+                          </span>
+                        </div>
+                        {config.player_count === 4 && (
+                          <div>
+                            <span style={{ color: 'var(--color-text-light)' }}>四位：</span>
+                            <span className="font-mono" style={{ color: '#e74c3c' }}>{config.uma_4th}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Link to="/ranking" className="text-sm font-medium flex items-center gap-1" style={{ color: 'var(--color-primary-dark)' }}>
+                <Trophy size={14} /> 查看天梯排行
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {openRooms.length > 0 && (
