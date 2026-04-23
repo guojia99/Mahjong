@@ -221,6 +221,24 @@ def calculate_pt(game):
     return result
 
 
+def annotate_serialized_games_with_pt(games, data_list):
+    """GameListSerializer 结果不含 pt；与全服对局列表一致为每条附带 calculate_pt 结果。"""
+    game_list = list(games)
+    for item in data_list:
+        gid = item.get('id')
+        game_obj = next((g for g in game_list if str(g.id) == str(gid)), None)
+        if game_obj:
+            item['pt'] = calculate_pt(game_obj)
+
+
+def game_detail_with_pt(game):
+    from .serializers import GameDetailSerializer
+
+    data = GameDetailSerializer(game).data
+    data['pt'] = calculate_pt(game)
+    return data
+
+
 class HandRecordService:
     @staticmethod
     def create_hand_record(game, **kwargs):

@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from .models import Player, MahjongSoulAccount
 from apps.games.models import Game, GamePlayer
 from apps.games.serializers import GameListSerializer
+from apps.games.services import annotate_serialized_games_with_pt
 from .serializers import (
     PlayerListSerializer, PlayerDetailSerializer,
     PlayerCreateSerializer, PlayerUpdateSerializer,
@@ -117,4 +118,6 @@ class PlayerGamesView(APIView):
             id__in=game_ids
         ).prefetch_related('game_players__player').order_by('-start_time')
         serializer = GameListSerializer(games, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        annotate_serialized_games_with_pt(games, data)
+        return Response(data)

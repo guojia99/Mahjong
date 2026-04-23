@@ -15,7 +15,14 @@ from .serializers import (
     HandRecordCreateSerializer, HandRecordListSerializer,
     OnlineGameImportSerializer,
 )
-from .services import RoomService, GameService, HandRecordService, calculate_pt
+from .services import (
+    RoomService,
+    GameService,
+    HandRecordService,
+    calculate_pt,
+    annotate_serialized_games_with_pt,
+    game_detail_with_pt,
+)
 from apps.players.models import Player, MahjongSoulAccount
 
 logger = logging.getLogger(__name__)
@@ -113,7 +120,9 @@ class RoomGameListView(APIView):
         room = get_object_or_404(Room, pk=pk)
         games = room.games.prefetch_related('game_players__player').all()
         serializer = GameListSerializer(games, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        annotate_serialized_games_with_pt(games, data)
+        return Response(data)
 
     def post(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
@@ -133,7 +142,7 @@ class RoomGameListView(APIView):
                 room, request.user, serializer.validated_data.pop('player_ids'),
                 **serializer.validated_data
             )
-        return Response(GameDetailSerializer(game).data, status=status.HTTP_201_CREATED)
+        return Response(game_detail_with_pt(game), status=status.HTTP_201_CREATED)
 
 
 class GameListView(APIView):
@@ -160,10 +169,7 @@ class GameListView(APIView):
 
         serializer = GameListSerializer(games, many=True)
         data = serializer.data
-        for item in data:
-            game_obj = next((g for g in games if str(g.id) == item['id']), None)
-            if game_obj:
-                item['pt'] = calculate_pt(game_obj)
+        annotate_serialized_games_with_pt(games, data)
         return Response(data)
 
 
@@ -172,15 +178,14 @@ class GameDetailView(APIView):
 
     def get(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
-        serializer = GameDetailSerializer(game)
-        return Response(serializer.data)
+        return Response(game_detail_with_pt(game))
 
     def put(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
         serializer = GameUpdateSerializer(game, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         game = GameService.update_game(game, **serializer.validated_data)
-        return Response(GameDetailSerializer(game).data)
+        return Response(game_detail_with_pt(game))
 
 
 class GameScoreView(APIView):
@@ -191,7 +196,7 @@ class GameScoreView(APIView):
         serializer = ScoreSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         game = GameService.submit_scores(game, serializer.validated_data['scores'])
-        return Response(GameDetailSerializer(game).data)
+        return Response(game_detail_with_pt(game))
 
 
 class GamePlayerUpdateView(APIView):
@@ -201,7 +206,7 @@ class GamePlayerUpdateView(APIView):
         game = get_object_or_404(Game, pk=pk)
         player_ids = request.data.get('player_ids', [])
         game = GameService.update_game_players(game, player_ids)
-        return Response(GameDetailSerializer(game).data)
+        return Response(game_detail_with_pt(game))
 
 
 class GameShuffleSeatsView(APIView):
@@ -220,7 +225,7 @@ class GameShuffleSeatsView(APIView):
         for gp, seat in zip(gps, seats):
             gp.seat_number = seat
             gp.save()
-        return Response(GameDetailSerializer(game).data)
+        return Response(game_detail_with_pt(game))
 
 
 class OnlineGameParseView(APIView):
@@ -376,7 +381,7 @@ class OnlineGameImportView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-        return Response(GameDetailSerializer(game).data, status=status.HTTP_201_CREATED)
+        return Response(game_detail_with_pt(game), status=status.HTTP_201_CREATED)
 
 
 class BindMajsoulAccountView(APIView):
