@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAdminUser
 from common.permissions import IsAdminUserOrReadOnly
 from .models import UmaConfig, RankTier, PlayerRankingScore
 from .serializers import (
@@ -75,7 +76,7 @@ class RankTierListView(APIView):
 
 
 class RankTierDetailView(APIView):
-    permission_classes = [IsAdminUserOrReadOnly]
+    permission_classes = [IsAdminUser | AllowAny]
 
     def get(self, request, pk):
         tier = get_object_or_404(RankTier, pk=pk)
@@ -96,6 +97,8 @@ class RankTierDetailView(APIView):
 
 
 class RecalculateRankingView(APIView):
+    permission_classes = [IsAdminUser]
+
     def post(self, request):
         try:
             with transaction.atomic():
@@ -107,6 +110,8 @@ class RecalculateRankingView(APIView):
 
 
 class RankingLeaderboardView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request):
         leaderboard = get_ranking_leaderboard()
         serializer = PlayerRankingScoreSerializer(leaderboard, many=True)
@@ -114,6 +119,8 @@ class RankingLeaderboardView(APIView):
 
 
 class PlayerRankingView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request, pk):
         player = get_object_or_404(Player, pk=pk)
         ranking = get_player_ranking(player)
@@ -142,6 +149,8 @@ class GameRankingSettleView(APIView):
 
 
 class PlayerGameRankingResultsView(APIView):
+    permission_classes = [AllowAny]
+
     def get(self, request, pk):
         from .models import GameRankingResult
         player = get_object_or_404(Player, pk=pk)
