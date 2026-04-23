@@ -17,13 +17,55 @@ class PlayerBriefSerializer(serializers.ModelSerializer):
 
 class PlayerListSerializer(serializers.ModelSerializer):
     majsoul_uids = serializers.SerializerMethodField()
+    ranking_tier = serializers.SerializerMethodField()
+    ranking_score = serializers.SerializerMethodField()
+    total_game_count = serializers.SerializerMethodField()
+    last_game_time = serializers.SerializerMethodField()
 
     class Meta:
         model = Player
-        fields = ['id', 'nickname', 'real_name', 'avatar', 'majsoul_uids', 'created_at']
+        fields = [
+            'id', 'nickname', 'real_name', 'avatar', 'majsoul_uids',
+            'ranking_tier', 'ranking_score', 'total_game_count', 'last_game_time',
+            'created_at',
+        ]
 
     def get_majsoul_uids(self, obj):
         return list(obj.majsoul_accounts.values_list('uid', flat=True))
+
+    def get_ranking_tier(self, obj):
+        from apps.ranking.models import PlayerRankingScore
+        from apps.ranking.serializers import RankTierSerializer
+        try:
+            prs = obj.ranking_scores.select_related('tier').get()
+            if prs.tier:
+                return RankTierSerializer(prs.tier).data
+        except PlayerRankingScore.DoesNotExist:
+            pass
+        return None
+
+    def get_ranking_score(self, obj):
+        from apps.ranking.models import PlayerRankingScore
+        try:
+            prs = obj.ranking_scores.only('score').get()
+            return prs.score
+        except PlayerRankingScore.DoesNotExist:
+            return None
+
+    def get_total_game_count(self, obj):
+        from apps.games.models import GamePlayer
+        return GamePlayer.objects.filter(
+            player=obj, score__isnull=False
+        ).count()
+
+    def get_last_game_time(self, obj):
+        from apps.games.models import GamePlayer, Game
+        latest_gp = GamePlayer.objects.filter(
+            player=obj, score__isnull=False
+        ).select_related('game').order_by('-game__start_time').first()
+        if latest_gp and latest_gp.game and latest_gp.game.start_time:
+            return latest_gp.game.start_time.strftime('%Y-%m-%d')
+        return None
 
 
 class PlayerDetailSerializer(serializers.ModelSerializer):

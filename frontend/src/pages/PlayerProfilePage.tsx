@@ -3,12 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { getPlayer, getPlayerGames } from '@/api/players';
 import { getPlayerStats } from '@/api/games';
 import { getPlayerYakumans } from '@/api/players';
+import { getPlayerRanking, getPlayerGameRankingResults } from '@/api/ranking';
 import { useToast } from '@/hooks/useToast';
-import type { Player, Game, PlayerStats, PlayerStatsRecentPoint, HandRecord } from '@/types';
+import type { Player, Game, PlayerStats, PlayerStatsRecentPoint, HandRecord, PlayerRankingScore as PlayerRankingType } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS, GAME_MODE_FULL_LABELS } from '@/types';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import YakumanCard from '@/components/YakumanCard';
 import PlayerStatsLineChart from '@/components/PlayerStatsLineChart';
+import RankTierBadge from '@/components/RankTierBadge';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
@@ -33,6 +35,10 @@ export default function PlayerProfilePage() {
   const [games, setGames] = useState<Game[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [yakumans, setYakumans] = useState<HandRecord[]>([]);
+  const [ranking, setRanking] = useState<PlayerRankingType | null>(null);
+  const [gameRankingResults, setGameRankingResults] = useState<Record<string, {
+    rank: number; delta: number; old_tier_name: string; new_tier_name: string; old_score: number; new_score: number;
+  }>>({});
   const [tab, setTab] = useState<'stats' | 'games' | 'yakumans' | 'info'>('stats');
   const [filterPlayerCount, setFilterPlayerCount] = useState<'' | '3' | '4'>('4');
   const [filterGameMode, setFilterGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
@@ -58,6 +64,8 @@ export default function PlayerProfilePage() {
     getPlayer(id).then(setPlayer).catch(() => showToast('加载雀士失败'));
     getPlayerGames(id).then(setGames).catch(() => showToast('加载对局失败'));
     getPlayerYakumans(id).then(setYakumans).catch(() => setYakumans([]));
+    getPlayerRanking(id).then(setRanking).catch(() => setRanking(null));
+    getPlayerGameRankingResults(id).then(setGameRankingResults).catch(() => setGameRankingResults({}));
   }, [id, showToast]);
 
   useEffect(() => {
@@ -176,6 +184,91 @@ export default function PlayerProfilePage() {
           </div>
         </div>
       </div>
+
+      {ranking && ranking.tier && (
+        <div
+          className="card mb-6 p-4"
+          style={{
+            background: ranking.tier.bg_gradient
+              ? undefined
+              : `${ranking.tier.bg_color}08`,
+            border: `1.5px solid ${ranking.tier.bg_color}30`,
+          }}
+        >
+          <style>{`
+            @keyframes huntianGlow {
+              from { filter: brightness(1); }
+              to { filter: brightness(1.15); }
+            }
+          `}</style>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <RankTierBadge tier={ranking.tier} score={ranking.score} size="lg" />
+            <div className="text-right">
+              <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                排位分 (四麻半庄)
+              </div>
+              <div
+                className="text-2xl font-bold"
+                style={{
+                  color: ranking.score >= 0 ? '#2d9d78' : '#e74c3c',
+                }}
+              >
+                {Math.round(ranking.score * 100) / 100}
+              </div>
+              <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                {ranking.game_count} 局
+              </div>
+            </div>
+          </div>
+          {ranking.tier.description && (
+            <div
+              className="mt-2 text-xs"
+              style={{ color: 'var(--color-text-light)', fontStyle: 'italic' }}
+            >
+              {ranking.tier.description}
+            </div>
+          )}
+          {ranking.next_tier && (
+            <div className="mt-3 pt-3" style={{ borderTop: '1px dashed var(--color-border)' }}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                  距下一级 <span className="font-semibold" style={{ color: ranking.next_tier.bg_color }}>{ranking.next_tier.name}</span>
+                </span>
+                <span className="text-xs font-mono" style={{ color: 'var(--color-text-light)' }}>
+                  {ranking.next_tier.needed} 分
+                </span>
+              </div>
+              <div
+                className="h-2 rounded-full overflow-hidden"
+                style={{ background: '#f0f0f0' }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, ((ranking.next_tier.threshold - ranking.next_tier.needed) / ranking.next_tier.threshold) * 100))}%`,
+                    background: `linear-gradient(90deg, ${ranking.tier.bg_color}90, ${ranking.next_tier.bg_color})`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between mt-0.5">
+                <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                  {ranking.tier.initial_score}
+                </span>
+                <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                  {ranking.next_tier.threshold}
+                </span>
+              </div>
+            </div>
+          )}
+          {!ranking.next_tier && ranking.tier.level_order >= 15 && (
+            <div className="mt-3 pt-3" style={{ borderTop: '1px dashed var(--color-border)' }}>
+              <div className="text-xs text-center font-semibold" style={{ color: ranking.tier.bg_color }}>
+                已达最高段位
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4 flex-wrap">
         <button
@@ -429,7 +522,7 @@ export default function PlayerProfilePage() {
                           </Link>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="badge" style={{
                           background: myRank === 1 ? '#fff8e1' : '#f0f0f0',
                           color: myRank === 1 ? '#f0b830' : '#999',
@@ -447,6 +540,38 @@ export default function PlayerProfilePage() {
                         }}>
                           {(() => { const v = Math.round(myPt * 100) / 100; return v > 0 ? `+${v}` : v; })()}pt
                         </span>
+                        {(() => {
+                          const rr = gameRankingResults[game.id];
+                          if (!rr) return null;
+                          const delta = Math.round(rr.delta * 100) / 100;
+                          const tierChanged = rr.old_tier_name !== rr.new_tier_name;
+                          return (
+                            <>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.125rem',
+                                padding: '0.125rem 0.5rem', borderRadius: '0.375rem',
+                                fontSize: '0.625rem', fontWeight: 700,
+                                color: '#6b5ce7',
+                                background: '#f0edff',
+                                border: '1px solid #d8d0f8',
+                              }}>
+                                R{delta > 0 ? `+${delta}` : delta}
+                              </span>
+                              {tierChanged && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.125rem',
+                                  padding: '0.125rem 0.5rem', borderRadius: '0.375rem',
+                                  fontSize: '0.625rem', fontWeight: 700,
+                                  color: '#f0b830',
+                                  background: '#fff8e1',
+                                  border: '1px solid #fce588',
+                                }}>
+                                  {rr.old_tier_name} &#x2192; {rr.new_tier_name}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs" style={{ color: 'var(--color-text-light)' }}>

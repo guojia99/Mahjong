@@ -130,6 +130,50 @@ export interface PtRankingItem {
     game_count: number;
 }
 
+export interface RankTier {
+    id: string;
+    name: string;
+    level_order: number;
+    initial_score: number;
+    promotion_score: number;
+    dajiang_score: number;
+    fourth_penalty: number;
+    is_protected: boolean;
+    bg_color: string;
+    bg_gradient: string;
+    description: string;
+}
+
+export interface UmaConfig {
+    id: string;
+    name: string;
+    player_count: number;
+    game_mode: string;
+    uma_1st: number;
+    uma_2nd: number;
+    uma_3rd: number;
+    uma_4th: number;
+    base_score: number;
+    is_active: boolean;
+}
+
+export interface PlayerRankingScore {
+    id: string;
+    player: Player;
+    tier: RankTier | null;
+    score: number;
+    game_count: number;
+    updated_at: string;
+    next_tier: {
+        name: string;
+        level_order: number;
+        threshold: number;
+        needed: number;
+        bg_color: string;
+        bg_gradient: string;
+    } | null;
+}
+
 export const SEAT_WIND_LABELS: Record<number, string> = {
     0: '东',
     1: '南',

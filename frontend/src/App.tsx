@@ -14,6 +14,8 @@ import YakumanListPage from '@/pages/YakumanListPage';
 import CalculatorPage from '@/pages/CalculatorPage';
 import PracticePage from '@/pages/PracticePage';
 import OnlineGamePage from '@/pages/OnlineGamePage';
+import RankingLeaderboardPage from '@/pages/RankingLeaderboardPage';
+import RankingAdminPage from '@/pages/RankingAdminPage';
 import { isAdmin } from '@/api/auth';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -34,15 +36,16 @@ function App() {
           <Route path="player-list" element={<PlayerListPage />} />
           <Route path="player-list/:id" element={<PlayerProfilePage />} />
           <Route path="rooms" element={<RoomsPage />} />
+          <Route path="rooms/online" element={<AdminRoute><OnlineGamePage /></AdminRoute>} />
           <Route path="rooms/:id" element={<RoomDetailPage />} />
           <Route path="rooms/:roomId/games/:gameId" element={<GameDetailPage />} />
           <Route path="games" element={<GameListPage />} />
-          <Route path="games/online" element={<AdminRoute><OnlineGamePage /></AdminRoute>} />
           <Route path="pt-ranking" element={<PtRankingPage />} />
+          <Route path="ranking" element={<RankingLeaderboardPage />} />
+          <Route path="ranking-admin" element={<AdminRoute><RankingAdminPage /></AdminRoute>} />
           <Route path="yakumans" element={<YakumanListPage />} />
           <Route path="calculator" element={<CalculatorPage />} />
           <Route path="practice" element={<PracticePage />} />
-          {/* <Route path="yaku-practice" element={<YakuPracticePage />} /> */}
         </Route>
       </Routes>
     </BrowserRouter>

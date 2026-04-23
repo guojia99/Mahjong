@@ -128,6 +128,12 @@ class GameService:
                 gp.seat_number = abs(gp.seat_number) - 1
                 gp.save(update_fields=['seat_number', 'score', 'is_dealer_start'])
 
+        try:
+            from apps.ranking.services import settle_game_ranking
+            settle_game_ranking(game)
+        except Exception:
+            pass
+
         return game
 
     @staticmethod
@@ -183,6 +189,12 @@ class GameService:
 
                 if not room.room_players.filter(player=player).exists():
                     RoomPlayer.objects.create(room=room, player=player)
+
+        try:
+            from apps.ranking.services import settle_game_ranking
+            settle_game_ranking(game)
+        except Exception:
+            pass
 
         return game
 
