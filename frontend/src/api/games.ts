@@ -223,3 +223,21 @@ export async function getPtRanking(params?: {
   const { data } = await api.get('/games/pt-ranking/', { params });
   return data;
 }
+
+export interface FunRankingItem {
+  player: import('@/types').Player;
+  rate: number;
+  count: number;
+  total: number;
+}
+
+export async function getFunRanking(params?: {
+  rank_type?: '1st' | '2nd' | '3rd' | '4th' | 'avg_rank' | 'avg_score' | 'high_score' | 'low_score';
+  player_count?: number;
+  game_mode?: string;
+  game_type?: 'offline' | 'online';
+  min_games?: number;
+}): Promise<FunRankingItem[]> {
+  const { data } = await api.get('/games/fun-ranking/', { params });
+  return data;
+}

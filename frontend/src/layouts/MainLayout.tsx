@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe, Crown, Settings } from 'lucide-react';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe, Crown, Settings, Medal } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
 const publicNavItems = [
@@ -9,6 +9,7 @@ const publicNavItems = [
   { path: '/rooms', label: '房间', icon: Gamepad2 },
   { path: '/games', label: '对局列表', icon: Gamepad2 },
   { path: '/pt-ranking', label: 'PT排名', icon: Trophy },
+  { path: '/fun-ranking', label: '趣味排行', icon: Medal },
   { path: '/ranking', label: '天梯排位', icon: Crown },
   { path: '/yakumans', label: '役满列表', icon: Sparkles },
   { path: '/calculator', label: '点数计算', icon: Calculator },
@@ -31,7 +32,7 @@ export default function MainLayout() {
 
   const navItems = admin ? [...publicNavItems, ...adminNavItems] : publicNavItems;
 
-              const exactPaths = ['/', '/player-list', '/games', '/pt-ranking', '/ranking', '/rooms/online', '/ranking-admin', '/yakumans', '/calculator', '/practice'];
+              const exactPaths = ['/', '/player-list', '/games', '/pt-ranking', '/fun-ranking', '/ranking', '/rooms/online', '/ranking-admin', '/yakumans', '/calculator', '/practice'];
 
   const renderNavItem = (item: typeof navItems[number]) => {
     const Icon = item.icon;

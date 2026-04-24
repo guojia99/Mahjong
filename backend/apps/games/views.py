@@ -616,6 +616,101 @@ class PtRankingView(APIView):
         return Response(rankings)
 
 
+class FunRankingView(APIView):
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        rank_type = request.query_params.get('rank_type', '1st')
+        player_count = request.query_params.get('player_count')
+        game_mode = request.query_params.get('game_mode')
+        game_type = request.query_params.get('game_type')
+
+        gps = GamePlayer.objects.filter(score__isnull=False).select_related('game', 'player')
+
+        if player_count:
+            gps = gps.filter(game__player_count=int(player_count))
+        if game_mode:
+            gps = gps.filter(game__game_mode=game_mode)
+        if game_type in ('offline', 'online'):
+            gps = gps.filter(game__game_type=game_type)
+
+        player_stats = {}
+        for gp in gps:
+            pid = str(gp.player_id)
+            if pid not in player_stats:
+                player_stats[pid] = {
+                    'total': 0, 'ranks': {1: 0, 2: 0, 3: 0, 4: 0},
+                    'score_sum': 0, 'high_score': None, 'low_score': None,
+                    'rank_sum': 0, 'player_obj': gp.player,
+                }
+            s = player_stats[pid]
+            s['total'] += 1
+            s['score_sum'] += gp.score
+
+            if s['high_score'] is None or gp.score > s['high_score']:
+                s['high_score'] = gp.score
+            if s['low_score'] is None or gp.score < s['low_score']:
+                s['low_score'] = gp.score
+
+            all_gps = list(gp.game.game_players.filter(score__isnull=False).order_by('-score'))
+            ranked = sorted(all_gps, key=lambda x: x.score, reverse=True)
+            rank = next((i + 1 for i, g in enumerate(ranked) if g.player_id == gp.player_id), len(ranked))
+            if 1 <= rank <= 4:
+                s['ranks'][rank] += 1
+                s['rank_sum'] += rank
+
+        min_games = int(request.query_params.get('min_games', '1'))
+
+        rank_key_map = {'1st': 1, '2nd': 2, '3rd': 3, '4th': 4}
+        valid_types = list(rank_key_map.keys()) + ['avg_rank', 'avg_score', 'high_score', 'low_score']
+        if rank_type not in valid_types:
+            rank_type = '1st'
+
+        items = []
+        for pid, s in player_stats.items():
+            total = s['total']
+            if total < min_games:
+                continue
+
+            item = {'player_id': pid, 'total': total}
+
+            if rank_type in rank_key_map:
+                target = rank_key_map[rank_type]
+                count = s['ranks'].get(target, 0)
+                item['rate'] = round(count / total * 100, 2)
+                item['count'] = count
+            elif rank_type == 'avg_rank':
+                item['rate'] = round(s['rank_sum'] / total, 2)
+                item['count'] = total
+            elif rank_type == 'avg_score':
+                item['rate'] = round(s['score_sum'] / total, 1)
+                item['count'] = total
+            elif rank_type == 'high_score':
+                item['rate'] = s['high_score']
+                item['count'] = total
+            elif rank_type == 'low_score':
+                item['rate'] = s['low_score']
+                item['count'] = total
+
+            items.append(item)
+
+        reverse = rank_type not in ('avg_rank', 'low_score')
+        items.sort(key=lambda x: x['rate'], reverse=reverse)
+
+        from apps.players.serializers import PlayerListSerializer
+        result = []
+        for item in items:
+            player = player_stats[item['player_id']]['player_obj']
+            result.append({
+                'player': PlayerListSerializer(player).data,
+                'rate': item['rate'],
+                'count': item['count'],
+                'total': item['total'],
+            })
+
+        return Response(result)
+
+
 class YakumanListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 

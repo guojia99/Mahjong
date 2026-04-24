@@ -10,6 +10,7 @@ import RoomDetailPage from '@/pages/RoomDetailPage';
 import GameDetailPage from '@/pages/GameDetailPage';
 import GameListPage from '@/pages/GameListPage';
 import PtRankingPage from '@/pages/PtRankingPage';
+import FunRankingPage from '@/pages/FunRankingPage';
 import YakumanListPage from '@/pages/YakumanListPage';
 import CalculatorPage from '@/pages/CalculatorPage';
 import PracticePage from '@/pages/PracticePage';
@@ -41,6 +42,7 @@ function App() {
           <Route path="rooms/:roomId/games/:gameId" element={<GameDetailPage />} />
           <Route path="games" element={<GameListPage />} />
           <Route path="pt-ranking" element={<PtRankingPage />} />
+          <Route path="fun-ranking" element={<FunRankingPage />} />
           <Route path="ranking" element={<RankingLeaderboardPage />} />
           <Route path="ranking-admin" element={<AdminRoute><RankingAdminPage /></AdminRoute>} />
           <Route path="yakumans" element={<YakumanListPage />} />
