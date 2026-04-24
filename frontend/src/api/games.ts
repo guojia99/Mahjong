@@ -70,7 +70,7 @@ export async function getGame(id: string): Promise<Game> {
   return data;
 }
 
-export async function updateGame(id: string, payload: { game_mode?: string; player_count?: number; start_time?: string; end_time?: string }) {
+export async function updateGame(id: string, payload: { game_mode?: string; player_count?: number; start_time?: string; end_time?: string | null }) {
   const { data } = await api.put(`/games/${id}/`, payload);
   return data;
 }
