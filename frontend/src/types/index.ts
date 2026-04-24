@@ -54,6 +54,7 @@ export interface Game {
     game_mode: 'east_wind' | 'half_match';
     player_count: number;
     start_time: string;
+    end_time: string | null;
     source_url: string;
     paipu_data?: Record<string, unknown>;
     players: GamePlayerInfo[];

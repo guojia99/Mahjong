@@ -75,6 +75,7 @@ class Game(models.Model):
     game_mode = models.CharField(max_length=20, choices=GAME_MODE_CHOICES, default='east_wind', verbose_name='对局模式')
     player_count = models.SmallIntegerField(choices=PLAYER_COUNT_CHOICES, default=4, verbose_name='人数(3三麻/4四麻)')
     start_time = models.DateTimeField(verbose_name='对局时间')
+    end_time = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
     source_url = models.URLField(blank=True, default='', verbose_name='牌谱链接')
     paipu_data = models.JSONField(default=dict, blank=True, verbose_name='雀魂牌谱详细数据')
     created_by = models.ForeignKey(

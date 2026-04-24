@@ -1,0 +1,31 @@
+# 复制为 config.yaml 后填写真实账号（国服网页端账号密码登录）。
+# cp config.example.yaml config.yaml
+
+# 雀魂国服网页根路径（与浏览器一致）
+ms_host: "https://game.maj-soul.com"
+
+# config.json 里 region_urls 的下标，国服示例工程通常用 1
+region_url_index: 1
+
+account: "在此填写账号"
+password: "在此填写密码"
+
+# 与参考 Node 工程 paipu.js 中 DEVICE_INFO 一致（可按需改）
+device:
+  platform: "pc"
+  hardware: "pc"
+  os: "windows"
+  os_version: "win10"
+  is_browser: true
+  software: "Chrome"
+  sale_platform: "web"
+
+# 参考 paipu.js 为 []；若登录失败可改为 [2] 再试（与 mahjong_soul_api 示例一致）
+currency_platforms: []
+
+tag: "cn"
+
+# 要拉取的牌谱：整段 URL 或 uuid（可多项）
+# 示例：https://game.maj-soul.com/1/?paipu=260407-88ba4972-e70d-48c7-9a57-95c11486b0a3_a253935907
+paipu_list:
+  - "https://game.maj-soul.com/1/?paipu=260407-88ba4972-e70d-48c7-9a57-95c11486b0a3_a253935907"

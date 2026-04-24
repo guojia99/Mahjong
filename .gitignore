@@ -219,3 +219,6 @@ backend/*.pyc
 node_modules/
 .make-pids/
 .make-pids/*
+
+# 雀魂 demo 本地密钥（勿提交）
+majsoul_paipu_demo/config.yaml

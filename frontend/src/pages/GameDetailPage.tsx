@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord } from '@/api/games';
+import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord, deleteGame, updateGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
 import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
@@ -9,10 +9,16 @@ import HandRecordModal from '@/components/HandRecordModal';
 import SortablePlayerList, { type SortableItem } from '@/components/SortablePlayerList';
 import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
-import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil } from 'lucide-react';
 
 function gpToSortable(gp: GamePlayerInfo): SortableItem {
   return { id: gp.player.id, nickname: gp.player.nickname, avatar: gp.player.avatar };
+}
+
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = iso.includes('T') ? iso : iso.replace(' ', 'T');
+  return t.length >= 16 ? t.slice(0, 16) : t;
 }
 
 function ScoreTag({ score }: { score: number | null }) {
@@ -30,6 +36,10 @@ export default function GameDetailPage() {
   const [showScoreInput, setShowScoreInput] = useState(false);
   const [showChangePlayers, setShowChangePlayers] = useState(false);
   const [showHandRecordModal, setShowHandRecordModal] = useState(false);
+  const [showEditGame, setShowEditGame] = useState(false);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editGameMode, setEditGameMode] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
@@ -196,6 +206,39 @@ export default function GameDetailPage() {
     }
   };
 
+  const handleDeleteGame = async () => {
+    if (!gameId || !roomId) return;
+    if (!confirm('确定删除该对局吗？此操作不可恢复。')) return;
+    try {
+      await deleteGame(gameId);
+      showToast('对局已删除', 'success');
+      navigate(`/rooms/${roomId}`);
+    } catch {
+      showToast('删除失败');
+    }
+  };
+
+  const handleEditGame = async () => {
+    if (!gameId) return;
+    setLoading(true);
+    try {
+      const payload: { start_time?: string; end_time?: string | null; game_mode?: string } = {};
+      if (editStartTime) payload.start_time = editStartTime;
+      if (editEndTime) payload.end_time = editEndTime;
+      else payload.end_time = null;
+      if (editGameMode) payload.game_mode = editGameMode;
+      const updated = await updateGame(gameId, payload);
+      setGame(updated);
+      setShowEditGame(false);
+      showToast('对局信息已更新', 'success');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '修改失败';
+      showToast(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!game) {
     return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
   }
@@ -227,7 +270,10 @@ export default function GameDetailPage() {
               <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
               <span className="font-semibold">{GAME_MODE_LABELS[game.game_mode]}</span>
             </div>
-            <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>{game.start_time}</div>
+            <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+              {game.start_time}
+              {game.end_time && <span> ~ {game.end_time}</span>}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {admin && (
@@ -253,6 +299,17 @@ export default function GameDetailPage() {
                     <Sparkles size={14} /> 役满牌谱
                   </button>
                 )}
+                <button className="btn btn-sm btn-outline" onClick={handleDeleteGame} style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}>
+                  <Trash2 size={14} /> 删除对局
+                </button>
+                <button className="btn btn-sm btn-outline" onClick={() => {
+                  setEditStartTime(toDatetimeLocal(game.start_time));
+                  setEditEndTime(toDatetimeLocal(game.end_time));
+                  setEditGameMode(game.game_mode);
+                  setShowEditGame(true);
+                }}>
+                  <Pencil size={14} /> 编辑
+                </button>
               </>
             )}
           </div>
@@ -578,6 +635,29 @@ export default function GameDetailPage() {
           onClose={() => setShowHandRecordModal(false)}
         />
       )}
+
+      <Modal open={showEditGame} onClose={() => setShowEditGame(false)} title="编辑对局信息">
+        <div className="form-group">
+          <label className="form-label">对局模式</label>
+          <select value={editGameMode} onChange={(e) => setEditGameMode(e.target.value)} className="form-input" disabled={game.is_scored}>
+            <option value="east_wind">东风局</option>
+            <option value="half_match">半庄</option>
+          </select>
+          {game.is_scored && <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>已录分，无法修改模式</p>}
+        </div>
+        <div className="form-group">
+          <label className="form-label">开始时间</label>
+          <input type="datetime-local" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="form-input" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">结束时间（可选）</label>
+          <input type="datetime-local" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="form-input" />
+        </div>
+        <div className="flex gap-3 justify-end">
+          <button className="btn btn-outline btn-sm" onClick={() => setShowEditGame(false)}>取消</button>
+          <button className="btn btn-primary btn-sm" disabled={loading} onClick={handleEditGame}>保存</button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getRooms, createRoom, closeRoom } from '@/api/games';
+import { getRooms, createRoom, closeRoom, deleteRoom } from '@/api/games';
 import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import type { Room } from '@/types';
 import { ROOM_TYPE_LABELS } from '@/types';
-import { Plus, MapPin, Users, Gamepad2, Clock } from 'lucide-react';
+import { Plus, MapPin, Users, Gamepad2, Clock, Trash2 } from 'lucide-react';
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -67,6 +67,18 @@ export default function RoomsPage() {
       loadRooms();
     } catch {
       showToast('操作失败');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('确定删除该房间吗？此操作不可恢复。')) return;
+    try {
+      await deleteRoom(id);
+      showToast('房间已删除', 'success');
+      loadRooms();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '删除失败';
+      showToast(msg);
     }
   };
 
@@ -204,6 +216,15 @@ export default function RoomsPage() {
                       style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
                     >
                       关闭房间
+                    </button>
+                  )}
+                  {admin && room.game_count === 0 && (
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={() => handleDelete(room.id)}
+                      style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
+                    >
+                      <Trash2 size={14} /> 删除
                     </button>
                   )}
                 </div>

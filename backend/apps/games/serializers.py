@@ -83,7 +83,7 @@ class GameListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
         fields = [
-            'id', 'game_type', 'game_mode', 'player_count', 'start_time',
+            'id', 'game_type', 'game_mode', 'player_count', 'start_time', 'end_time',
             'source_url', 'paipu_data', 'players', 'is_scored', 'created_at', 'hand_records',
         ]
 
@@ -121,13 +121,13 @@ class GameCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Game
-        fields = ['game_type', 'game_mode', 'player_count', 'start_time', 'source_url', 'player_ids']
+        fields = ['game_type', 'game_mode', 'player_count', 'start_time', 'end_time', 'source_url', 'player_ids']
 
 
 class GameUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Game
-        fields = ['game_mode', 'player_count', 'start_time']
+        fields = ['game_mode', 'player_count', 'start_time', 'end_time']
 
     def validate_start_time(self, value):
         from django.utils import timezone

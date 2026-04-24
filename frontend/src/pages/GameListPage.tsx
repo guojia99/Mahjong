@@ -245,7 +245,7 @@ export default function GameListPage() {
                     </span>
                     <span className="badge badge-mode">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
-                    <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{game.start_time}</span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{game.start_time}{game.end_time ? ` ~ ${game.end_time}` : ''}</span>
                     {game.game_type === 'online' && Boolean(game.source_url?.trim()) && (
                       <button
                         type="button"
