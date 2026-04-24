@@ -23,6 +23,7 @@ export default function RoomDetailPage() {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [gameMode, setGameMode] = useState('east_wind');
   const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
@@ -92,11 +93,13 @@ export default function RoomDetailPage() {
       await createRoomGame(id, {
         game_mode: gameMode,
         start_time: startTime || new Date().toISOString().slice(0, 16),
+        end_time: endTime || null,
         player_ids: selectedPlayers,
       });
       showToast('对局创建成功', 'success');
       setShowNewGame(false);
       setSelectedPlayers([]);
+      setEndTime('');
       loadData();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '创建失败';
@@ -202,7 +205,7 @@ export default function RoomDetailPage() {
                     </span>
                     <span className="text-sm font-medium">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-text-light)' }}>
-                      <Clock size={12} /> {game.start_time}
+                      <Clock size={12} /> {game.start_time}{game.end_time ? ` ~ ${game.end_time}` : ''}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
@@ -267,7 +270,7 @@ export default function RoomDetailPage() {
         </div>
       </Modal>
 
-      <Modal open={showNewGame} onClose={() => { setShowNewGame(false); setSelectedPlayers([]); }} title="新建对局">
+      <Modal open={showNewGame} onClose={() => { setShowNewGame(false); setSelectedPlayers([]); setEndTime(''); }} title="新建对局">
         <form onSubmit={handleCreateGame}>
           <div className="form-group">
             <label className="form-label">选择选手 (3-4人)</label>
@@ -315,8 +318,17 @@ export default function RoomDetailPage() {
               className="form-input"
             />
           </div>
+          <div className="form-group">
+            <label className="form-label">结束时间（可选）</label>
+            <input
+              type="datetime-local"
+              value={endTime}
+              onChange={(e) => setEndTime(e.target.value)}
+              className="form-input"
+            />
+          </div>
           <div className="flex gap-3 justify-end">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => { setShowNewGame(false); setSelectedPlayers([]); }}>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => { setShowNewGame(false); setSelectedPlayers([]); setEndTime(''); }}>
               取消
             </button>
             <button type="submit" disabled={loading || selectedPlayers.length < 3} className="btn btn-primary btn-sm">

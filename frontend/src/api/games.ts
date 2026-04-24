@@ -33,6 +33,10 @@ export async function closeRoom(id: string): Promise<Room> {
   return data;
 }
 
+export async function deleteRoom(id: string) {
+  await api.delete(`/rooms/${id}/`);
+}
+
 export async function addPlayerToRoom(roomId: string, playerId: string) {
   const { data } = await api.post(`/rooms/${roomId}/players/`, { player_id: playerId });
   return data;
@@ -53,6 +57,7 @@ export async function createRoomGame(
     game_mode: string;
     player_count?: number;
     start_time: string;
+    end_time?: string | null;
     player_ids: string[];
   }
 ): Promise<Game> {
@@ -65,9 +70,13 @@ export async function getGame(id: string): Promise<Game> {
   return data;
 }
 
-export async function updateGame(id: string, payload: { game_mode?: string; player_count?: number; start_time?: string }) {
+export async function updateGame(id: string, payload: { game_mode?: string; player_count?: number; start_time?: string; end_time?: string }) {
   const { data } = await api.put(`/games/${id}/`, payload);
   return data;
+}
+
+export async function deleteGame(id: string) {
+  await api.delete(`/games/${id}/`);
 }
 
 export async function submitGameScores(gameId: string, scores: GameScore[]): Promise<Game> {

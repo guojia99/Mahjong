@@ -23,6 +23,7 @@ from .services import (
     annotate_serialized_games_with_pt,
     game_detail_with_pt,
 )
+from common.exceptions import BusinessException
 from apps.players.models import Player, MahjongSoulAccount
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,13 @@ class RoomDetailView(APIView):
         room.save()
         return Response(RoomDetailSerializer(room).data)
 
+    def delete(self, request, pk):
+        room = get_object_or_404(Room, pk=pk)
+        if room.games.exists():
+            raise BusinessException('该房间存在对局记录，无法删除')
+        room.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class RoomCloseView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
@@ -118,7 +126,9 @@ class RoomGameListView(APIView):
 
     def get(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
-        games = room.games.prefetch_related('game_players__player').all()
+        games = room.games.prefetch_related('game_players__player').annotate(
+            sort_time=Coalesce('end_time', 'start_time', output_field=DateTimeField()),
+        ).order_by('-sort_time', '-created_at')
         serializer = GameListSerializer(games, many=True)
         data = serializer.data
         annotate_serialized_games_with_pt(games, data)
@@ -126,6 +136,8 @@ class RoomGameListView(APIView):
 
     def post(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
+        if room.status == 'closed':
+            return Response({'error': '房间已关闭，无法新增对局'}, status=400)
         copy_from = request.data.get('copy_from')
         if copy_from:
             from_game = get_object_or_404(Game, pk=copy_from)
@@ -153,7 +165,7 @@ class GameListView(APIView):
             game_players__score__isnull=False
         ).distinct().prefetch_related(
             'game_players__player', 'hand_records__player'
-        ).order_by('-start_time')
+        ).select_related('room')
 
         player_count = request.query_params.get('player_count')
         if player_count:
@@ -166,6 +178,10 @@ class GameListView(APIView):
         game_type = request.query_params.get('game_type')
         if game_type:
             games = games.filter(game_type=game_type)
+
+        games = games.annotate(
+            sort_time=Coalesce('end_time', 'start_time', 'room__session_time', 'created_at', output_field=DateTimeField()),
+        ).order_by('-sort_time', '-created_at')
 
         serializer = GameListSerializer(games, many=True)
         data = serializer.data
@@ -186,6 +202,11 @@ class GameDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         game = GameService.update_game(game, **serializer.validated_data)
         return Response(game_detail_with_pt(game))
+
+    def delete(self, request, pk):
+        game = get_object_or_404(Game, pk=pk)
+        game.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class GameScoreView(APIView):
@@ -469,7 +490,9 @@ class PlayerStatsView(APIView):
 
         gps = GamePlayer.objects.filter(
             player=player, score__isnull=False
-        ).select_related('game').order_by('-game__start_time')
+        ).select_related('game__room').order_by(
+            '-game__end_time', '-game__start_time', '-game__room__session_time', '-game__created_at'
+        )
 
         if player_count:
             gps = gps.filter(game__player_count=int(player_count))
@@ -552,7 +575,7 @@ class PtRankingView(APIView):
 
         games = Game.objects.filter(
             game_players__score__isnull=False
-        ).distinct().prefetch_related('game_players__player')
+        ).distinct().prefetch_related('game_players__player').select_related('room')
 
         if player_count:
             games = games.filter(player_count=int(player_count))
@@ -561,6 +584,10 @@ class PtRankingView(APIView):
         game_type = request.query_params.get('game_type')
         if game_type in ('offline', 'online'):
             games = games.filter(game_type=game_type)
+
+        games = games.annotate(
+            sort_time=Coalesce('end_time', 'start_time', 'room__session_time', 'created_at', output_field=DateTimeField()),
+        ).order_by('-sort_time', '-created_at')
 
         pt_totals = {}
 

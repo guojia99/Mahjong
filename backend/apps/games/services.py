@@ -72,8 +72,6 @@ class GameService:
 
     @staticmethod
     def update_game(game, **kwargs):
-        if game.is_scored:
-            raise GameAlreadyScored('对局已录分，无法修改')
         for key, value in kwargs.items():
             setattr(game, key, value)
         game.save()
