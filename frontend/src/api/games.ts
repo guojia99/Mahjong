@@ -115,6 +115,7 @@ export async function importOnlineGame(payload: {
   player_count?: number;
   paipu_data?: Record<string, unknown>;
   start_time?: string | null;
+  end_time?: string | null;
   /** 与已有线上对局牌谱 URL 重复时须为 true，否则后端拒绝导入 */
   allow_duplicate_url?: boolean;
 }): Promise<Game> {
@@ -127,6 +128,7 @@ const PARSE_ONLINE_TIMEOUT_MS = 120_000;
 export async function parseOnlineGame(url: string): Promise<{
   uuid: string;
   start_time: string;
+  end_time: string;
   game_mode: string;
   player_count: number;
   players: {
@@ -167,6 +169,11 @@ export async function getAllGames(params?: {
   game_type?: string;
 }): Promise<Game[]> {
   const { data } = await api.get('/games/', { params });
+  return data;
+}
+
+export async function retryOnlineGame(gameId: string): Promise<Game> {
+  const { data } = await api.post(`/games/online/retry/${gameId}/`, {}, { timeout: 120_000 });
   return data;
 }
 

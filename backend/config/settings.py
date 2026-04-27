@@ -115,12 +115,11 @@ CORS_ALLOW_CREDENTIALS = True
 
 AUTH_USER_MODEL = 'users.User'
 
-# 雀魂牌谱解析：第三方 HTTP 接口（POST paipuList，见 services.majsoul）
-MAJSOUL_PAI_PU_API_URL = os.environ.get(
-    'MAJSOUL_PAI_PU_API_URL',
-    'http://manage.followyourheart.cn/backend/api/majsoul/paipu/analysis',
-)
-MAJSOUL_PAI_PU_API_TIMEOUT = int(os.environ.get('MAJSOUL_PAI_PU_API_TIMEOUT', '90'))
+# 雀魂牌谱解析：本地 Node 脚本（通过 WebSocket 协议获取牌谱详情）
+MAJSOUL_ACCOUNT = os.environ.get('MAJSOUL_ACCOUNT', db_config.get('majsoul_account', ''))
+MAJSOUL_PASSWORD = os.environ.get('MAJSOUL_PASSWORD', db_config.get('majsoul_password', ''))
+MAJSOUL_NODE_SCRIPT_DIR = BASE_DIR / 'majsoul_node'
+MAJSOUL_RATE_LIMIT_PER_MINUTE = int(os.environ.get('MAJSOUL_RATE_LIMIT_PER_MINUTE', '20'))
 
 # 后端处理日志：统一写入 /tmp/marjong.log（与 apps、services 等业务模块）
 _MARJONG_LOG_PATH = '/tmp/marjong.log'

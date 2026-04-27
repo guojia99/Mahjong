@@ -216,6 +216,7 @@ frontend/dist/
 backend/.venv/
 backend/media/
 backend/*.pyc
+backend/db_config.json
 
 # Proxy
 node_modules/

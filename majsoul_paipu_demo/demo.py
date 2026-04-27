@@ -1,44 +1,30 @@
 #!/usr/bin/env python3
 """
-雀魂牌谱拉取 Demo（逻辑对齐 EvanMaFYH/majsoul-paipu 中 paipu.js + majsoul.js）：
+雀魂牌谱拉取 Demo：
+  通过 Node 脚本 (paipu.js) 调用雀魂 WebSocket 协议获取牌谱详情，
+  本层 Python 负责：读取 config.yaml -> 调用 Node -> 解析 JSON 输出。
 
-- HTTP 拉取 version.json / config.json，选择网关 WebSocket
-- protobuf Wrapper + .lq.Lobby.login（密码为 HMAC-SHA256(key=lailai)）
-- .lq.Lobby.fetchGameRecordsDetail，uuid_list 批量取 RecordGame
-
-依赖 Python 库 ms-api（MahjongRepository/mahjong_soul_api 生态），等价于用 Python 走同一套协议，
-无需再嵌 Node 调 protobufjs。
-
-使用前：cp config.example.yaml config.yaml 并填写 account / password。
+使用前：
+  1. cp config.example.yaml config.yaml  并填写 account / password
+  2. cd node_demo && npm install
+  3. python3 demo.py
 """
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
-import hmac
 import json
 import logging
-import random
 import re
+import subprocess
 import sys
-import uuid
 from pathlib import Path
 from typing import Any
 
-import aiohttp
 import yaml
-from google.protobuf.json_format import MessageToDict
-
-from ms.base import MSRPCChannel
-from ms.rpc import Lobby
-import ms.protocol_pb2 as pb
 
 LOG = logging.getLogger("majsoul_paipu_demo")
 
-_UUID_RE = re.compile(
-    r"^\S{6}-\S{8}-\S{4}-\S{4}-\S{4}-\S{12}$"
-)
+_UUID_RE = re.compile(r"^\S{6}-\S{8}-\S{4}-\S{4}-\S{4}-\S{12}$")
 
 
 def _script_dir() -> Path:
@@ -64,20 +50,6 @@ def _placeholder_account(cfg: dict[str, Any]) -> bool:
     return False
 
 
-def normalize_paipu_url(raw: str) -> str:
-    s = (raw or "").strip()
-    if not s:
-        return ""
-    lower = s.lower()
-    for needle in ("https://", "http://"):
-        idx = lower.find(needle)
-        if idx != -1:
-            tail = s[idx:].strip()
-            token = tail.split()[0] if tail.split() else tail
-            return token.rstrip(".,;；，。）)")
-    return s
-
-
 def extract_paipu_uuid(token: str) -> str | None:
     if not token:
         return None
@@ -89,178 +61,55 @@ def extract_paipu_uuid(token: str) -> str | None:
     return None
 
 
-def format_paipu_record(record: pb.RecordGame) -> list[dict[str, Any]]:
-    """与 paipu.js formatPaipuRecord 一致：按 account_id 排序的摘要行。"""
-    rows: list[dict[str, Any]] = []
-    for item in record.accounts:
-        player_result = next(
-            (p for p in record.result.players if p.seat == item.seat), None
-        )
-        if player_result is None:
-            continue
-        rows.append(
-            {
-                "accountId": item.account_id,
-                "nickName": item.nickname,
-                "finalPoint": player_result.part_point_1,
-                "finalScore": player_result.total_point / 1000.0,
-            }
-        )
-    rows.sort(key=lambda x: x["accountId"])
-    return rows
+def fetch_paipu_via_node(
+    paipu_list: list[str],
+    account: str,
+    password: str,
+    *,
+    detail: bool = False,
+) -> list[dict[str, Any]]:
+    node_script = _script_dir() / "node_demo" / "paipu.js"
+    if not node_script.is_file():
+        raise FileNotFoundError(f"Node 脚本不存在: {node_script}\n请先 cd node_demo && npm install")
 
+    LOG.info("将请求牌谱 uuid: %s", [extract_paipu_uuid(p) for p in paipu_list])
 
-def password_hmac_hex(plain: str) -> str:
-    """与 crypto-js/hmac-sha256(password, 'lailai') 一致。"""
-    return hmac.new(b"lailai", plain.encode("utf-8"), hashlib.sha256).hexdigest()
+    cmd = ["node", str(node_script)]
+    if detail:
+        cmd.append("--detail")
+    cmd.extend([
+        json.dumps(paipu_list, ensure_ascii=False),
+        account,
+        password,
+    ])
 
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=str(_script_dir() / "node_demo"),
+    )
 
-async def connect_ms(
-    session: aiohttp.ClientSession, ms_host: str, region_url_index: int
-) -> tuple[MSRPCChannel, Lobby, str, str]:
-    """
-    返回: channel, lobby, version_raw（含 .w）, client_version_string（web- 前缀后不含资源后缀）
-    """
-    async with session.get(f"{ms_host}/1/version.json") as res:
-        version_doc = await res.json()
-    version = version_doc["version"]
-    ver_for_string = re.sub(r"\.[a-z]+$", "", version, flags=re.IGNORECASE)
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        LOG.error("Node 脚本执行失败 (exit=%d): %s", result.returncode, stderr)
+        raise RuntimeError(f"Node 脚本执行失败: {stderr}")
 
-    async with session.get(f"{ms_host}/1/v{version}/config.json") as res:
-        config = await res.json()
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError("Node 脚本无输出")
 
-    ip0 = config["ip"][0]
-    region_urls = ip0.get("region_urls") or ip0["gateways"]
-    if region_url_index < 0 or region_url_index >= len(region_urls):
-        raise IndexError(f"region_url_index 越界: {region_url_index}, 共 {len(region_urls)} 个")
-    url = region_urls[region_url_index]["url"]
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        LOG.error("Node 输出非 JSON: %s", output[:500])
+        raise
 
-    async with session.get(
-        url + "?service=ws-gateway&protocol=ws&ssl=true"
-    ) as res:
-        servers = await res.json()
-    server = random.choice(servers["servers"])
-    endpoint = f"wss://{server}/gateway"
-    LOG.info("WebSocket 网关: %s", endpoint)
+    if isinstance(data, dict) and "error" in data:
+        raise RuntimeError(f"牌谱获取失败: {data['error']}")
 
-    channel = MSRPCChannel(endpoint)
-    lobby = Lobby(channel)
-    await channel.connect(ms_host)
-    return channel, lobby, version, f"web-{ver_for_string}"
-
-
-async def login_lobby(
-    lobby: Lobby,
-    cfg: dict[str, Any],
-    version_resource: str,
-    client_version_string: str,
-) -> None:
-    req = pb.ReqLogin()
-    req.account = str(cfg["account"]).strip()
-    req.password = password_hmac_hex(str(cfg["password"]))
-    req.reconnect = True
-    req.gen_access_token = True
-    req.type = 0
-    req.client_version_string = client_version_string
-    req.client_version.resource = version_resource
-    req.random_key = str(uuid.uuid4())
-    req.tag = str(cfg.get("tag") or "cn")
-
-    dev = cfg.get("device") or {}
-    req.device.platform = str(dev.get("platform", "pc"))
-    req.device.hardware = str(dev.get("hardware", "pc"))
-    req.device.os = str(dev.get("os", "windows"))
-    req.device.os_version = str(dev.get("os_version", "win10"))
-    req.device.is_browser = bool(dev.get("is_browser", True))
-    req.device.software = str(dev.get("software", "Chrome"))
-    req.device.sale_platform = str(dev.get("sale_platform", "web"))
-
-    for x in cfg.get("currency_platforms") or []:
-        req.currency_platforms.append(int(x))
-
-    res = await lobby.login(req)
-    if res.error.code:
-        err = MessageToDict(res.error, preserving_proto_field_name=True)
-        raise RuntimeError(f"登录失败: {json.dumps(err, ensure_ascii=False)}")
-    if not res.access_token:
-        raise RuntimeError("登录失败: 未返回 access_token")
-
-
-async def fetch_records_detail(
-    lobby: Lobby, uuid_list: list[str]
-) -> pb.ResGameRecordsDetail:
-    req = pb.ReqGameRecordsDetail()
-    for u in uuid_list:
-        req.uuid_list.append(u)
-    return await lobby.fetch_game_records_detail(req)
-
-
-def _uniq_records_by_uuid(
-    records: list[pb.RecordGame],
-) -> list[pb.RecordGame]:
-    seen: set[str] = set()
-    # 保持插入顺序去重（与 lodash.uniqBy 行为接近）
-    out: list[pb.RecordGame] = []
-    for r in records:
-        if r.uuid in seen:
-            continue
-        seen.add(r.uuid)
-        out.append(r)
-    return out
-
-
-async def async_main(config_path: Path) -> None:
-    cfg = load_config(config_path)
-    if _placeholder_account(cfg):
-        print(
-            "请先将 config.example.yaml 复制为 config.yaml，并填写有效的 account / password 后再运行。",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-
-    ms_host = str(cfg.get("ms_host") or "https://game.maj-soul.com").rstrip("/")
-    region_idx = int(cfg.get("region_url_index", 1))
-
-    raw_list = cfg.get("paipu_list") or []
-    if isinstance(raw_list, str):
-        raw_list = [raw_list]
-    uuid_list: list[str] = []
-    for item in raw_list:
-        url = normalize_paipu_url(str(item))
-        u = extract_paipu_uuid(url) or extract_paipu_uuid(str(item))
-        if u:
-            uuid_list.append(u)
-    if not uuid_list:
-        raise SystemExit("paipu_list 中未能解析出任何牌谱 uuid")
-
-    LOG.info("将请求牌谱 uuid: %s", uuid_list)
-
-    timeout = aiohttp.ClientTimeout(total=60)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        channel, lobby, version_resource, client_ver_str = await connect_ms(
-            session, ms_host, region_idx
-        )
-        try:
-            await login_lobby(lobby, cfg, version_resource, client_ver_str)
-            LOG.info("登录成功")
-            res = await fetch_records_detail(lobby, uuid_list)
-            if res.error.code:
-                err = MessageToDict(res.error, preserving_proto_field_name=True)
-                raise RuntimeError(f"fetchGameRecordsDetail 错误: {err}")
-            records = list(res.record_list)
-            records = _uniq_records_by_uuid(records)
-            payload = []
-            for rec in records:
-                payload.append(
-                    {
-                        "uuid": rec.uuid,
-                        "start_time": rec.start_time,
-                        "players": format_paipu_record(rec),
-                    }
-                )
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        finally:
-            await channel.close()
+    return data if isinstance(data, list) else []
 
 
 def main() -> None:
@@ -269,12 +118,32 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
-    cfg_path = Path(sys.argv[1]) if len(sys.argv) > 1 else _script_dir() / "config.yaml"
-    try:
-        asyncio.run(async_main(cfg_path))
-    except FileNotFoundError as e:
-        print(str(e), file=sys.stderr)
-        raise SystemExit(2) from e
+
+    argv = sys.argv[1:]
+    detail = "--detail" in argv
+    if detail:
+        argv.remove("--detail")
+    cfg_path = Path(argv[0]) if argv else _script_dir() / "config.yaml"
+    cfg = load_config(cfg_path)
+
+    if _placeholder_account(cfg):
+        print(
+            "请先将 config.example.yaml 复制为 config.yaml，并填写有效的 account / password 后再运行。",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+
+    raw_list = cfg.get("paipu_list") or []
+    if isinstance(raw_list, str):
+        raw_list = [raw_list]
+
+    records = fetch_paipu_via_node(
+        paipu_list=raw_list,
+        account=str(cfg["account"]).strip(),
+        password=str(cfg["password"]).strip(),
+        detail=detail,
+    )
+    print(json.dumps(records, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
