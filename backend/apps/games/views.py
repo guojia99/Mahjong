@@ -291,6 +291,7 @@ class OnlineGameParseView(APIView):
         return Response({
             'uuid': result['uuid'],
             'start_time': result['start_time'],
+            'end_time': result.get('end_time', ''),
             'game_mode': result['game_mode'],
             'player_count': result['player_count'],
             'players': players_info,
@@ -345,6 +346,7 @@ class OnlineGameParseBatchView(APIView):
                     'data': {
                         'uuid': result['uuid'],
                         'start_time': result['start_time'],
+                        'end_time': result.get('end_time', ''),
                         'game_mode': result['game_mode'],
                         'player_count': result['player_count'],
                         'players': players_info,
@@ -383,6 +385,7 @@ class OnlineGameImportView(APIView):
         player_count = data.get('player_count', len(player_data))
         paipu_data = data.get('paipu_data', {}) or {}
         start_time = data.get('start_time')
+        end_time = data.get('end_time')
 
         if source_url:
             exists = Game.objects.filter(game_type='online', source_url=source_url).exists()
@@ -397,7 +400,7 @@ class OnlineGameImportView(APIView):
         try:
             game = GameService.create_online_game(
                 request.user, source_url, player_data, room, game_mode=game_mode, player_count=player_count,
-                paipu_data=paipu_data, start_time=start_time,
+                paipu_data=paipu_data, start_time=start_time, end_time=end_time,
             )
         except Exception as e:
             return Response({'error': str(e)}, status=400)
@@ -741,3 +744,68 @@ class PlayerYakumanListView(APIView):
         records = HandRecordService.get_player_yakumans(player, record_type=record_type)
         serializer = HandRecordListSerializer(records, many=True)
         return Response(serializer.data)
+
+
+class OnlineGameRetryView(APIView):
+    """重新获取单个线上对局的牌谱信息（start_time / end_time），并更新数据库。"""
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def post(self, request, pk):
+        game = get_object_or_404(Game, pk=pk)
+        if game.game_type != 'online':
+            return Response({'error': '仅线上对局可重新获取'}, status=400)
+        if not game.source_url:
+            return Response({'error': '该对局无牌谱链接，无法重新获取'}, status=400)
+
+        from services.majsoul import fetch_paipu_records, normalize_paipu_input_url, extract_paipu_uuid
+
+        url = normalize_paipu_input_url(game.source_url)
+        if not url:
+            return Response({'error': '牌谱链接无效'}, status=400)
+
+        try:
+            records = fetch_paipu_records([url])
+        except Exception as e:
+            logger.error('重新获取牌谱失败 game=%s: %s', pk, e, exc_info=True)
+            return Response({'error': f'牌谱获取失败: {e}'}, status=500)
+
+        if not records or len(records) == 0:
+            return Response({'error': '未获取到牌谱数据'}, status=404)
+
+        rec = records[0]
+        uuid_val = rec.get('uuid', '')
+        game_uuid = extract_paipu_uuid(game.source_url)
+        if game_uuid and uuid_val and game_uuid != uuid_val:
+            logger.warning('retry uuid mismatch: db=%s api=%s', game_uuid, uuid_val)
+
+        from services.majsoul import _timestamp_to_naive_dt
+
+        start_time = None
+        end_time = None
+        raw_start = rec.get('start_time')
+        raw_end = rec.get('end_time')
+        start_time = _timestamp_to_naive_dt(raw_start)
+        end_time = _timestamp_to_naive_dt(raw_end)
+
+        updated_fields = []
+        if start_time:
+            game.start_time = start_time
+            updated_fields.append('start_time')
+        if end_time:
+            game.end_time = end_time
+            updated_fields.append('end_time')
+
+        game.paipu_data = {
+            **(game.paipu_data or {}),
+            'retry_source': 'majsoul_local_node',
+            'retry_uuid': uuid_val,
+            'retry_start_time': raw_start,
+            'retry_end_time': raw_end,
+            'retry_players': rec.get('players', []),
+        }
+        updated_fields.append('paipu_data')
+
+        if updated_fields:
+            game.save(update_fields=updated_fields)
+
+        return Response(game_detail_with_pt(game))

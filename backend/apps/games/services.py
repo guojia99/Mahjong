@@ -140,7 +140,7 @@ class GameService:
 
     @staticmethod
     def create_online_game(user, source_url, player_data, room, game_mode='half_match', player_count=None,
-                           paipu_data=None, start_time=None):
+                           paipu_data=None, start_time=None, end_time=None):
         from .models import Game, GamePlayer, RoomPlayer
         from apps.players.models import Player
         from apps.players.services import PlayerService
@@ -160,6 +160,7 @@ class GameService:
                 game_mode=game_mode,
                 player_count=player_count,
                 start_time=start_time,
+                end_time=end_time,
                 source_url=source_url,
                 paipu_data=paipu_data or {},
                 created_by=user,

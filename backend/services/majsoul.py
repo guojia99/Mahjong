@@ -1,24 +1,44 @@
 """
-雀魂牌谱：通过外部 HTTP 接口解析，不再使用自研 WebSocket/Protobuf 逻辑。
+雀魂牌谱：通过本地 Node 脚本调用雀魂 WebSocket 协议获取牌谱详情。
 
-环境变量可覆盖接口地址与超时：MAJSOUL_PAI_PU_API_URL、MAJSOUL_PAI_PU_API_TIMEOUT
+环境变量可覆盖配置：MAJSOUL_ACCOUNT、MAJSOUL_PASSWORD、MAJSOUL_RATE_LIMIT_PER_MINUTE
 """
+import asyncio
 import json
 import logging
 import re
-import urllib.error
-import urllib.request
+import subprocess
+import time
+from collections import deque
+from threading import Lock
 from typing import Any
 
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+_rate_lock = Lock()
+_rate_timestamps: deque[float] = deque()
+
+
+def _wait_for_rate_limit():
+    with _rate_lock:
+        now = time.monotonic()
+        limit = getattr(settings, 'MAJSOUL_RATE_LIMIT_PER_MINUTE', 20)
+        window = 60.0
+        while _rate_timestamps and _rate_timestamps[0] < now - window:
+            _rate_timestamps.popleft()
+        if len(_rate_timestamps) >= limit:
+            sleep_time = _rate_timestamps[0] + window - now + 0.1
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+                now = time.monotonic()
+                while _rate_timestamps and _rate_timestamps[0] < now - window:
+                    _rate_timestamps.popleft()
+        _rate_timestamps.append(now)
+
 
 def normalize_paipu_input_url(raw: str) -> str:
-    """
-    从整段剪贴文本中截取牌谱 URL：去掉「雀魂牌谱 :」等 https 之前的前缀，只保留以 http:// 或 https:// 开头的一段。
-    """
     s = (raw or '').strip()
     if not s:
         return ''
@@ -46,7 +66,6 @@ def extract_paipu_uuid(url: str) -> str | None:
 
 
 def _point_to_table_hundred(final_point) -> int:
-    """与线上规则一致：将接口中的 finalPoint 折成与系统一致的百分位整数（4 人合计 1000）。"""
     if final_point is None:
         return 0
     try:
@@ -56,7 +75,138 @@ def _point_to_table_hundred(final_point) -> int:
     return int(round(v / 100.0))
 
 
-def _normalize_api_players(players_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _node_script_path() -> str:
+    script_dir = getattr(settings, 'MAJSOUL_NODE_SCRIPT_DIR', None)
+    if script_dir:
+        return str(script_dir / 'paipu.js')
+    return ''
+
+
+def _get_credentials() -> tuple[str, str]:
+    account = getattr(settings, 'MAJSOUL_ACCOUNT', '') or ''
+    password = getattr(settings, 'MAJSOUL_PASSWORD', '') or ''
+    return account, password
+
+
+def _call_node_paipu(paipu_list: list[str]) -> list[dict[str, Any]]:
+    _wait_for_rate_limit()
+
+    node_script = _node_script_path()
+    if not node_script:
+        raise RuntimeError('未配置 MAJSOUL_NODE_SCRIPT_DIR')
+
+    account, password = _get_credentials()
+    print(account,password)
+    if not account or not password:
+        raise RuntimeError('未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）')
+
+    cmd = [
+        'node', node_script,
+        json.dumps(paipu_list, ensure_ascii=False),
+        account,
+        password,
+    ]
+
+    script_dir = str(getattr(settings, 'MAJSOUL_NODE_SCRIPT_DIR', ''))
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=script_dir,
+    )
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip()
+        logger.error('Node paipu.js 执行失败 (exit=%d): %s', result.returncode, stderr)
+        raise RuntimeError(f'牌谱获取失败: {stderr}')
+
+    output = result.stdout.strip()
+    if not output:
+        raise RuntimeError('Node paipu.js 无输出')
+
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        logger.error('Node 输出非 JSON: %s', output[:500])
+        raise RuntimeError('牌谱获取返回了无效数据')
+
+    if isinstance(data, dict) and 'error' in data:
+        raise RuntimeError(f"牌谱获取失败: {data['error']}")
+
+    return data if isinstance(data, list) else []
+
+
+def _detect_game_mode(uuid_val: str) -> str:
+    if not uuid_val:
+        return 'half_match'
+    mode_map = {
+        '1': 'half_match',
+        '2': 'half_match',
+        '3': 'east_wind',
+        '4': 'east_wind',
+        '5': 'east_wind',
+        '6': 'half_match',
+    }
+    prefix = uuid_val.split('-')[0] if '-' in uuid_val else uuid_val[:1]
+    return mode_map.get(prefix[:1], 'half_match')
+
+
+def analyze_paipu_url(source_url: str) -> dict:
+    url = normalize_paipu_input_url(source_url)
+    if not url:
+        raise ValueError('空链接或未识别到有效的 http(s) 牌谱链接')
+    paipu_uuid = extract_paipu_uuid(url) or url
+
+    try:
+        records = _call_node_paipu([url])
+    except Exception as e:
+        logger.error('牌谱解析失败: %s', e, exc_info=True)
+        raise RuntimeError(f'牌谱解析失败: {e}') from e
+
+    if not records or len(records) == 0:
+        raise RuntimeError('未返回牌谱数据，请检查链接是否有效')
+
+    rec = records[0]
+    players = _normalize_node_players(rec.get('players', []))
+    if not players:
+        raise RuntimeError('未解析到有效玩家行')
+
+    n = len(players)
+    if n not in (3, 4):
+        logger.warning('非 3/4 人场，人数=%s', n)
+
+    game_mode = _detect_game_mode(rec.get('uuid', ''))
+
+    start_time_val = rec.get('start_time')
+    end_time_val = rec.get('end_time')
+
+    start_time_str = ''
+    end_time_str = ''
+    if start_time_val:
+        start_time_str = _timestamp_to_str(start_time_val)
+    if end_time_val:
+        end_time_str = _timestamp_to_str(end_time_val)
+
+    return {
+        'uuid': str(rec.get('uuid', paipu_uuid))[:80],
+        'start_time': start_time_str,
+        'end_time': end_time_str,
+        'game_mode': game_mode,
+        'player_count': n,
+        'players': players,
+        'raw_data': {
+            'source': 'majsoul_local_node',
+            'url': url,
+            'uuid': rec.get('uuid', ''),
+            'start_time': start_time_val,
+            'end_time': end_time_val,
+            'players': rec.get('players', []),
+        },
+    }
+
+
+def _normalize_node_players(players_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for seat, item in enumerate(players_list or []):
         if not isinstance(item, dict):
@@ -80,97 +230,40 @@ def _normalize_api_players(players_list: list[dict[str, Any]]) -> list[dict[str,
     return out
 
 
-def analyze_paipu_url(source_url: str) -> dict:
+def _timestamp_to_str(ts) -> str:
+    if ts is None:
+        return ''
+    try:
+        import time as _time
+        ts_val = int(ts)
+        local = _time.localtime(ts_val)
+        return _time.strftime('%Y-%m-%d %H:%M', local)
+    except (TypeError, ValueError, OSError):
+        return ''
+
+
+def _timestamp_to_naive_dt(ts) -> 'datetime | None':
+    if ts is None:
+        return None
+    try:
+        import time as _time
+        from datetime import datetime
+        ts_val = int(ts)
+        local = _time.localtime(ts_val)
+        return datetime(
+            local.tm_year, local.tm_mon, local.tm_mday,
+            local.tm_hour, local.tm_min, local.tm_sec,
+        )
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def fetch_paipu_records(urls: list[str]) -> list[dict[str, Any]]:
+    """批量获取牌谱记录（供 retry 重试接口使用）。
+
+    返回与 _call_node_paipu 一致的列表。
     """
-    调用外部接口解析牌谱，返回与历史 OnlineGameParseView 结构兼容的字典。
-
-    返回:
-      uuid, start_time, game_mode, player_count, players, raw_data(含 code/msg 与 data)
-    """
-    url = normalize_paipu_input_url(source_url)
-    if not url:
-        raise ValueError('空链接或未识别到有效的 http(s) 牌谱链接')
-    paipu_uuid = extract_paipu_uuid(url) or url
-
-    api = getattr(
-        settings,
-        'MAJSOUL_PAI_PU_API_URL',
-        'http://manage.followyourheart.cn/backend/api/majsoul/paipu/analysis',
-    )
-    timeout = getattr(settings, 'MAJSOUL_PAI_PU_API_TIMEOUT', 90)
-
-    payload = json.dumps({'paipuList': [url]}).encode('utf-8')
-    http_req = urllib.request.Request(
-        api,
-        data=payload,
-        method='POST',
-        headers={
-            'Content-Type': 'application/json; charset=utf-8',
-            'Accept': 'application/json',
-        },
-    )
-    try:
-        with urllib.request.urlopen(http_req, timeout=timeout) as http_resp:
-            status = http_resp.getcode() or 200
-            raw = http_resp.read().decode('utf-8')
-    except urllib.error.HTTPError as e:
-        status = e.code
-        try:
-            raw = e.read().decode('utf-8')
-        except OSError:
-            raw = e.reason or ''
-    except (urllib.error.URLError, TimeoutError, OSError) as e:
-        logger.error('牌谱分析接口网络错误: %s', e, exc_info=True)
-        raise RuntimeError(f'牌谱分析服务不可用: {e}') from e
-
-    try:
-        body = json.loads(raw) if raw else {}
-    except (ValueError, TypeError):
-        logger.error('牌谱分析接口非 JSON, status=%s, text=%.500s', status, raw)
-        raise RuntimeError('牌谱分析服务返回了无效数据') from None
-    if not isinstance(body, dict):
-        logger.error('牌谱分析接口 JSON 非对象, status=%s, text=%.500s', status, raw)
-        raise RuntimeError('牌谱分析服务返回了无效数据') from None
-
-    if status >= 400:
-        err = (body or {}).get('msg') or (body or {}).get('message') or raw
-        raise RuntimeError(f'牌谱分析服务错误 ({status}): {err}')
-
-    try:
-        c = int((body or {}).get('code', 0) or 0)
-    except (TypeError, ValueError):
-        c = -1
-    if c != 0:
-        raise RuntimeError((body or {}).get('msg') or '牌谱分析失败')
-
-    data = body.get('data')
-    if not data or not isinstance(data, (list, tuple)) or not data[0]:
-        raise RuntimeError('未返回牌谱玩家数据，请检查链接或稍后重试')
-
-    first = data[0]
-    if not isinstance(first, (list, tuple)):
-        first = [first] if first else []
-    first = [x for x in first if isinstance(x, dict)]
-
-    players = _normalize_api_players(first)
-    if not players:
-        raise RuntimeError('未解析到有效玩家行')
-
-    n = len(players)
-    if n not in (3, 4):
-        logger.warning('非 3/4 人场，人数=%s', n)
-
-    return {
-        'uuid': str(paipu_uuid)[:80],
-        'start_time': '',
-        'game_mode': 'half_match',
-        'player_count': n,
-        'players': players,
-        'raw_data': {
-            'source': 'majsoul_paipu_api',
-            'url': url,
-            'code': body.get('code'),
-            'msg': body.get('msg'),
-            'data': body.get('data'),
-        },
-    }
+    valid_urls = [normalize_paipu_input_url(u) for u in urls if normalize_paipu_input_url(u)]
+    if not valid_urls:
+        return []
+    return _call_node_paipu(valid_urls)

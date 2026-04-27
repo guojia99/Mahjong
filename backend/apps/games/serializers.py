@@ -167,6 +167,7 @@ class OnlineGameImportSerializer(serializers.Serializer):
     player_count = serializers.IntegerField(required=False)
     paipu_data = serializers.DictField(required=False, default=dict)
     start_time = serializers.DateTimeField(required=False, allow_null=True)
+    end_time = serializers.DateTimeField(required=False, allow_null=True)
     allow_duplicate_url = serializers.BooleanField(required=False, default=False)
 
 

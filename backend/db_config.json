@@ -1,5 +1,0 @@
-{
-    "database": {
-        "sqlite_path": "db.sqlite3"
-    }
-}

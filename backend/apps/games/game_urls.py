@@ -6,6 +6,7 @@ from .views import (
     HandRecordListView, HandRecordDetailView,
     PlayerStatsView, PtRankingView, FunRankingView,
     YakumanListView, RecentYakumanView, PlayerYakumanListView,
+    OnlineGameRetryView,
 )
 
 urlpatterns = [
@@ -13,6 +14,7 @@ urlpatterns = [
     path('online/', OnlineGameImportView.as_view(), name='game-online-import'),
     path('online/parse/', OnlineGameParseView.as_view(), name='game-online-parse'),
     path('online/parse-batch/', OnlineGameParseBatchView.as_view(), name='game-online-parse-batch'),
+    path('online/retry/<uuid:pk>/', OnlineGameRetryView.as_view(), name='game-online-retry'),
     path('online/bind-account/', BindMajsoulAccountView.as_view(), name='game-online-bind-account'),
     path('online/unbound-accounts/', UnboundMajsoulAccountsView.as_view(), name='game-online-unbound-accounts'),
     path('pt-ranking/', PtRankingView.as_view(), name='game-pt-ranking'),

@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { importOnlineGame, parseOnlineGameBatch, getRooms, createRoom, getRoom, type OnlineParseItem } from '@/api/games';
+import { importOnlineGame, parseOnlineGameBatch, getRooms, createRoom, getRoom, retryOnlineGame, getAllGames, type OnlineParseItem } from '@/api/games';
 import { getPlayers, createPlayer, addMajsoulAccount, deletePlayer } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
-import type { Player, Room } from '@/types';
+import type { Player, Room, Game } from '@/types';
 import { ROOM_TYPE_LABELS } from '@/types';
-import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus, Trash2 } from 'lucide-react';
+import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus, Trash2, RefreshCw, CheckSquare, Square } from 'lucide-react';
 
 type RowState = {
   id: string;
@@ -30,6 +30,13 @@ function toDatetimeLocalValue(iso: string | null | undefined): string {
   if (!iso) return '';
   const t = iso.includes('T') ? iso : iso.replace(' ', 'T');
   return t.length >= 16 ? t.slice(0, 16) : t;
+}
+
+function toNaiveISO(s: string): string {
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return s;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 /** 从当前雀士列表构建 UID → 雀士 id（列表接口含 majsoul_uids） */
@@ -59,7 +66,7 @@ export default function OnlineGamePage() {
 
   const [importing, setImporting] = useState(false);
   const [importedGames, setImportedGames] = useState<
-    { id: string; source_url: string; start_time: string; players: { player: { nickname: string }; score: number | null }[] }[]
+    { id: string; source_url: string; start_time: string; end_time: string; players: { player: { nickname: string }; score: number | null }[] }[]
   >([]);
 
   const [showCreateRoom, setShowCreateRoom] = useState(false);
@@ -77,6 +84,15 @@ export default function OnlineGamePage() {
   const [paipuOpenUrl, setPaipuOpenUrl] = useState<string | null>(null);
   /** 全量雀士（用于解析后按 UID 预填绑定、展示已关联头像昵称） */
   const [playersDirectory, setPlayersDirectory] = useState<Player[]>([]);
+
+  // ===== 重新获取牌谱信息 =====
+  const [showRetrySection, setShowRetrySection] = useState(false);
+  const [onlineGames, setOnlineGames] = useState<Game[]>([]);
+  const [onlineGamesLoaded, setOnlineGamesLoaded] = useState(false);
+  const [selectedRetryIds, setSelectedRetryIds] = useState<Set<string>>(new Set());
+  const [retrying, setRetrying] = useState(false);
+  const [retryProgress, setRetryProgress] = useState({ current: 0, total: 0 });
+  const [retryResults, setRetryResults] = useState<{ gameId: string; ok: boolean; error?: string; start_time?: string; end_time?: string }[]>([]);
 
   const { showToast, ToastComponent } = useToast();
 
@@ -391,7 +407,9 @@ export default function OnlineGamePage() {
       score: p.score,
       is_dealer_start: i === 0,
     }));
-    const st = effectiveStartTime ? new Date(effectiveStartTime).toISOString() : null;
+    const hasPaipuTime = Boolean(row.data.start_time);
+    const st = hasPaipuTime ? toNaiveISO(row.data.start_time) : (effectiveStartTime ? toNaiveISO(effectiveStartTime) : null);
+    const et = row.data.end_time ? toNaiveISO(row.data.end_time) : null;
     const seenInRun = urlsAlreadyImportedInRun.has(row.source_url);
     const allow_duplicate_url = seenInRun || Boolean(row.duplicate_in_db);
     const game = await importOnlineGame({
@@ -402,6 +420,7 @@ export default function OnlineGamePage() {
       player_count: row.data.player_count,
       paipu_data: row.data.raw_data,
       start_time: st,
+      end_time: et,
       allow_duplicate_url,
     });
     urlsAlreadyImportedInRun.add(row.source_url);
@@ -419,6 +438,7 @@ export default function OnlineGamePage() {
           id: game.id,
           source_url: game.source_url,
           start_time: game.start_time,
+          end_time: game.end_time || '',
           players: game.players.map((gp) => ({ player: gp.player, score: gp.score })),
         },
         ...prev,
@@ -451,6 +471,7 @@ export default function OnlineGamePage() {
                 id: game.id,
                 source_url: game.source_url,
                 start_time: game.start_time,
+                end_time: game.end_time || '',
                 players: game.players.map((gp) => ({ player: gp.player, score: gp.score })),
               },
               ...prev,
@@ -466,6 +487,76 @@ export default function OnlineGamePage() {
     } finally {
       setImporting(false);
     }
+  };
+
+  // ===== 重新获取牌谱信息 =====
+  const loadOnlineGames = useCallback(async () => {
+    try {
+      const games = await getAllGames({ game_type: 'online' });
+      setOnlineGames(games.filter((g) => g.source_url));
+    } catch {
+      showToast('加载线上对局列表失败', 'error');
+    } finally {
+      setOnlineGamesLoaded(true);
+    }
+  }, []);
+
+  const handleToggleRetrySection = () => {
+    const next = !showRetrySection;
+    setShowRetrySection(next);
+    if (next && !onlineGamesLoaded) {
+      void loadOnlineGames();
+    }
+  };
+
+  const toggleRetrySelect = (gameId: string) => {
+    setSelectedRetryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(gameId)) {
+        next.delete(gameId);
+      } else {
+        next.add(gameId);
+      }
+      return next;
+    });
+  };
+
+  const toggleRetrySelectAll = () => {
+    const allIds = onlineGames.map((g) => g.id);
+    if (selectedRetryIds.size === allIds.length) {
+      setSelectedRetryIds(new Set());
+    } else {
+      setSelectedRetryIds(new Set(allIds));
+    }
+  };
+
+  const handleRetryAll = async () => {
+    if (selectedRetryIds.size === 0) {
+      showToast('请先选择要对局', 'error');
+      return;
+    }
+    const ids = [...selectedRetryIds];
+    setRetrying(true);
+    setRetryProgress({ current: 0, total: ids.length });
+    setRetryResults([]);
+    let success = 0;
+    let fail = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const gameId = ids[i];
+      try {
+        const updated = await retryOnlineGame(gameId);
+        setRetryResults((prev) => [...prev, { gameId, ok: true, start_time: updated.start_time, end_time: updated.end_time || '' }]);
+        success++;
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '获取失败';
+        setRetryResults((prev) => [...prev, { gameId, ok: false, error: msg }]);
+        fail++;
+      }
+      setRetryProgress({ current: i + 1, total: ids.length });
+    }
+    setRetrying(false);
+    showToast(`重新获取完成：${success} 成功，${fail} 失败`, success > 0 ? 'success' : 'error');
+    void loadOnlineGames();
   };
 
   return (
@@ -549,6 +640,165 @@ https://game.maj-soul.com/1/?paipu=..."
           </button>
         </div>
       </div>
+
+      {/* ===== 重新获取牌谱信息 ===== */}
+      <div className="card mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <RefreshCw size={18} style={{ color: 'var(--color-primary-dark)' }} />
+            <h3 className="font-bold">3. 重新获取线上牌谱时间</h3>
+          </div>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            onClick={() => { void handleToggleRetrySection(); }}
+          >
+            {showRetrySection ? '收起' : '展开'}
+          </button>
+        </div>
+        <p className="text-sm mb-0" style={{ color: 'var(--color-text-light)' }}>
+          通过雀魂本地协议重新获取所有线上对局的开始/结束时间，并更新到数据库。限流 20 次/分钟。
+        </p>
+      </div>
+
+      {showRetrySection && (
+        <div className="card mb-6">
+          {!onlineGamesLoaded ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>加载中...</p>
+          ) : onlineGames.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>没有线上对局记录。</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                    onClick={toggleRetrySelectAll}
+                  >
+                    {selectedRetryIds.size === onlineGames.length ? <CheckSquare size={14} /> : <Square size={14} />}
+                    {selectedRetryIds.size === onlineGames.length ? '取消全选' : '全选'}
+                  </button>
+                  <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+                    已选 {selectedRetryIds.size} / {onlineGames.length} 局
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline"
+                    onClick={() => {
+                      setOnlineGamesLoaded(false);
+                      void loadOnlineGames();
+                    }}
+                    disabled={retrying || !onlineGamesLoaded}
+                  >
+                    刷新列表
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary inline-flex items-center gap-1"
+                    disabled={retrying || selectedRetryIds.size === 0 || !onlineGamesLoaded}
+                    onClick={() => { void handleRetryAll(); }}
+                  >
+                    <RefreshCw size={14} />
+                    {retrying ? `获取中 (${retryProgress.current}/${retryProgress.total})` : '开始获取'}
+                  </button>
+                </div>
+              </div>
+
+              {retrying && (
+                <div className="mb-4">
+                  <div className="w-full rounded-full overflow-hidden" style={{ height: '0.5rem', background: '#e5e7eb' }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: retryProgress.total > 0 ? `${(retryProgress.current / retryProgress.total) * 100}%` : '0%',
+                        background: 'var(--color-primary)',
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs mt-1 text-right" style={{ color: 'var(--color-text-light)' }}>
+                    {retryProgress.current} / {retryProgress.total}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {onlineGames.map((game) => {
+                  const isSelected = selectedRetryIds.has(game.id);
+                  const retryResult = retryResults.find((r) => r.gameId === game.id);
+                  return (
+                    <div
+                      key={game.id}
+                      className="flex items-start gap-3 p-3 rounded-xl cursor-pointer transition-colors"
+                      style={{
+                        border: '1px solid var(--color-border)',
+                        background: isSelected ? 'var(--color-primary-light)' : 'white',
+                      }}
+                      onClick={() => { if (!retrying) toggleRetrySelect(game.id); }}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 flex-shrink-0"
+                        checked={isSelected}
+                        onChange={() => toggleRetrySelect(game.id)}
+                        disabled={retrying}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">{game.start_time}</span>
+                          {game.end_time && (
+                            <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>~ {game.end_time}</span>
+                          )}
+                          <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                            {game.game_mode === 'east_wind' ? '东风' : '半庄'} / {game.player_count}人
+                          </span>
+                        </div>
+                        <div className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>
+                          {game.players.map((p: import('@/types').GamePlayerInfo, i: number) => (
+                            <span key={p.player.id}>
+                              {p.player.nickname}
+                              {p.score !== null && (
+                                <span style={{ color: p.score > 0 ? '#2d9d78' : '#e74c3c', marginLeft: 2 }}>
+                                  {p.score > 0 ? `+${p.score}` : p.score}
+                                </span>
+                              )}
+                              {i < game.players.length - 1 ? ' / ' : ''}
+                            </span>
+                          ))}
+                        </div>
+                        {game.source_url && (
+                          <div className="text-xs font-mono mt-1 truncate" style={{ color: 'var(--color-text-light)' }}>
+                            {game.source_url}
+                          </div>
+                        )}
+                      </div>
+                      {retryResult && (
+                        <div className="flex-shrink-0 text-right">
+                          <div className="text-xs px-2 py-1 rounded-lg" style={{
+                            background: retryResult.ok ? '#e8f8f0' : '#fde8e8',
+                            color: retryResult.ok ? '#2d9d78' : '#e74c3c',
+                          }}>
+                            {retryResult.ok ? 'OK' : retryResult.error || '失败'}
+                          </div>
+                          {retryResult.ok && retryResult.start_time && (
+                            <div className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>
+                              {retryResult.start_time}
+                              {retryResult.end_time ? ` ~ ${retryResult.end_time}` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {parseError && (
         <div className="card mb-6">
@@ -669,6 +919,11 @@ https://game.maj-soul.com/1/?paipu=..."
                   <div className="text-sm mb-2">
                     模式 {d.game_mode === 'east_wind' ? '东风' : '半庄'} / {d.player_count} 人 · 分数和 {sum} / {exp}
                     {sum === exp ? ' ✓' : ' ✗'}
+                    {d.start_time && (
+                      <span className="ml-2 text-xs" style={{ color: 'var(--color-text-light)' }}>
+                        时间 {d.start_time}{d.end_time ? ` ~ ${d.end_time}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="space-y-2">
                     {d.players.map((p) => {
@@ -776,11 +1031,13 @@ https://game.maj-soul.com/1/?paipu=..."
           <div className="space-y-2">
             {importedGames.map((game) => (
               <div key={game.id} className="p-3 rounded-xl" style={{ border: '1px solid var(--color-border)', background: 'white' }}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="badge badge-online">线上</span>
-                    <span className="text-sm">{game.start_time}</span>
-                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="badge badge-online">线上</span>
+                      <span className="text-sm">
+                        {game.start_time}{game.end_time ? ` ~ ${game.end_time}` : ''}
+                      </span>
+                    </div>
                   <div className="text-xs">
                     {game.players.map((gp, i) => (
                       <span key={i}>

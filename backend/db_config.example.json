@@ -1,0 +1,7 @@
+{
+    "database": {
+        "sqlite_path": "db.sqlite3"
+    },
+    "majsoul_account": "",
+    "majsoul_password": ""
+}
