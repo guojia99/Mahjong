@@ -118,6 +118,26 @@ export default function RoomDetailPage() {
     return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
   }
 
+  const scoredGames = games.filter(g => g.is_scored && g.pt);
+  const playerPtMap = new Map<string, { total: number; count: number }>();
+  for (const game of scoredGames) {
+    if (!game.pt) continue;
+    for (const gp of game.players) {
+      if (gp.score === null) continue;
+      const pid = gp.player.id;
+      const pt = game.pt[pid] ?? 0;
+      const prev = playerPtMap.get(pid) ?? { total: 0, count: 0 };
+      playerPtMap.set(pid, { total: prev.total + pt, count: prev.count + 1 });
+    }
+  }
+  const sortedPtList = [...playerPtMap.entries()]
+    .map(([pid, { total, count }]) => {
+      const player = room.room_players?.find(rp => rp.player.id === pid)?.player;
+      return { playerId: pid, player, pt: Math.round(total * 100) / 100, count };
+    })
+    .filter(x => x.player)
+    .sort((a, b) => b.pt - a.pt);
+
   return (
     <div>
       {ToastComponent}
@@ -183,6 +203,52 @@ export default function RoomDetailPage() {
         </div>
       )}
 
+      {sortedPtList.length > 0 && (
+        <div className="card mb-6">
+          <h3 className="font-bold mb-3">PT排行 ({scoredGames.length}局已录分)</h3>
+          <div className="space-y-2">
+            {sortedPtList.map((item, idx) => {
+              const maxPt = Math.max(...sortedPtList.map(x => Math.abs(x.pt)), 1);
+              const barW = (Math.abs(item.pt) / maxPt) * 100;
+              const medalColors = ['#f0b830', '#a8d8ea', '#e8a0bf'];
+              return (
+                <div key={item.playerId} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: '#f9f5f2' }}>
+                  <span className="text-sm font-bold" style={{ color: idx < 3 ? medalColors[idx] : 'var(--color-text-light)', minWidth: '1.5rem', textAlign: 'center' }}>
+                    {idx + 1}
+                  </span>
+                  {item.player?.avatar ? (
+                    <img src={item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+                  ) : (
+                    <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.625rem' }}>
+                      {item.player?.nickname?.charAt(0)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold truncate">{item.player?.nickname}</span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{item.count}局</span>
+                    </div>
+                    <div className="mt-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#f0f0f0' }}>
+                      <div style={{
+                        width: `${Math.max(barW, 4)}%`,
+                        height: '100%',
+                        background: item.pt >= 0 ? 'linear-gradient(90deg, #a8e6cf, #2d9d78)' : 'linear-gradient(90deg, #ff8b94, #e74c3c)',
+                        borderRadius: '0.5rem',
+                      }} />
+                    </div>
+                  </div>
+                  <div className="text-right" style={{ minWidth: '3.5rem' }}>
+                    <span className="text-base font-bold" style={{ color: item.pt >= 0 ? '#2d9d78' : '#e74c3c' }}>
+                      {item.pt > 0 ? `+${item.pt}` : item.pt}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h3 className="font-bold mb-3">对局记录 ({games.length}局)</h3>
         {games.length === 0 ? (
@@ -200,16 +266,15 @@ export default function RoomDetailPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className={`badge badge-${game.game_type}`}>
-                      {GAME_TYPE_LABELS[game.game_type]}
-                    </span>
                     <span className="text-sm font-medium">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className="text-xs flex items-center gap-1" style={{ color: 'var(--color-text-light)' }}>
                       <Clock size={12} /> {game.start_time}{game.end_time ? ` ~ ${game.end_time}` : ''}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    {game.players.map((gp) => (
+                    {[...game.players]
+                      .sort((a, b) => (b.score ?? -999999) - (a.score ?? -999999))
+                      .map((gp, gi, arr) => (
                       <div key={gp.player.id} className="flex items-center gap-1 text-xs">
                         <span
                           className="font-semibold"
@@ -222,15 +287,13 @@ export default function RoomDetailPage() {
                             ({gp.score > 0 ? `+${gp.score}` : gp.score})
                           </span>
                         )}
-                        {game.players.indexOf(gp) < game.players.length - 1 && (
+                        {gi < arr.length - 1 && (
                           <span style={{ color: 'var(--color-border)' }}>/</span>
                         )}
                       </div>
                     ))}
-                    {game.is_scored && (
-                      <span className="badge badge-open" style={{ fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>
-                        已录分
-                      </span>
+                    {!game.is_scored && (
+                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>未录分</span>
                     )}
                   </div>
                 </div>
