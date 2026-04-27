@@ -129,7 +129,8 @@ async def connect_ms(
     async with session.get(f"{ms_host}/1/v{version}/config.json") as res:
         config = await res.json()
 
-    region_urls = config["ip"][0]["region_urls"]
+    ip0 = config["ip"][0]
+    region_urls = ip0.get("region_urls") or ip0["gateways"]
     if region_url_index < 0 or region_url_index >= len(region_urls):
         raise IndexError(f"region_url_index 越界: {region_url_index}, 共 {len(region_urls)} 个")
     url = region_urls[region_url_index]["url"]
