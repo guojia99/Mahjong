@@ -8,7 +8,7 @@ import Modal from '@/components/Modal';
 import PlayerCard from '@/components/PlayerCard';
 import SearchBar from '@/components/SearchBar';
 import type { Room, Player, Game } from '@/types';
-import { GAME_MODE_LABELS, GAME_TYPE_LABELS, ROOM_STATUS_LABELS, ROOM_TYPE_LABELS } from '@/types';
+import { GAME_MODE_LABELS, ROOM_STATUS_LABELS, ROOM_TYPE_LABELS } from '@/types';
 import { Plus, MapPin, Clock, Play, Globe } from 'lucide-react';
 
 export default function RoomDetailPage() {
