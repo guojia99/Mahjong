@@ -96,7 +96,10 @@ stop:
 	@$(MAKE) --no-print-directory _kill-pid PID=proxy
 	@$(MAKE) --no-print-directory _kill-pid PID=frontend
 	@$(MAKE) --no-print-directory _kill-pid PID=backend
+	@-pkill -f "vite preview" 2>/dev/null
+	@-pkill -f "manage.py runserver" 2>/dev/null
 	@-rm -rf $(PIDDIR)
+	@sleep 1
 	@echo "\033[32mDone.\033[0m"
 
 ## 重启所有服务（先停止 → 自动 migrate → 再 dev）

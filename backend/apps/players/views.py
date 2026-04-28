@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils.translation import gettext_lazy as _
+from rest_framework.permissions import AllowAny
 from common.permissions import IsAdminUserOrReadOnly
 from django.shortcuts import get_object_or_404
 from .models import Player, MahjongSoulAccount
@@ -17,11 +18,7 @@ from .services import PlayerService
 
 
 class PlayerAvatarBatchView(APIView):
-    """
-    批量获取雀士头像数据（id -> avatar），供列表等场景复用，避免在每条业务接口里重复塞大字段。
-    支持 POST body: {"ids": ["uuid", ...]} 或 GET query: ?ids=uuid,uuid
-    """
-    permission_classes = [IsAdminUserOrReadOnly]
+    permission_classes = [AllowAny]
     _MAX = 200
 
     def get(self, request):

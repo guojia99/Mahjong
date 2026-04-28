@@ -27,6 +27,8 @@ const en: Record<string, string> = {
   'common.unit.round': 'round',
   'common.unit.person': 'player',
   'common.unit.score': 'pt',
+  'common.gamesUnit': 'games',
+  'common.peopleUnit': 'players',
 
   // ===== App =====
   'app.name': 'Kano Mahjong',
@@ -211,6 +213,7 @@ const en: Record<string, string> = {
   'gameDetail.yakumanRecord': 'Yakuman Record',
   'gameDetail.deleteGame': 'Delete Game',
   'gameDetail.editGame': 'Edit',
+  'gameDetail.editGameModalTitle': 'Edit Game Info',
   'gameDetail.playerCountLabel': 'Players',
   'gameDetail.totalLabel': 'Total:',
   'gameDetail.dealerStart': 'East Start',
@@ -426,6 +429,7 @@ const en: Record<string, string> = {
   'calculator.load': 'Load',
   'calculator.back': 'Back',
   'calculator.close': 'Close',
+  'calculator.cancel': 'Cancel',
   'calculator.selectChiSequence': 'Select chi sequence:',
   'calculator.currentSelection': 'Current selection',
   'calculator.handLabel': 'Hand',
@@ -440,6 +444,7 @@ const en: Record<string, string> = {
   'calculator.fuCalcProcess': 'Fu Calculation Process',
   'calculator.noYaku': 'No valid yaku / hand',
   'calculator.yakumanResult': 'Yakuman',
+  'calculator.hanUnit': 'han',
   'calculator.handUnit': 'hand',
 
   // ===== PracticePage =====
@@ -543,7 +548,7 @@ const en: Record<string, string> = {
   'playerProfile.filterAll': 'All',
   'playerProfile.gameSource': 'Game Source',
   'playerProfile.chartRounds': 'Chart Games',
-  'playerProfile.recentN': 'Recent {n} Games',
+  'playerProfile.recentN': 'Recent {{n}} Games',
   'playerProfile.totalGamesLabel': 'Total Games',
   'playerProfile.totalPt': 'Total PT',
   'playerProfile.rankRateTitle': 'Placement Rate',
@@ -556,7 +561,7 @@ const en: Record<string, string> = {
   'playerProfile.cumPtUnit': 'pt',
   'playerProfile.noDataInCondition': 'No data for this filter',
   'playerProfile.noGameRecords': 'No game records',
-  'playerProfile.rankN': '#{n}',
+  'playerProfile.rankN': '#{{n}}',
   'playerProfile.noYakumanRecords': 'No yakuman records',
   'playerProfile.nicknameLabel': 'Nickname',
   'playerProfile.realNameLabel': 'Real Name',
