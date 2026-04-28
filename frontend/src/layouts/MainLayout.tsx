@@ -211,7 +211,7 @@ export default function MainLayout() {
                     {LANG_OPTIONS.map(lang => (
                       <button
                         key={lang.code}
-                        onClick={() => { i18n.changeLanguage(lang.code); setLangOpen(false); }}
+                        onClick={() => { i18n.changeLanguage(lang.code); localStorage.setItem('mahjong-lang', lang.code); setLangOpen(false); }}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
                         style={{
                           fontWeight: i18n.language === lang.code ? 600 : 400,
