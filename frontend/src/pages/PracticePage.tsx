@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import PointsQuickReference from '@/components/PointsQuickReference';
 import { ProblemGenerator } from '@/mahjong-calc/problem';
 import type { Problem } from '@/mahjong-calc/problem';
@@ -58,20 +59,20 @@ function formatTime(ms: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}.${centis.toString().padStart(2, '0')}`;
 }
 
-function getRiichiLabel(flag: number): string {
-  if (test(flag, DOUBLE_RIICHI)) return '双立直';
-  if (test(flag, RIICHI)) return '立直';
-  return '未立直';
+function getRiichiLabel(flag: number, t: (key: string) => string): string {
+  if (test(flag, DOUBLE_RIICHI)) return t('practice.doubleRiichi');
+  if (test(flag, RIICHI)) return t('practice.riichi');
+  return t('practice.noRiichi');
 }
 
-function getFlagInfo(flag: number): string {
+function getFlagInfo(flag: number, t: (key: string) => string): string {
   let info = '';
   const checks: [number, string][] = [
-    [FIELD_EAST, '东一局'], [FIELD_SOUTH, '南一局'], [FIELD_WEST, '西一局'], [FIELD_NORTH, '北一局'],
-    [SEAT_EAST, '东家'], [SEAT_SOUTH, '南家'], [SEAT_WEST, '西家'], [SEAT_NORTH, '北家'],
-    [TSUMO, '自摸'], [RON, '荣和'],
-    [IPPATSU, '一发'], [HAITEI_RAOYUE, '海底捞月'], [HOUTEI_RAOYUI, '河底摸鱼'],
-    [RINNSHANN_KAIHOU, '岭上开花'], [CHANKAN, '抢杠'], [TENHOU, '天和'], [CHIIHOU, '地和'],
+    [FIELD_EAST, t('practice.east1')], [FIELD_SOUTH, t('practice.south1')], [FIELD_WEST, t('practice.west1')], [FIELD_NORTH, t('practice.north1')],
+    [SEAT_EAST, t('practice.eastSeat')], [SEAT_SOUTH, t('practice.southSeat')], [SEAT_WEST, t('practice.westSeat')], [SEAT_NORTH, t('practice.northSeat')],
+    [TSUMO, t('practice.tsumo')], [RON, t('practice.ron')],
+    [IPPATSU, t('practice.ippatsu')], [HAITEI_RAOYUE, t('practice.haitei')], [HOUTEI_RAOYUI, t('practice.houte')],
+    [RINNSHANN_KAIHOU, t('practice.rinnshann')], [CHANKAN, t('practice.chankan')], [TENHOU, t('practice.tenhou')], [CHIIHOU, t('practice.chiihou')],
   ];
   for (const [f, name] of checks) if (test(flag, f)) info += name + ' ';
   return info;
@@ -84,6 +85,7 @@ function TileImg({ name }: { name: string }) {
 }
 
 export default function PracticePage() {
+  const { t } = useTranslation();
   const [problem, setProblem] = useState<Problem | null>(null);
   const [phase, setPhase] = useState<'input' | 'show'>('input');
   const [ans, setAns] = useState('');
@@ -184,23 +186,23 @@ export default function PracticePage() {
   const furuBlocks = problem.furu.map(cvtFuro);
   const doraTiles = [...problem.dora.map(cvtPai), ...Array(Math.max(0, 5 - problem.dora.length)).fill('B')];
   const uraTiles = [...problem.ura.map(cvtPai), ...Array(Math.max(0, 5 - problem.ura.length)).fill('B')];
-  const flagInfo = getFlagInfo(problem.flag);
-  const riichiLabel = getRiichiLabel(problem.flag);
+  const flagInfo = getFlagInfo(problem.flag, t);
+  const riichiLabel = getRiichiLabel(problem.flag, t);
 
   const r = problem.ans;
   const isKotsumo = r.pointType === 2;
   const isYakuman = r.isYakuman;
   const resultText = isYakuman
-    ? `${r.han}倍役满`
+    ? `${r.han}${t('calculator.yakumanResult')}`
     : r.hanRealYaku === 0
-      ? '无役（宝牌・里宝・赤宝不计役），0 点'
-      : r.manType === 1 && r.han === 5 ? `${r.han}翻 满贯`
-        : r.manType > 0 ? `${r.han}翻 ${MAN_TYPE_NAMES[r.manType]}`
-        : `${r.han}翻 ${r.fu}符`;
+      ? t('practice.noYakuResult')
+      : r.manType === 1 && r.han === 5 ? `${r.han}${t('practice.hanUnit')} ${t('practice.manganResult')}`
+        : r.manType > 0 ? `${r.han}${t('practice.hanUnit')} ${MAN_TYPE_NAMES[r.manType]}`
+        : `${r.han}${t('practice.hanUnit')} ${r.fu}符`;
 
-  const placeHolder = isKotsumo ? '子家点数'
-    : r.pointType === 1 || r.pointType === 3 ? '荣和：直接输入点数'
-    : '亲家自摸：输入收取每人点数';
+  const placeHolder = isKotsumo ? t('practice.koPointsPlaceholder')
+    : r.pointType === 1 || r.pointType === 3 ? t('practice.ronPointsPlaceholder')
+    : t('practice.oyaTsumoPlaceholder');
 
   const x1 = parseInt(ans) || 0, x2 = parseInt(ansKo) || 0;
   let isCorrect = false;
@@ -223,7 +225,7 @@ export default function PracticePage() {
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
           onClick={() => void navigator.clipboard.writeText(formatKifuTextFromProblem(problem)).catch(() => {})}
         >
-          <Copy size={14} /> 复制牌谱
+          <Copy size={14} /> {t('practice.copyKifu')}
         </button>
         <button
           type="button"
@@ -231,17 +233,17 @@ export default function PracticePage() {
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
           onClick={() => { setKifuPasteOpen(v => !v); setKifuErr(null); }}
         >
-          <ClipboardPaste size={14} /> 粘贴牌谱
+          <ClipboardPaste size={14} /> {t('practice.pasteKifu')}
         </button>
         <div style={{ background: '#fff8e1', padding: '0.25rem 0.75rem', borderRadius: '0.75rem', fontSize: '1.25rem', fontWeight: 700, fontFamily: 'monospace', color: '#e65100' }}>
           {formatTime(timer)}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--color-text-light)' }}>
-          <span>正确率: <b style={{ color: accuracy >= 80 ? '#2d9d78' : accuracy >= 50 ? '#f0b830' : '#e74c3c' }}>{accuracy}%</b></span>
+          <span>{t('practice.accuracy')} <b style={{ color: accuracy >= 80 ? '#2d9d78' : accuracy >= 50 ? '#f0b830' : '#e74c3c' }}>{accuracy}%</b></span>
           <span>|</span>
-          <span>平均: <b>{formatTime(avgTime)}</b></span>
+          <span>{t('practice.average')} <b>{formatTime(avgTime)}</b></span>
           <span>|</span>
-          <span>已答: <b>{totalQuestions}</b></span>
+          <span>{t('practice.answered')} <b>{totalQuestions}</b></span>
         </div>
       </div>
 
@@ -250,14 +252,14 @@ export default function PracticePage() {
           <textarea
             value={kifuPasteText}
             onChange={e => setKifuPasteText(e.target.value)}
-            placeholder="粘贴牌谱（场型/手牌/和牌/宝牌/里宝/副露）"
+            placeholder={t('practice.pastePlaceholder')}
             rows={8}
             style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
           />
           {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
           <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>载入</button>
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>{t('practice.load')}</button>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>{t('practice.cancel')}</button>
           </div>
         </div>
       )}
@@ -280,11 +282,11 @@ export default function PracticePage() {
 
       <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', justifyContent: 'center', background: 'white', borderRadius: '1rem', padding: '0.75rem 1.25rem', border: '1px solid var(--color-border)' }}>
         <div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>表宝牌</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>{t('practice.doraIndicators')}</div>
           <div style={{ display: 'flex', gap: '2px' }}>{doraTiles.map((t, i) => <TileImg key={i} name={t} />)}</div>
         </div>
         <div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>里宝牌</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>{t('practice.uraIndicators')}</div>
           <div style={{ display: 'flex', gap: '2px' }}>{uraTiles.map((t, i) => <TileImg key={i} name={t} />)}</div>
         </div>
       </div>
@@ -292,8 +294,8 @@ export default function PracticePage() {
       <div style={{ width: '100%', maxWidth: '40rem' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
           <span style={{
-            background: riichiLabel === '未立直' ? '#eceff1' : '#fff3e0',
-            color: riichiLabel === '未立直' ? '#546e7a' : '#e65100',
+            background: riichiLabel === t('practice.noRiichi') ? '#eceff1' : '#fff3e0',
+            color: riichiLabel === t('practice.noRiichi') ? '#546e7a' : '#e65100',
             padding: '0.4rem 0.85rem',
             borderRadius: '0.625rem',
             fontSize: '0.9375rem',
@@ -308,13 +310,13 @@ export default function PracticePage() {
       <div style={{ width: '100%', maxWidth: '40rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', marginBottom: '0.375rem' }}>
-            {phase === 'input' ? '输入答案' : '答案显示'}
+            {phase === 'input' ? t('practice.inputAnswer') : t('practice.showAnswer')}
           </div>
           {phase === 'input' ? (
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.2rem' }}>
-                  {isKotsumo ? '子家' : r.pointType === 0 ? '每人' : '点数'}
+                  {isKotsumo ? t('practice.koPlayer') : r.pointType === 0 ? t('practice.eachPlayer') : t('practice.points')}
                 </div>
                 <input ref={inputRef} type="text" value={ans} onChange={e => setAns(e.target.value)} onKeyDown={handleKeyDown} placeholder={placeHolder}
                   style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '0.75rem', border: '2px solid var(--color-primary)', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
@@ -322,8 +324,8 @@ export default function PracticePage() {
               </div>
               {isKotsumo && (
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.2rem' }}>亲家</div>
-                  <input ref={inputRef2} type="text" value={ansKo} onChange={e => setAnsKo(e.target.value)} onKeyDown={handleKeyDown} placeholder="亲家点数"
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-text-light)', marginBottom: '0.2rem' }}>{t('practice.oyaPointsPlaceholder')}</div>
+                  <input ref={inputRef2} type="text" value={ansKo} onChange={e => setAnsKo(e.target.value)} onKeyDown={handleKeyDown} placeholder={t('practice.oyaPointsPlaceholder')}
                     style={{ width: '100%', padding: '0.625rem 0.875rem', borderRadius: '0.75rem', border: '2px solid var(--color-primary)', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                   />
                 </div>
@@ -336,7 +338,7 @@ export default function PracticePage() {
               </ul>
               {r.fuMessages.length > 0 && (
                 <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
-                  <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>符计算过程</div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>{t('practice.fuCalcProcess')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                     {r.fuMessages.map((m, i) => (
                       <span key={i} style={{ background: '#f0f7ff', color: '#1565c0', padding: '0.15rem 0.4rem', borderRadius: '0.375rem', fontSize: '0.7rem' }}>{m}</span>
@@ -347,13 +349,13 @@ export default function PracticePage() {
               <div style={{ marginTop: '0.5rem', fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>{resultText}</div>
               <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: isCorrect ? '#2d9d78' : '#e74c3c', fontWeight: 600 }}>
                 {isKotsumo
-                  ? <span>您: 子家{x1} / 亲家{x2} | 正确: 子家{r.point1} / 亲家{r.point2}</span>
+                  ? <span>{t('practice.you')} {t('practice.koPlayer')}{x1} / {t('practice.oyaPointsPlaceholder')}{x2} | {t('practice.correct')}: {t('practice.koPlayer')}{r.point1} / {t('practice.oyaPointsPlaceholder')}{r.point2}</span>
                   : r.pointType === 1 || r.pointType === 3
-                    ? `您: ${x1} | 正确: ${r.point1}`
-                    : `您: ${x1} ALL | 正确: ${r.point1}ALL`}
+                    ? `${t('practice.you')} ${x1} | ${t('practice.correct')}: ${r.point1}`
+                    : `${t('practice.you')} ${x1} ALL | ${t('practice.correct')}: ${r.point1}ALL`}
               </div>
               <div style={{ marginTop: '0.375rem', fontSize: '1.25rem', fontWeight: 800 }}>
-                {isCorrect ? <span style={{ color: '#2d9d78' }}>答案正确</span> : <span style={{ color: '#e74c3c' }}>答案错误</span>}
+                {isCorrect ? <span style={{ color: '#2d9d78' }}>{t('practice.correctAnswer')}</span> : <span style={{ color: '#e74c3c' }}>{t('practice.wrongAnswer')}</span>}
               </div>
             </div>
           )}
@@ -362,7 +364,7 @@ export default function PracticePage() {
 
       <button onClick={phase === 'input' ? handleCheck : handleNext}
         style={{ padding: '0.75rem 3rem', borderRadius: '2rem', border: 'none', fontSize: '1rem', fontWeight: 700, cursor: 'pointer', color: 'white', background: 'linear-gradient(135deg, #a8e6cf, #3d9d78)', boxShadow: '0 2px 8px rgba(61,157,120,0.3)', transition: 'transform 0.1s' }}>
-        {phase === 'input' ? '确认' : '下一题'}
+        {phase === 'input' ? t('practice.confirm') : t('practice.next')}
       </button>
     </div>
   );

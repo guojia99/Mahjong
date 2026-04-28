@@ -4,6 +4,7 @@ import { getFunRanking } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import { Medal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -20,17 +21,6 @@ type RankType = '1st' | '2nd' | '3rd' | '4th' | 'avg_rank' | 'avg_score' | 'high
 
 type TabConfig = { value: RankType; label: string; color: string; emoji: string; unit: string; format: (v: number) => string };
 
-const RANK_TABS: TabConfig[] = [
-  { value: '1st', label: '一位率', color: '#f0b830', emoji: '\uD83E\uDD47', unit: '%', format: v => `${v}%` },
-  { value: '2nd', label: '二位率', color: '#a8d8ea', emoji: '\uD83E\uDD48', unit: '%', format: v => `${v}%` },
-  { value: '3rd', label: '三位率', color: '#e8a0bf', emoji: '\uD83E\uDD49', unit: '%', format: v => `${v}%` },
-  { value: '4th', label: '四位率', color: '#b0b0b0', emoji: '\uD83D\uDCA5', unit: '%', format: v => `${v}%` },
-  { value: 'avg_rank', label: '平均顺位', color: '#7c6ff7', emoji: '\uD83C\uDFC6', unit: '位', format: v => v.toFixed(2) },
-  { value: 'avg_score', label: '平均得点', color: '#2d9d78', emoji: '\uD83C\uDFC5', unit: '点', format: v => v.toFixed(1) },
-  { value: 'high_score', label: '最高得点', color: '#e68a00', emoji: '\uD83D\uDD25', unit: '点', format: v => String(v) },
-  { value: 'low_score', label: '最低得点', color: '#e74c3c', emoji: '\uD83D\uDCA2', unit: '点', format: v => String(v) },
-];
-
 const MEDAL_COLORS = ['#f0b830', '#a8d8ea', '#e8a0bf'];
 
 export default function FunRankingPage() {
@@ -41,6 +31,18 @@ export default function FunRankingPage() {
   const [gameType, setGameType] = useState<'' | 'offline' | 'online'>('');
   const [minGames, setMinGames] = useState('1');
   const { showToast, ToastComponent } = useToast();
+  const { t } = useTranslation();
+
+  const RANK_TABS: TabConfig[] = [
+    { value: '1st', label: t('funRanking.1stRate'), color: '#f0b830', emoji: '\uD83E\uDD47', unit: '%', format: v => `${v}%` },
+    { value: '2nd', label: t('funRanking.2ndRate'), color: '#a8d8ea', emoji: '\uD83E\uDD48', unit: '%', format: v => `${v}%` },
+    { value: '3rd', label: t('funRanking.3rdRate'), color: '#e8a0bf', emoji: '\uD83E\uDD49', unit: '%', format: v => `${v}%` },
+    { value: '4th', label: t('funRanking.4thRate'), color: '#b0b0b0', emoji: '\uD83D\uDCA5', unit: '%', format: v => `${v}%` },
+    { value: 'avg_rank', label: t('funRanking.avgRank'), color: '#7c6ff7', emoji: '\uD83C\uDFC6', unit: t('chart.rankPosition'), format: v => v.toFixed(2) },
+    { value: 'avg_score', label: t('funRanking.avgScore'), color: '#2d9d78', emoji: '\uD83C\uDFC5', unit: t('common.unit.score'), format: v => v.toFixed(1) },
+    { value: 'high_score', label: t('funRanking.highScore'), color: '#e68a00', emoji: '\uD83D\uDD25', unit: t('common.unit.score'), format: v => String(v) },
+    { value: 'low_score', label: t('funRanking.lowScore'), color: '#e74c3c', emoji: '\uD83D\uDCA2', unit: t('common.unit.score'), format: v => String(v) },
+  ];
 
   useEffect(() => {
     const params: Record<string, string> = { rank_type: rankType };
@@ -48,7 +50,7 @@ export default function FunRankingPage() {
     if (gameMode) params.game_mode = gameMode;
     if (gameType) params.game_type = gameType;
     if (minGames) params.min_games = minGames;
-    getFunRanking(params).then(setRankings).catch(() => showToast('加载排行失败'));
+    getFunRanking(params).then(setRankings).catch(() => showToast(t('funRanking.loadFailed')));
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast]);
 
   const currentTab = RANK_TABS.find(t => t.value === rankType) || RANK_TABS[0];
@@ -71,7 +73,7 @@ export default function FunRankingPage() {
       {ToastComponent}
       <div className="flex items-center gap-2 mb-6">
         <Medal size={20} style={{ color: currentTab.color }} />
-        <h2 className="text-lg font-bold">趣味排行</h2>
+        <h2 className="text-lg font-bold">{t('funRanking.title')}</h2>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4 items-center">
@@ -99,9 +101,9 @@ export default function FunRankingPage() {
         >
           {(
             [
-              { v: '' as const, label: '全部' },
-              { v: 'offline' as const, label: '线下' },
-              { v: 'online' as const, label: '线上' },
+              { v: '' as const, label: t('funRanking.allType') },
+              { v: 'offline' as const, label: t('funRanking.offline') },
+              { v: 'online' as const, label: t('funRanking.online') },
             ] as const
           ).map(({ v, label }, i) => (
             <button
@@ -120,27 +122,27 @@ export default function FunRankingPage() {
           ))}
         </div>
         <select value={playerCount} onChange={(e) => setPlayerCount(e.target.value as typeof playerCount)} style={SELECT_STYLE}>
-          <option value="">全部人数</option>
-          <option value="4">四麻</option>
-          <option value="3">三麻</option>
+          <option value="">{t('funRanking.allPlayerCount')}</option>
+          <option value="4">{t('playerCount.yonma')}</option>
+          <option value="3">{t('playerCount.sanma')}</option>
         </select>
         <select value={gameMode} onChange={(e) => setGameMode(e.target.value as typeof gameMode)} style={SELECT_STYLE}>
-          <option value="">全部模式</option>
-          <option value="east_wind">东风</option>
-          <option value="half_match">半庄</option>
+          <option value="">{t('funRanking.allMode')}</option>
+          <option value="east_wind">{t('gameMode.eastWind')}</option>
+          <option value="half_match">{t('gameMode.halfMatch')}</option>
         </select>
         <select value={minGames} onChange={(e) => setMinGames(e.target.value)} style={SELECT_STYLE}>
-          <option value="1">最少1局</option>
-          <option value="5">最少5局</option>
-          <option value="10">最少10局</option>
-          <option value="20">最少20局</option>
-          <option value="50">最少50局</option>
+          <option value="1">{t('funRanking.minGames')}1{t('funRanking.minGamesUnit')}</option>
+          <option value="5">{t('funRanking.minGames')}5{t('funRanking.minGamesUnit')}</option>
+          <option value="10">{t('funRanking.minGames')}10{t('funRanking.minGamesUnit')}</option>
+          <option value="20">{t('funRanking.minGames')}20{t('funRanking.minGamesUnit')}</option>
+          <option value="50">{t('funRanking.minGames')}50{t('funRanking.minGamesUnit')}</option>
         </select>
       </div>
 
       {rankings.length === 0 ? (
         <div className="empty-state card">
-          <p className="text-sm">暂无数据</p>
+          <p className="text-sm">{t('funRanking.noData')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -167,7 +169,7 @@ export default function FunRankingPage() {
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{item.player.nickname}</div>
                   <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                    {isPercent ? `${item.count}/${item.total} 局` : `${item.total} 局`}
+                    {isPercent ? `${item.count}/${item.total} ${t('common.unit.round')}` : `${item.total} ${t('common.unit.round')}`}
                   </div>
                   <div className="mt-1 h-2 rounded-full overflow-hidden" style={{ background: '#f0f0f0', width: '100%' }}>
                     <div style={{

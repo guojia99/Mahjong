@@ -1,15 +1,22 @@
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
-from common.exceptions import BusinessException
+from django.utils.translation import gettext_lazy
+
+
+def _resolve(s):
+    if isinstance(s, gettext_lazy):
+        return str(s)
+    return s
 
 
 def custom_exception_handler(exc, context):
     response = exception_handler(exc, context)
 
+    from common.exceptions import BusinessException
     if isinstance(exc, BusinessException):
         return Response(
-            {'error': exc.message, 'code': exc.code},
+            {'error': _resolve(exc.message), 'code': exc.code},
             status=exc.code,
         )
 
@@ -19,9 +26,9 @@ def custom_exception_handler(exc, context):
             msgs = []
             for key, value in data.items():
                 if isinstance(value, list):
-                    msgs.extend([f'{key}: {v}' for v in value])
+                    msgs.extend([f'{key}: {_resolve(v)}' for v in value])
                 else:
-                    msgs.append(f'{key}: {value}')
+                    msgs.append(f'{key}: {_resolve(value)}')
             response.data = {'error': '; '.join(msgs), 'code': response.status_code}
 
     return response

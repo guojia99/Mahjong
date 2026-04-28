@@ -1,4 +1,5 @@
 import {useState, useMemo, useCallback} from 'react';
+import {useTranslation} from 'react-i18next';
 import {Copy, ClipboardPaste} from 'lucide-react';
 import {formatKifuText, parseKifuText, snapshotFromCalculatorState} from '@/mahjong-calc/kifuText';
 import type {Dispatch, SetStateAction, MouseEventHandler} from 'react';
@@ -33,21 +34,20 @@ const TILE_ROWS = [
 const RED_TILES = ['0m', '0p', '0s'];
 
 const YAKU_OPTIONS = [
-    {value: 'riichi', label: '立直'}, {value: 'double-riichi', label: '双立直'},
-    {value: 'ippatsu', label: '一发'}, {value: 'haite', label: '海底捞月'},
-    {value: 'houte', label: '河底摸鱼'}, {value: 'rinnshann', label: '岭上开花'},
-    {value: 'chankan', label: '抢杠'}, {value: 'tenhou', label: '天和'}, {value: 'chiihou', label: '地和'},
+    {value: 'riichi'}, {value: 'double-riichi'},
+    {value: 'ippatsu'}, {value: 'haite'},
+    {value: 'houte'}, {value: 'rinnshann'},
+    {value: 'chankan'}, {value: 'tenhou'}, {value: 'chiihou'},
 ];
 
 const FURU_TYPES = [
-    {value: 'chi', label: '吃'}, {value: 'pon', label: '碰'},
-    {value: 'kan', label: '杠'}, {value: 'ankan', label: '暗杠'},
+    {value: 'chi'}, {value: 'pon'},
+    {value: 'kan'}, {value: 'ankan'},
 ];
 
-const WIND_OPTIONS = [{value: 'east', label: '东'}, {value: 'south', label: '南'}, {
+const WIND_OPTIONS = [{value: 'east'}, {value: 'south'}, {
     value: 'west',
-    label: '西'
-}, {value: 'north', label: '北'}];
+}, {value: 'north'}];
 
 function cvtWind(x: string): PositionType {
     if (x === 'east') return PositionType.EAST;
@@ -193,7 +193,6 @@ type CalculatorZoneBoxProps = {
     target: PopupTarget;
     items: string[];
     isFuru?: boolean;
-    hint?: string;
     popup: PopupTarget;
     setPopup: Dispatch<SetStateAction<PopupTarget>>;
     furo: FuruItem[];
@@ -209,7 +208,6 @@ function CalculatorZoneBox({
     target,
     items,
     isFuru,
-    hint,
     popup,
     setPopup,
     furo,
@@ -219,6 +217,7 @@ function CalculatorZoneBox({
     setDora,
     setUra,
 }: CalculatorZoneBoxProps) {
+    const { t } = useTranslation();
     const isEmpty = isFuru ? furo.length === 0 : items.length === 0;
 
     return (
@@ -240,7 +239,7 @@ function CalculatorZoneBox({
                 }}
             >
                 {isEmpty ? (
-                    <span style={{fontSize: '0.8rem', color: '#bbb', userSelect: 'none'}}>+ 点击添加{hint}</span>
+                    <span style={{fontSize: '0.8rem', color: '#bbb', userSelect: 'none'}}>{t('calculator.clickToAdd')}</span>
                 ) : isFuru ? (
                     furo.map((f, i) => (
                         <FuruBlock
@@ -299,6 +298,8 @@ function CalculatorTilePopup({
     addTile,
     addChiRed,
 }: CalculatorTilePopupProps) {
+    const { t } = useTranslation();
+    const furuLabel = (v: string) => t('calculator.furu.' + v);
     return (
         <div style={{
             position: 'fixed',
@@ -330,7 +331,7 @@ function CalculatorTilePopup({
                             fontWeight: 600,
                             color: 'var(--color-text)',
                             marginBottom: '0.5rem'
-                        }}>选择吃的顺子：
+                        }}>{t('calculator.selectChiSequence')}
                         </div>
                         <div style={{display: 'flex', gap: '0.5rem'}}>
                             {[3, 4, 5].map(n => {
@@ -384,7 +385,7 @@ function CalculatorTilePopup({
                                         cursor: 'pointer',
                                         color: furuMode === o.value ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
                                         transition: 'all 0.15s',
-                                    }}>{o.label}</button>
+                                    }}>{furuLabel(o.value)}</button>
                         ))}
                     </div>
                 )}
@@ -399,7 +400,7 @@ function CalculatorTilePopup({
                             fontSize: '0.7rem',
                             color: 'var(--color-text-light)',
                             marginBottom: '0.25rem'
-                        }}>当前选择 ({previewTiles.length})
+                        }}>{t('calculator.currentSelection')} ({previewTiles.length})
                         </div>
                         <div style={{display: 'flex', gap: '2px', flexWrap: 'wrap'}}>
                             {previewTiles.map((p, i) => <TileImg key={i} name={p} small/>)}
@@ -459,7 +460,7 @@ function CalculatorTilePopup({
                                 cursor: 'pointer',
                                 color: 'var(--color-text-light)'
                             }}>
-                        {chiRedPick ? '返回' : '关闭'}
+                        {chiRedPick ? t('calculator.back') : t('calculator.close')}
                     </button>
                 </div>
             </div>
@@ -472,6 +473,9 @@ function normalKey(s: string) {
 }
 
 export default function CalculatorPage() {
+    const { t } = useTranslation();
+    const windLabel = (v: string) => t('calculator.wind.' + v);
+    const yakuLabel = (v: string) => t('calculator.yaku.' + v);
     const [hand, setHand] = useState<string[]>([]);
     const [furo, setFuro] = useState<FuruItem[]>([]);
     const [dora, setDora] = useState<string[]>([]);
@@ -763,8 +767,8 @@ export default function CalculatorPage() {
                     }}>
                         <div style={{display: 'flex', gap: '0.5rem'}}>
                             {[
-                                {label: '场风', value: field, onChange: setField},
-                                {label: '自风', value: seat, onChange: setSeat},
+                                {label: t('calculator.fieldWind'), value: field, onChange: setField},
+                                {label: t('calculator.seatWind'), value: seat, onChange: setSeat},
                             ].map(({label, value, onChange}) => (
                                 <div key={label} style={{
                                     flex: 1,
@@ -778,20 +782,20 @@ export default function CalculatorPage() {
                                     <select value={value} onChange={e => onChange(e.target.value)}
                                             style={{...selectStyle, flex: 1}}>
                                         {WIND_OPTIONS.map(o => <option key={o.value}
-                                                                       value={o.value}>{o.label}</option>)}
+                                                                        value={o.value}>{windLabel(o.value)}</option>)}
                                     </select>
                                 </div>
                             ))}
                         </div>
                         <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'}}>
-                            <span style={{color: 'var(--color-text-light)'}}>和了方式</span>
+                            <span style={{color: 'var(--color-text-light)'}}>{t('calculator.winMethod')}</span>
                             <select value={agariWay} onChange={e => setAgariWay(e.target.value)} style={selectStyle}>
-                                <option value="tsumo">自摸</option>
-                                <option value="ron">荣和</option>
+                                <option value="tsumo">{t('calculator.tsumo')}</option>
+                                <option value="ron">{t('calculator.ron')}</option>
                             </select>
                         </div>
                         <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'}}>
-                            <span style={{color: 'var(--color-text-light)'}}>本场</span>
+                            <span style={{color: 'var(--color-text-light)'}}>{t('calculator.currentRound')}</span>
                             <input type="number" value={ponba}
                                    onChange={e => setPonba(Math.max(0, parseInt(e.target.value) || 0))} min={0}
                                    style={inputStyle}/>
@@ -818,8 +822,8 @@ export default function CalculatorPage() {
                                 userSelect: 'none'
                             }}>
                                 <input type="checkbox" checked={yakus.includes(o.value)} disabled={yakuDisable[o.value]}
-                                       onChange={() => toggleYaku(o.value)}/>
-                                {o.label}
+                                        onChange={() => toggleYaku(o.value)}/>
+                                {yakuLabel(o.value)}
                             </label>
                         ))}
                     </div>
@@ -827,15 +831,15 @@ export default function CalculatorPage() {
                 <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center'}}>
                     <button type="button" onClick={copyKifu} className="btn btn-sm btn-outline"
                             style={{display: 'inline-flex', alignItems: 'center', gap: '0.25rem'}}>
-                        <Copy size={14}/> 复制牌谱
+                        <Copy size={14}/> {t('calculator.copyKifu')}
                     </button>
                     <button type="button" onClick={() => {
                         setKifuPasteOpen(v => !v);
                         setKifuErr(null);
                     }} className="btn btn-sm btn-outline" style={{display: 'inline-flex', alignItems: 'center', gap: '0.25rem'}}>
-                        <ClipboardPaste size={14}/> 粘贴牌谱
+                        <ClipboardPaste size={14}/> {t('calculator.pasteKifu')}
                     </button>
-                    <button onClick={clearAll} className="btn btn-sm btn-outline">清空</button>
+                    <button onClick={clearAll} className="btn btn-sm btn-outline">{t('calculator.clearAll')}</button>
                 </div>
 
                 {kifuPasteOpen && (
@@ -848,7 +852,7 @@ export default function CalculatorPage() {
                         background: '#fafafa'
                     }}>
                         <textarea value={kifuPasteText} onChange={e => setKifuPasteText(e.target.value)}
-                                  placeholder="粘贴牌谱文本"
+                                  placeholder={t('calculator.pastePlaceholder')}
                                   rows={8}
                                   style={{
                                       width: '100%',
@@ -861,12 +865,12 @@ export default function CalculatorPage() {
                                   }}/>
                         {kifuErr && <div style={{color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem'}}>{kifuErr}</div>}
                         <div style={{marginTop: '0.5rem', display: 'flex', gap: '0.5rem'}}>
-                            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>载入</button>
+                            <button type="button" className="btn btn-sm" onClick={() => applyKifuFromText(kifuPasteText)}>{t('calculator.load')}</button>
                             <button type="button" className="btn btn-sm btn-outline"
                                     onClick={() => {
                                         setKifuPasteOpen(false);
                                         setKifuErr(null);
-                                    }}>取消
+                                    }}>{t('calculator.cancel')}
                             </button>
                         </div>
                     </div>
@@ -896,7 +900,7 @@ export default function CalculatorPage() {
                                     marginTop: '0.25rem',
                                     fontWeight: 600
                                 }}>
-                                    {result.isYakuman ? `${result.han}倍役满` : `${result.han}翻${needFu ? ` ${result.fu}符` : ''} ${manName}`}
+                                    {result.isYakuman ? `${result.han}${t('calculator.yakumanResult')}` : `${result.han}${t('calculator.hanUnit')}${needFu ? ` ${result.fu}符` : ''} ${manName}`}
                                 </div>
                                 <ul style={{
                                     margin: '0.5rem 0 0',
@@ -917,7 +921,7 @@ export default function CalculatorPage() {
                                             fontWeight: 600,
                                             color: 'var(--color-text-light)',
                                             marginBottom: '0.25rem'
-                                        }}>符计算过程
+                                        }}>{t('calculator.fuCalcProcess')}
                                         </div>
                                         <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.375rem'}}>
                                             {result.fuMessages.map((m, i) => (
@@ -935,27 +939,27 @@ export default function CalculatorPage() {
                                 )}
                             </>
                         ) : (
-                            <div style={{fontSize: '1.5rem', fontWeight: 700, color: '#999'}}>无役/无和牌型</div>
+                            <div style={{fontSize: '1.5rem', fontWeight: 700, color: '#999'}}>{t('calculator.noYaku')}</div>
                         )}
                     </div>
                 )}
             </div>
 
             <div style={{width: '100%', maxWidth: '40rem', display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
-                <CalculatorZoneBox label={`手牌 (${hand.length}/${14 - furo.length * 3})`} target="hand" items={hand}
-                    hint="手牌" popup={popup} setPopup={setPopup} furo={furo} removeFuru={removeFuru}
+                <CalculatorZoneBox label={`${t('calculator.handLabel')} (${hand.length}/${14 - furo.length * 3})`} target="hand" items={hand}
+                    popup={popup} setPopup={setPopup} furo={furo} removeFuru={removeFuru}
                     removeTile={removeTile} setHand={setHand} setDora={setDora} setUra={setUra}/>
-                <CalculatorZoneBox label="副露" target="furu" items={[]} isFuru hint="副露" popup={popup}
+                <CalculatorZoneBox label={t('calculator.furuLabel')} target="furu" items={[]} isFuru popup={popup}
                     setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile} setHand={setHand}
                     setDora={setDora} setUra={setUra}/>
                 <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
                     <div style={{flex: 1}}>
-                        <CalculatorZoneBox label="宝牌指示牌" target="dora" items={dora} hint="宝牌" popup={popup}
+                        <CalculatorZoneBox label={t('calculator.doraLabel')} target="dora" items={dora} popup={popup}
                             setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile}
                             setHand={setHand} setDora={setDora} setUra={setUra}/>
                     </div>
                     <div style={{flex: 1}}>
-                        <CalculatorZoneBox label="里宝牌指示牌" target="ura" items={ura} hint="里宝牌" popup={popup}
+                        <CalculatorZoneBox label={t('calculator.uraLabel')} target="ura" items={ura} popup={popup}
                             setPopup={setPopup} furo={furo} removeFuru={removeFuru} removeTile={removeTile}
                             setHand={setHand} setDora={setDora} setUra={setUra}/>
                     </div>

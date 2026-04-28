@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
 from .models import Room, RoomPlayer, Game, GamePlayer, HandRecord
 from apps.players.serializers import PlayerListSerializer, PlayerBriefSerializer
 
@@ -141,18 +142,18 @@ class ScoreSubmitSerializer(serializers.Serializer):
         scores = attrs['scores']
         player_ids = [s['player_id'] for s in scores]
         if len(player_ids) != len(set(player_ids)):
-            raise serializers.ValidationError('存在重复的选手')
+            raise serializers.ValidationError(_('存在重复的选手'))
 
         total = sum(s['score'] for s in scores)
         player_count = len(scores)
         if player_count == 4 and total != 1000:
-            raise serializers.ValidationError(f'4人对局分数总和必须为1000，当前为{total}')
+            raise serializers.ValidationError(_('4人对局分数总和必须为1000，当前为%(total)s') % {'total': total})
         elif player_count == 3 and total != 1050:
-            raise serializers.ValidationError(f'3人对局分数总和必须为1050，当前为{total}')
+            raise serializers.ValidationError(_('3人对局分数总和必须为1050，当前为%(total)s') % {'total': total})
 
         has_dealer = any(s.get('is_dealer_start', False) for s in scores)
         if not has_dealer:
-            raise serializers.ValidationError('必须指定一名东起选手')
+            raise serializers.ValidationError(_('必须指定一名东起选手'))
 
         return attrs
 
@@ -204,5 +205,5 @@ class HandRecordCreateSerializer(serializers.ModelSerializer):
 
     def validate_yakuman_names(self, value):
         if not value or not isinstance(value, list) or len(value) == 0:
-            raise serializers.ValidationError('至少需要选择一个役种')
+            raise serializers.ValidationError(_('至少需要选择一个役种'))
         return value

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getPlayers } from '@/api/players';
 import SearchBar from '@/components/SearchBar';
@@ -16,6 +17,7 @@ type PlayerListItem = Player & {
 type SortKey = 'default' | 'ranking_score' | 'total_game_count' | 'last_game_time';
 
 export default function PlayerListPage() {
+  const { t } = useTranslation();
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('default');
@@ -41,17 +43,17 @@ export default function PlayerListPage() {
   }, [players, sortKey]);
 
   const sortOptions: { key: SortKey; label: string }[] = [
-    { key: 'default', label: '默认' },
-    { key: 'ranking_score', label: '排位分' },
-    { key: 'total_game_count', label: '总局数' },
-    { key: 'last_game_time', label: '最近对局' },
+    { key: 'default', label: t('playerList.sortDefault') },
+    { key: 'ranking_score', label: t('playerList.sortRankingScore') },
+    { key: 'total_game_count', label: t('playerList.sortTotalGames') },
+    { key: 'last_game_time', label: t('playerList.sortLastGame') },
   ];
 
   return (
     <div>
       <div className="mb-6 flex flex-col sm:flex-row gap-3">
         <div className="flex-1">
-          <SearchBar query={query} onQueryChange={setQuery} placeholder="搜索雀士..." />
+          <SearchBar query={query} onQueryChange={setQuery} placeholder={t('playerList.searchPlaceholder')} />
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {sortOptions.map((opt) => (
@@ -75,7 +77,7 @@ export default function PlayerListPage() {
       {sorted.length === 0 ? (
         <div className="empty-state card">
           <Users size={48} style={{ margin: '0 auto 1rem' }} />
-          <p>暂无雀士</p>
+          <p>{t('playerList.noPlayers')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -115,7 +117,7 @@ export default function PlayerListPage() {
                         {scoreVal}
                       </div>
                     )}
-                    <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>排位分</div>
+                    <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('playerList.rankingScore')}</div>
                   </div>
                 </div>
 
@@ -124,11 +126,11 @@ export default function PlayerListPage() {
                   style={{ borderTop: '1px solid var(--color-border)' }}
                 >
                   <div className="flex justify-between text-xs">
-                    <span style={{ color: 'var(--color-text-light)' }}>总局数</span>
-                    <span className="font-medium">{player.total_game_count ?? 0} 局</span>
+                    <span style={{ color: 'var(--color-text-light)' }}>{t('playerList.totalGames')}</span>
+                    <span className="font-medium">{player.total_game_count ?? 0} {t('common.unit.round')}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span style={{ color: 'var(--color-text-light)' }}>最近</span>
+                    <span style={{ color: 'var(--color-text-light)' }}>{t('playerList.lastGame')}</span>
                     <span className="font-medium">{player.last_game_time ?? '-'}</span>
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getAllGames } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
@@ -42,6 +43,7 @@ function GamePlayerCell({
   score: number | null;
   isDealer: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className="flex items-center gap-2 min-w-0 p-2.5 rounded-2xl border border-white/60"
@@ -99,7 +101,7 @@ function GamePlayerCell({
                 boxShadow: '0 1px 1px rgba(200, 140, 0, 0.12)',
               }}
             >
-              东
+{t('wind.east')}
             </span>
           )}
         </div>
@@ -124,6 +126,7 @@ const SELECT_STYLE: React.CSSProperties = {
 };
 
 export default function GameListPage() {
+  const { t } = useTranslation();
   const [games, setGames] = useState<Game[]>([]);
   const [playerCountFilter, setPlayerCountFilter] = useState<'' | '3' | '4'>('4');
   const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match'>('half_match');
@@ -142,7 +145,7 @@ export default function GameListPage() {
     if (playerCountFilter) params.player_count = playerCountFilter;
     if (modeFilter) params.game_mode = modeFilter;
     if (typeFilter) params.game_type = typeFilter;
-    getAllGames(params).then(setGames).catch(() => showToast('加载对局失败'));
+    getAllGames(params).then(setGames).catch(() => showToast(t('gameList.loadFailed')));
   }, [playerCountFilter, modeFilter, typeFilter, showToast]);
 
   useEffect(() => {
@@ -163,9 +166,9 @@ export default function GameListPage() {
   return (
     <div>
       {ToastComponent}
-      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title="打开雀魂牌谱">
+      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title={t('gameList.openPaipuTitle')}>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>
-          即将在新标签页打开外部网站（雀魂牌谱）。若为误触可取消。
+          {t('gameList.openPaipuWarn')}
         </p>
         {paipuConfirmUrl && (
           <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>
@@ -174,7 +177,7 @@ export default function GameListPage() {
         )}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuConfirmUrl(null)}>
-            取消
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -184,7 +187,7 @@ export default function GameListPage() {
               setPaipuConfirmUrl(null);
             }}
           >
-            <ExternalLink size={14} /> 打开牌谱
+            <ExternalLink size={14} /> {t('gameList.openPaipu')}
           </button>
         </div>
       </Modal>
@@ -194,36 +197,36 @@ export default function GameListPage() {
           onChange={(e) => setPlayerCountFilter(e.target.value as typeof playerCountFilter)}
           style={SELECT_STYLE}
         >
-          <option value="">全部人数</option>
-          <option value="4">四麻</option>
-          <option value="3">三麻</option>
+          <option value="">{t('gameList.allPlayerCount')}</option>
+          <option value="4">{t('playerCount.yonma')}</option>
+          <option value="3">{t('playerCount.sanma')}</option>
         </select>
         <select
           value={modeFilter}
           onChange={(e) => setModeFilter(e.target.value as typeof modeFilter)}
           style={SELECT_STYLE}
         >
-          <option value="">全部模式</option>
-          <option value="east_wind">东风</option>
-          <option value="half_match">半庄</option>
+          <option value="">{t('gameList.allMode')}</option>
+          <option value="east_wind">{t('gameMode.eastWind')}</option>
+          <option value="half_match">{t('gameMode.halfMatch')}</option>
         </select>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
           style={SELECT_STYLE}
         >
-          <option value="">全部类型</option>
-          <option value="offline">线下</option>
-          <option value="online">线上</option>
+          <option value="">{t('gameList.allType')}</option>
+          <option value="offline">{t('gameType.offline')}</option>
+          <option value="online">{t('gameType.online')}</option>
         </select>
         <span className="text-sm self-center ml-auto" style={{ color: 'var(--color-text-light)' }}>
-          共 {games.length} 局
+          {t('gameList.totalGames', { count: games.length })}
         </span>
       </div>
 
       {games.length === 0 ? (
         <div className="empty-state card">
-          <p className="text-sm">暂无对局记录</p>
+          <p className="text-sm">{t('gameList.noGames')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -241,7 +244,7 @@ export default function GameListPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`badge ${game.player_count === 3 ? 'badge-sanma' : 'badge-yonma'}`}>
-                      {PLAYER_COUNT_LABELS[game.player_count] || `${game.player_count}麻`}
+                      {PLAYER_COUNT_LABELS[game.player_count] || `${game.player_count}`}
                     </span>
                     <span className="badge badge-mode">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
@@ -254,7 +257,7 @@ export default function GameListPage() {
                         onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
                       >
                         <span className="inline-flex items-center gap-0.5">
-                          <ExternalLink size={12} /> 牌谱
+                          <ExternalLink size={12} /> {t('gameList.paipu')}
                         </span>
                       </button>
                     )}

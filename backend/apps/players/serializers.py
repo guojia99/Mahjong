@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.utils.translation import gettext_lazy as _
 from .models import Player, MahjongSoulAccount
 
 
@@ -103,5 +104,5 @@ class MahjongSoulAccountCreateSerializer(serializers.ModelSerializer):
 
     def validate_uid(self, value):
         if MahjongSoulAccount.objects.filter(uid=value).exists():
-            raise serializers.ValidationError('该UID已绑定其他雀士')
+            raise serializers.ValidationError(_('该UID已绑定其他雀士'))
         return value

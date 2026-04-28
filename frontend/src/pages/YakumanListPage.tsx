@@ -4,13 +4,7 @@ import { Sparkles } from 'lucide-react';
 import type { HandRecord } from '@/types';
 import { HAND_RECORD_TYPE_LABELS } from '@/types';
 import YakumanCard from '@/components/YakumanCard';
-
-const TYPE_OPTIONS = [
-  { value: '', label: '全部' },
-  { value: 'yakuman', label: '役满' },
-  { value: 'yakuman_confirmed', label: '役满确定' },
-  { value: 'yakuman_chance', label: '役满机会' },
-];
+import { useTranslation } from 'react-i18next';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -24,7 +18,15 @@ const SELECT_STYLE: React.CSSProperties = {
 };
 
 export default function YakumanListPage() {
+  const { t } = useTranslation();
   const [records, setRecords] = useState<HandRecord[]>([]);
+
+  const TYPE_OPTIONS = [
+    { value: '', label: t('yakumanList.typeAll') },
+    { value: 'yakuman', label: t('yakumanList.typeYakuman') },
+    { value: 'yakuman_confirmed', label: t('yakumanList.typeConfirmed') },
+    { value: 'yakuman_chance', label: t('yakumanList.typeChance') },
+  ];
   const [typeFilter, setTypeFilter] = useState('');
 
   useEffect(() => {
@@ -36,11 +38,11 @@ export default function YakumanListPage() {
   return (
     <div>
       <h2 className="text-xl font-bold mb-1 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
-        <Sparkles size={20} style={{ color: '#e65100' }} /> 役满列表
+        <Sparkles size={20} style={{ color: '#e65100' }} /> {t('yakumanList.title')}
       </h2>
       <div className="flex items-center gap-3 mb-6">
         <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
-          {typeLabel ? `${typeLabel}记录` : '全部记录'} ({records.length})
+          {typeLabel ? `${typeLabel}${t('yakumanList.recordLabel')}` : t('yakumanList.allRecords')} ({records.length})
         </p>
       </div>
 
@@ -59,7 +61,7 @@ export default function YakumanListPage() {
       {records.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <p className="text-sm">暂无役满记录</p>
+            <p className="text-sm">{t('yakumanList.noRecords')}</p>
           </div>
         </div>
       ) : (

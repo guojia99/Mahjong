@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getRooms, createRoom, closeRoom, deleteRoom } from '@/api/games';
 import { isAdmin } from '@/api/auth';
@@ -9,6 +10,7 @@ import { ROOM_TYPE_LABELS } from '@/types';
 import { Plus, MapPin, Users, Gamepad2, Clock, Trash2 } from 'lucide-react';
 
 export default function RoomsPage() {
+  const { t } = useTranslation();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<'' | 'offline' | 'online'>('');
@@ -25,7 +27,7 @@ export default function RoomsPage() {
       const data = await getRooms(Object.keys(params).length ? params : undefined);
       setRooms(data);
     } catch {
-      showToast('加载房间失败');
+      showToast(t('rooms.loadFailed'));
     }
   }, [statusFilter, typeFilter, showToast]);
 
@@ -45,39 +47,39 @@ export default function RoomsPage() {
     try {
       await createRoom({
         name,
-        location: location || (roomType === 'online' ? '线上' : ''),
+        location: location || (roomType === 'online' ? t('gameType.online') : ''),
         room_type: roomType,
         session_time: sessionTime || null,
       });
-      showToast('房间创建成功', 'success');
+      showToast(t('rooms.createSuccess'), 'success');
       setShowCreate(false);
       loadRooms();
     } catch {
-      showToast('创建失败');
+      showToast(t('rooms.createFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = async (id: string) => {
-    if (!confirm('确定关闭该房间吗？关闭后将无法再录入对局。')) return;
+    if (!confirm(t('rooms.closeConfirm'))) return;
     try {
       await closeRoom(id);
-      showToast('房间已关闭', 'success');
+      showToast(t('rooms.closeSuccess'), 'success');
       loadRooms();
     } catch {
-      showToast('操作失败');
+      showToast(t('rooms.closeFailed'));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定删除该房间吗？此操作不可恢复。')) return;
+    if (!confirm(t('rooms.deleteConfirm'))) return;
     try {
       await deleteRoom(id);
-      showToast('房间已删除', 'success');
+      showToast(t('rooms.deleteSuccess'), 'success');
       loadRooms();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '删除失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('rooms.deleteFailed');
       showToast(msg);
     }
   };
@@ -88,11 +90,11 @@ export default function RoomsPage() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-xs font-medium w-full sm:w-auto" style={{ color: 'var(--color-text-light)' }}>状态</span>
+            <span className="text-xs font-medium w-full sm:w-auto" style={{ color: 'var(--color-text-light)' }}>{t('rooms.status')}</span>
             {[
-              { value: 'all', label: '全部' },
-              { value: 'open', label: '进行中' },
-              { value: 'closed', label: '已关闭' },
+              { value: 'all', label: t('rooms.statusAll') },
+              { value: 'open', label: t('roomStatus.open') },
+              { value: 'closed', label: t('roomStatus.closed') },
             ].map((f) => (
               <button
                 key={f.value}
@@ -111,17 +113,17 @@ export default function RoomsPage() {
           </div>
           {admin && (
             <button className="btn btn-primary sm:ml-auto" onClick={() => setShowCreate(true)}>
-              <Plus size={16} /> 开启房间
+              <Plus size={16} /> {t('rooms.openRoom')}
             </button>
           )}
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs font-medium w-full sm:w-auto" style={{ color: 'var(--color-text-light)' }}>类型</span>
+          <span className="text-xs font-medium w-full sm:w-auto" style={{ color: 'var(--color-text-light)' }}>{t('rooms.type')}</span>
           {(
             [
-              { value: '' as const, label: '全部' },
-              { value: 'offline' as const, label: '线下场' },
-              { value: 'online' as const, label: '线上场' },
+              { value: '' as const, label: t('rooms.typeAll') },
+              { value: 'offline' as const, label: t('roomType.offline') },
+              { value: 'online' as const, label: t('roomType.online') },
             ] as const
           ).map((f) => (
             <button
@@ -144,10 +146,10 @@ export default function RoomsPage() {
       {rooms.length === 0 ? (
         <div className="empty-state card">
           <Gamepad2 size={48} style={{ color: 'var(--color-text-light)', opacity: 0.3, margin: '0 auto 1rem' }} />
-          <p>暂无房间</p>
+          <p>{t('rooms.noRooms')}</p>
           {admin && (
             <button className="btn btn-outline btn-sm mt-3" onClick={() => setShowCreate(true)}>
-              开启第一个房间
+              {t('rooms.openFirstRoom')}
             </button>
           )}
         </div>
@@ -184,7 +186,7 @@ export default function RoomsPage() {
                       <div className="flex items-center gap-3 text-xs flex-wrap" style={{ color: 'var(--color-text-light)' }}>
                         {room.session_time && (
                           <span className="flex items-center gap-1">
-                            <Clock size={12} /> 场次 {room.session_time}
+                            <Clock size={12} /> {t('rooms.sessionLabel')} {room.session_time}
                           </span>
                         )}
                         {room.location && (
@@ -193,9 +195,9 @@ export default function RoomsPage() {
                           </span>
                         )}
                         <span className="flex items-center gap-1">
-                          <Users size={12} /> {room.player_count}人
+                          <Users size={12} /> {room.player_count}{t('common.unit.person')}
                         </span>
-                        <span>{room.game_count}局</span>
+                        <span>{room.game_count}{t('common.unit.round')}</span>
                         {room.earliest_game_time && room.latest_game_time && (
                           <span className="flex items-center gap-1">
                             <Clock size={12} /> {room.earliest_game_time} ~ {room.latest_game_time}
@@ -207,7 +209,7 @@ export default function RoomsPage() {
                 </Link>
                 <div className="flex items-center gap-2">
                   <span className={`badge ${room.status === 'open' ? 'badge-open' : 'badge-closed'}`}>
-                    {room.status === 'open' ? '进行中' : '已关闭'}
+                    {room.status === 'open' ? t('roomStatus.open') : t('roomStatus.closed')}
                   </span>
                   {admin && room.status === 'open' && (
                     <button
@@ -215,7 +217,7 @@ export default function RoomsPage() {
                       onClick={() => handleClose(room.id)}
                       style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
                     >
-                      关闭房间
+                      {t('rooms.closeRoom')}
                     </button>
                   )}
                   {admin && room.game_count === 0 && (
@@ -224,7 +226,7 @@ export default function RoomsPage() {
                       onClick={() => handleDelete(room.id)}
                       style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
                     >
-                      <Trash2 size={14} /> 删除
+                      <Trash2 size={14} /> {t('common.delete')}
                     </button>
                   )}
                 </div>
@@ -234,31 +236,31 @@ export default function RoomsPage() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="开启新房间">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t('rooms.newRoomTitle')}>
         <form onSubmit={handleCreate}>
           <div className="form-group">
-            <label className="form-label">房间类型 *</label>
+            <label className="form-label">{t('rooms.roomTypeLabel')}</label>
             <select name="room_type" className="form-input" defaultValue="offline" required>
-              <option value="offline">线下场</option>
-              <option value="online">线上场（先建场，再在「线上对局导入」中往该房间录入牌谱）</option>
+              <option value="offline">{t('roomType.offline')}</option>
+              <option value="online">{t('rooms.onlineOptionHint')}</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">房间名称 *</label>
-            <input name="name" className="form-input" placeholder="如：周五雀庄聚会" required autoFocus />
+            <label className="form-label">{t('rooms.roomNameLabel')}</label>
+            <input name="name" className="form-input" placeholder={t('rooms.roomNamePlaceholder')} required autoFocus />
           </div>
           <div className="form-group">
-            <label className="form-label">地点/雀庄</label>
-            <input name="location" className="form-input" placeholder="选填，线上场可不填（默认 线上）" />
+            <label className="form-label">{t('rooms.locationLabel')}</label>
+            <input name="location" className="form-input" placeholder={t('rooms.locationPlaceholder')} />
           </div>
           <div className="form-group">
-            <label className="form-label">场次时间</label>
+            <label className="form-label">{t('rooms.sessionTimeLabel')}</label>
             <input name="session_time" type="datetime-local" className="form-input" />
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>与线下面杀一致，用于标识本场；导入的线上对局默认用该时间作为对局时间（可在线上导入页单独覆盖）</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('rooms.sessionTimeHint')}</p>
           </div>
           <div className="flex gap-3 justify-end">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreate(false)}>取消</button>
-            <button type="submit" disabled={loading} className="btn btn-primary btn-sm">创建</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
+            <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{t('common.create')}</button>
           </div>
         </form>
       </Modal>

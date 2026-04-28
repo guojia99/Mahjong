@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { login } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 
 export default function LoginPage() {
+  const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,7 @@ export default function LoginPage() {
       await login(username, password);
       navigate('/');
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '登录失败';
+      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('login.failed');
       showToast(message);
     } finally {
       setLoading(false);
@@ -39,33 +41,33 @@ export default function LoginPage() {
             style={{ boxShadow: '0 4px 20px rgba(232, 160, 191, 0.3)' }}
           />
           <h1 className="text-2xl font-bold" style={{ color: 'var(--color-primary-dark)' }}>
-            嘉の雀桩
+            {t('app.name')}
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-light)' }}>
-            管理员登录
+            {t('login.title')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">用户名</label>
+            <label className="form-label">{t('login.username')}</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="form-input"
-              placeholder="请输入用户名"
+              placeholder={t('login.usernamePlaceholder')}
               required
             />
           </div>
           <div className="form-group">
-            <label className="form-label">密码</label>
+            <label className="form-label">{t('login.password')}</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="form-input"
-              placeholder="请输入密码"
+              placeholder={t('login.passwordPlaceholder')}
               required
               minLength={6}
             />
@@ -76,7 +78,7 @@ export default function LoginPage() {
             className="btn btn-primary w-full"
             style={{ padding: '0.75rem' }}
           >
-            {loading ? '请稍候...' : '登录'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
       </div>

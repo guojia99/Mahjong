@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAdminUser
+from django.utils.translation import gettext_lazy as _
 from common.permissions import IsAdminUserOrReadOnly
 from .models import UmaConfig, RankTier, PlayerRankingScore
 from .serializers import (
@@ -103,10 +104,10 @@ class RecalculateRankingView(APIView):
         try:
             with transaction.atomic():
                 recalculate_all_rankings()
-            return Response({'message': '排位分重新结算完成'})
+            return Response({'message': str(_('排位分重新结算完成'))})
         except Exception as e:
             logger.error(f'重算排位分失败: {e}', exc_info=True)
-            return Response({'error': f'重算失败: {str(e)}'}, status=500)
+            return Response({'error': str(_('重算失败: %(e)s') % {'e': str(e)})}, status=500)
 
 
 class RankingLeaderboardView(APIView):
@@ -143,7 +144,7 @@ class GameRankingSettleView(APIView):
         from apps.games.models import Game
         game = get_object_or_404(Game, pk=pk)
         if game.player_count != 4 or game.game_mode != 'half_match':
-            return Response({'error': '仅四麻半庄计算排位分'}, status=400)
+            return Response({'error': str(_('仅四麻半庄计算排位分'))}, status=400)
         points = calculate_game_ranking_points(game)
         return Response(points)
 

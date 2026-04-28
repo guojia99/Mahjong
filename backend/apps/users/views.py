@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.utils.translation import gettext_lazy as _
 from .serializers import LoginSerializer, UserSerializer
 from .services import AuthService
 
@@ -23,7 +24,7 @@ class LogoutView(APIView):
 
     def post(self, request):
         AuthService.logout(request.user)
-        return Response({'message': '已登出'})
+        return Response({'message': str(_('已登出'))})
 
 
 class MeView(APIView):

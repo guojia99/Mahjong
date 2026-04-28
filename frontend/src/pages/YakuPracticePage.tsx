@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { YAKU_PRACTICE_LIST, YAKU_CATEGORIES, generateYakuProblems } from '@/mahjong-calc/yakuPracticeGenerator';
 import type { YakuProblem, YakuDef } from '@/mahjong-calc/yakuPracticeGenerator';
 import { MAN_TYPE_NAMES } from '@/mahjong-calc/definition';
@@ -62,26 +63,26 @@ function cvtPai(p: Pai): string {
   return p.num + p.type;
 }
 
-function getFlagTags(flag: number): string[] {
+function getFlagTags(flag: number, t: (key: string) => string): string[] {
   const rt: string[] = [];
   const fieldSeat: [number, string][] = [
-    [1 << 0, '东一局'], [1 << 1, '南一局'], [1 << 2, '西一局'], [1 << 3, '北一局'],
-    [1 << 4, '东家'], [1 << 5, '南家'], [1 << 6, '西家'], [1 << 7, '北家'],
+    [1 << 0, t('practice.east1')], [1 << 1, t('practice.south1')], [1 << 2, t('practice.west1')], [1 << 3, t('practice.north1')],
+    [1 << 4, t('practice.eastSeat')], [1 << 5, t('practice.southSeat')], [1 << 6, t('practice.westSeat')], [1 << 7, t('practice.northSeat')],
   ];
   for (const [f, name] of fieldSeat) {
     if ((flag & f) === f) rt.push(name);
   }
-  if ((flag & TSUMO) === TSUMO) rt.push('自摸');
-  else if ((flag & RON) === RON) rt.push('荣和');
-  if ((flag & DOUBLE_RIICHI) === DOUBLE_RIICHI) rt.push('双立直');
-  else if ((flag & RIICHI) === RIICHI) rt.push('立直');
-  else rt.push('未立直');
+  if ((flag & TSUMO) === TSUMO) rt.push(t('practice.tsumo'));
+  else if ((flag & RON) === RON) rt.push(t('practice.ron'));
+  if ((flag & DOUBLE_RIICHI) === DOUBLE_RIICHI) rt.push(t('practice.doubleRiichi'));
+  else if ((flag & RIICHI) === RIICHI) rt.push(t('practice.riichi'));
+  else rt.push(t('practice.noRiichi'));
   if ((flag & IPPATSU) === IPPATSU && ((flag & RIICHI) === RIICHI || (flag & DOUBLE_RIICHI) === DOUBLE_RIICHI)) {
-    rt.push('一发');
+    rt.push(t('practice.ippatsu'));
   }
   const extra: [number, string][] = [
-    [HAITEI_RAOYUE, '海底捞月'], [HOUTEI_RAOYUI, '河底摸鱼'], [RINNSHANN_KAIHOU, '岭上开花'], [CHANKAN, '抢杠'],
-    [TENHOU, '天和'], [CHIIHOU, '地和'],
+    [HAITEI_RAOYUE, t('practice.haitei')], [HOUTEI_RAOYUI, t('practice.houte')], [RINNSHANN_KAIHOU, t('practice.rinnshann')], [CHANKAN, t('practice.chankan')],
+    [TENHOU, t('practice.tenhou')], [CHIIHOU, t('practice.chiihou')],
   ];
   for (const [f, name] of extra) {
     if ((flag & f) === f) rt.push(name);
@@ -90,6 +91,7 @@ function getFlagTags(flag: number): string[] {
 }
 
 export default function YakuPracticePage() {
+  const { t } = useTranslation();
   const [selectedYaku, setSelectedYaku] = useState<YakuDef | null>(null);
   const [problems, setProblems] = useState<YakuProblem[]>([]);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
@@ -197,7 +199,7 @@ export default function YakuPracticePage() {
     return (
       <div className="flex flex-col items-center gap-5" style={{ maxWidth: '40rem' }}>
         <h2 style={{ color: 'var(--color-text)', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <BookOpen size={20} style={{ color: '#e65100' }} /> 役种专项练习
+          <BookOpen size={20} style={{ color: '#e65100' }} /> {t('yakuPractice.title')}
         </h2>
 
         <div style={{ width: '100%' }}>
@@ -207,21 +209,21 @@ export default function YakuPracticePage() {
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
             onClick={() => { setKifuPasteOpen(v => !v); setKifuErr(null); }}
           >
-            <ClipboardPaste size={14} /> 粘贴牌谱载入
+            <ClipboardPaste size={14} /> {t('yakuPractice.pasteLoad')}
           </button>
           {kifuPasteOpen && (
             <div style={{ marginTop: '0.75rem', padding: '0.75rem', borderRadius: '0.75rem', border: '1px solid var(--color-border)', background: '#fafafa' }}>
               <textarea
                 value={kifuPasteText}
                 onChange={e => setKifuPasteText(e.target.value)}
-                placeholder="粘贴牌谱文本（场型/手牌/和牌/宝牌/里宝/副露）"
+                placeholder={t('yakuPractice.pastePlaceholder')}
                 rows={8}
                 style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
               />
               {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
               <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-                <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>载入练习</button>
-                <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+                <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>{t('yakuPractice.loadPractice')}</button>
+                <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>{t('common.cancel')}</button>
               </div>
             </div>
           )}
@@ -266,10 +268,10 @@ export default function YakuPracticePage() {
     <div className="flex flex-col items-center gap-4" style={{ maxWidth: '40rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', marginBottom: '0.25rem' }}>
         <button onClick={backToList} className="btn btn-sm btn-outline" style={{ whiteSpace: 'nowrap' }}>
-          &larr; 返回列表
+          &larr; {t('playerProfile.backToList')}
         </button>
         <div style={{ flex: 1, textAlign: 'center' }}>
-          <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>{selectedYaku.name}</span>
+          <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>{selectedYaku.id === '_kifu_import' ? t('yakuPractice.importKifu') : selectedYaku.name}</span>
           <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', marginLeft: '0.5rem' }}>{selectedYaku.han}</span>
         </div>
         <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -282,7 +284,7 @@ export default function YakuPracticePage() {
               setKifuErr(null);
             }}
           >
-            <ClipboardPaste size={14} /> 粘贴牌谱
+            <ClipboardPaste size={14} /> {t('yakuPractice.pasteKifu')}
           </button>
         </div>
         <div style={{
@@ -298,14 +300,14 @@ export default function YakuPracticePage() {
           <textarea
             value={kifuPasteText}
             onChange={e => setKifuPasteText(e.target.value)}
-            placeholder="粘贴牌谱文本，载入后将替换本题组为导入的一道题"
+            placeholder={t('yakuPractice.pasteReplaceHint')}
             rows={8}
             style={{ width: '100%', fontSize: '0.8rem', fontFamily: 'monospace', boxSizing: 'border-box', borderRadius: '0.5rem', padding: '0.5rem', border: '1px solid var(--color-border)' }}
           />
           {kifuErr && <div style={{ color: '#c62828', fontSize: '0.8rem', marginTop: '0.35rem' }}>{kifuErr}</div>}
           <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
-            <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>载入练习</button>
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>取消</button>
+            <button type="button" className="btn btn-sm" onClick={() => applyKifuText(kifuPasteText)}>{t('yakuPractice.loadPractice')}</button>
+            <button type="button" className="btn btn-sm btn-outline" onClick={() => { setKifuPasteOpen(false); setKifuErr(null); }}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -330,7 +332,7 @@ export default function YakuPracticePage() {
           const doraTiles = p.dora.map(d => d.num + d.type);
           const isRevealed = revealed.has(idx);
           const isCorrect = isRevealed && checkAnswer(idx);
-          const tags = getFlagTags(p.flag);
+          const tags = getFlagTags(p.flag, t);
 
           return (
             <div key={idx} style={{
@@ -339,7 +341,7 @@ export default function YakuPracticePage() {
               transition: 'border-color 0.2s',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', fontWeight: 600 }}>第 {idx + 1} 题</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-light)', fontWeight: 600 }}>{t('yakuPractice.questionN', { n: idx + 1 })}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <button
                     type="button"
@@ -347,7 +349,7 @@ export default function YakuPracticePage() {
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.7rem', padding: '0.2rem 0.45rem' }}
                     onClick={() => void navigator.clipboard.writeText(formatKifuTextFromYakuProblem(p)).catch(() => {})}
                   >
-                    <Copy size={12} /> 复制牌谱
+                    <Copy size={12} /> {t('practice.copyKifu')}
                   </button>
                   {isRevealed && (
                     <span style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem', color: isCorrect ? '#2d9d78' : '#e74c3c' }}>
@@ -372,7 +374,7 @@ export default function YakuPracticePage() {
 
               {doraTiles.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginTop: '0.25rem' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--color-text-light)' }}>表</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--color-text-light)' }}>{t('yakuPractice.doraIndicators')}</span>
                   {doraTiles.map((t, i) => <TileImg key={i} name={t} small />)}
                 </div>
               )}
@@ -392,7 +394,7 @@ export default function YakuPracticePage() {
                     value={userAns[idx] || ''}
                     onChange={e => setUserAns(prev => ({ ...prev, [idx]: e.target.value }))}
                     onKeyDown={e => { if (e.key === 'Enter') submitAnswer(idx); e.preventDefault(); }}
-                    placeholder={p.ans.pointType === 2 ? '子/亲 点数 (空格隔开)' : '输入点数'}
+                    placeholder={p.ans.pointType === 2 ? t('yakuPractice.koOyaPoints') : t('yakuPractice.inputPoints')}
                     style={{
                       width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.5rem',
                       border: '2px solid var(--color-primary)', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box',
@@ -406,7 +408,7 @@ export default function YakuPracticePage() {
                   </ul>
                   {p.ans.fuMessages.length > 0 && (
                     <div style={{ borderTop: '1px dashed var(--color-border)', paddingTop: '0.375rem', marginTop: '0.375rem' }}>
-                      <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>符计算过程</div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--color-text-light)', marginBottom: '0.25rem' }}>{t('practice.fuCalcProcess')}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
                         {p.ans.fuMessages.map((m, i) => (
                           <span key={i} style={{ background: '#f0f7ff', color: '#1565c0', padding: '0.15rem 0.4rem', borderRadius: '0.375rem', fontSize: '0.65rem' }}>{m}</span>
@@ -416,9 +418,9 @@ export default function YakuPracticePage() {
                   )}
                   <div style={{ marginTop: '0.375rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--color-primary-dark)' }}>
                     {p.ans.isYakuman
-                      ? `${p.ans.han}倍役满`
+                      ? `${p.ans.han}${t('calculator.yakumanResult')}`
                       : p.ans.hanRealYaku === 0
-                        ? '无役（宝牌・里宝・赤宝不计役），0 点'
+                        ? t('practice.noYakuResult')
                         : `${p.ans.han}翻${p.ans.fu}符 ${MAN_TYPE_NAMES[p.ans.manType]}`}
                   </div>
                   <div style={{ marginTop: '0.375rem', fontSize: '1.25rem', fontWeight: 800 }}>
@@ -435,13 +437,13 @@ export default function YakuPracticePage() {
 
       {!timerRunning && problems.length > 0 && (
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-          <button onClick={revealAll} className="btn btn-sm btn-outline">显示所有答案</button>
+          <button onClick={revealAll} className="btn btn-sm btn-outline">{t('yakuPractice.showAllAnswers')}</button>
           <button onClick={backToList} className="btn" style={{
             padding: '0.625rem 2.5rem', borderRadius: '2rem', border: 'none',
             fontSize: '0.875rem', fontWeight: 700, cursor: 'pointer', color: 'white',
             background: 'linear-gradient(135deg, #a8e6cf, #3d9d78)', boxShadow: '0 2px 8px rgba(61,157,120,0.3)',
           }}>
-            完成
+            {t('yakuPractice.complete')}
           </button>
         </div>
       )}

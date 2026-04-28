@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/useToast';
 import type { RankTier, UmaConfig } from '@/types';
 import RankTierBadge from '@/components/RankTierBadge';
 import { Settings, RefreshCw, Save } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const INPUT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.5rem',
@@ -23,15 +24,16 @@ export default function RankingAdminPage() {
   const [recalculating, setRecalculating] = useState(false);
   const [saving, setSaving] = useState(false);
   const { showToast, ToastComponent } = useToast();
+  const { t } = useTranslation();
 
   const loadData = useCallback(async () => {
     try {
-      const [t, u] = await Promise.all([getRankTiers(), getUmaConfigs()]);
-      setTiers(t);
-      setUmaConfigs(u);
+      const [tiersData, umaData] = await Promise.all([getRankTiers(), getUmaConfigs()]);
+      setTiers(tiersData);
+      setUmaConfigs(umaData);
       setDirty(false);
     } catch {
-      showToast('加载配置失败');
+      showToast(t('rankingAdmin.loadFailed'));
     }
   }, [showToast]);
 
@@ -54,23 +56,23 @@ export default function RankingAdminPage() {
     try {
       await Promise.all(tiers.map((t) => updateRankTier(t.id, t)));
       await Promise.all(umaConfigs.map((u) => updateUmaConfig(u.id, u)));
-      showToast('保存成功', 'success');
+      showToast(t('rankingAdmin.saveSuccess'), 'success');
       setDirty(false);
     } catch {
-      showToast('保存失败');
+      showToast(t('rankingAdmin.saveFailed'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleRecalculate = async () => {
-    if (!confirm('重算将清空所有排位数据并按时间顺序重新结算，确认继续？')) return;
+    if (!confirm(t('rankingAdmin.recalcConfirm'))) return;
     setRecalculating(true);
     try {
       await recalculateRanking();
-      showToast('排位分重算完成', 'success');
+      showToast(t('rankingAdmin.recalcSuccess'), 'success');
     } catch {
-      showToast('重算失败');
+      showToast(t('rankingAdmin.recalcFailed'));
     } finally {
       setRecalculating(false);
     }
@@ -81,7 +83,7 @@ export default function RankingAdminPage() {
       {ToastComponent}
       <div className="flex items-center gap-2 mb-6">
         <Settings size={20} style={{ color: 'var(--color-primary)' }} />
-        <h2 className="text-lg font-bold">排位配置管理</h2>
+        <h2 className="text-lg font-bold">{t('rankingAdmin.title')}</h2>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-6 items-center">
@@ -94,7 +96,7 @@ export default function RankingAdminPage() {
           }}
           onClick={() => setTab('tiers')}
         >
-          段位表
+          {t('rankingAdmin.tierTable')}
         </button>
         <button
           className="btn btn-sm"
@@ -105,12 +107,12 @@ export default function RankingAdminPage() {
           }}
           onClick={() => setTab('uma')}
         >
-          马点配置
+          {t('rankingAdmin.umaConfig')}
         </button>
         <div className="flex-1" />
         {dirty && (
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-            <Save size={14} /> {saving ? '保存中...' : '保存修改'}
+            <Save size={14} /> {saving ? t('rankingAdmin.saving') : t('rankingAdmin.saveChanges')}
           </button>
         )}
         <button
@@ -120,7 +122,7 @@ export default function RankingAdminPage() {
           disabled={recalculating}
         >
           <RefreshCw size={14} style={{ animation: recalculating ? 'spin 1s linear infinite' : 'none' }} />
-          {recalculating ? '重算中...' : '一键重算'}
+          {recalculating ? t('rankingAdmin.recalculating') : t('rankingAdmin.recalculate')}
         </button>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -130,14 +132,14 @@ export default function RankingAdminPage() {
           <table className="w-full text-xs" style={{ minWidth: '700px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-light)' }}>段位</th>
-                <th className="text-center py-2 px-2" style={{ color: 'var(--color-text-light)' }}>顺序</th>
-                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>初始分</th>
-                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>升级pt</th>
-                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>打点分</th>
-                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>四位扣点</th>
-                <th className="text-center py-2 px-2" style={{ color: 'var(--color-text-light)' }}>保护</th>
-                <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-light)' }}>颜色</th>
+                <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.tierCol')}</th>
+                <th className="text-center py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.orderCol')}</th>
+                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.initialScoreCol')}</th>
+                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.promotionPtCol')}</th>
+                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.dajiangScoreCol')}</th>
+                <th className="text-right py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.fourthPenaltyCol')}</th>
+                <th className="text-center py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.protectionCol')}</th>
+                <th className="text-left py-2 px-2" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.colorCol')}</th>
               </tr>
             </thead>
             <tbody>
@@ -220,12 +222,12 @@ export default function RankingAdminPage() {
                     checked={config.is_active}
                     onChange={(e) => handleUmaChange(idx, 'is_active', e.target.checked)}
                   />
-                  启用
+                  {t('common.enabled')}
                 </label>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 <div>
-                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>返点</div>
+                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.returnPoint')}</div>
                   <input
                     type="number"
                     value={config.base_score}
@@ -234,7 +236,7 @@ export default function RankingAdminPage() {
                   />
                 </div>
                 <div>
-                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>一位马点</div>
+                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.uma1stLabel')}</div>
                   <input
                     type="number"
                     value={config.uma_1st}
@@ -243,7 +245,7 @@ export default function RankingAdminPage() {
                   />
                 </div>
                 <div>
-                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>二位马点</div>
+                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.uma2ndLabel')}</div>
                   <input
                     type="number"
                     value={config.uma_2nd}
@@ -252,7 +254,7 @@ export default function RankingAdminPage() {
                   />
                 </div>
                 <div>
-                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>三位马点</div>
+                  <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.uma3rdLabel')}</div>
                   <input
                     type="number"
                     value={config.uma_3rd}
@@ -262,7 +264,7 @@ export default function RankingAdminPage() {
                 </div>
                 {config.player_count === 4 && (
                   <div>
-                    <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>四位马点</div>
+                    <div className="text-xs mb-1" style={{ color: 'var(--color-text-light)' }}>{t('rankingAdmin.uma4thLabel')}</div>
                     <input
                       type="number"
                       value={config.uma_4th}
@@ -280,7 +282,7 @@ export default function RankingAdminPage() {
       {dirty && (
         <div className="fixed bottom-4 right-4 z-50">
           <button className="btn btn-primary shadow-lg" onClick={handleSave} disabled={saving}>
-            <Save size={14} /> {saving ? '保存中...' : '保存修改'}
+            <Save size={14} /> {saving ? t('rankingAdmin.saving') : t('rankingAdmin.saveChanges')}
           </button>
         </div>
       )}

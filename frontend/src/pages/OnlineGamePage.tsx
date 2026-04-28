@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { importOnlineGame, parseOnlineGameBatch, getRooms, createRoom, getRoom, retryOnlineGame, getAllGames, type OnlineParseItem } from '@/api/games';
 import { getPlayers, createPlayer, addMajsoulAccount, deletePlayer } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
+import { useTranslation } from 'react-i18next';
 import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
 import type { Player, Room, Game } from '@/types';
@@ -95,6 +96,7 @@ export default function OnlineGamePage() {
   const [retryResults, setRetryResults] = useState<{ gameId: string; ok: boolean; error?: string; start_time?: string; end_time?: string }[]>([]);
 
   const { showToast, ToastComponent } = useToast();
+  const { t } = useTranslation();
 
   const refreshPlayersDirectory = useCallback(async () => {
     const list = await getPlayers();
@@ -175,7 +177,7 @@ export default function OnlineGamePage() {
         location: location?.trim() || '线上',
         session_time: session || null,
       });
-      showToast('线上场已创建', 'success');
+      showToast(t('online.onlineRoomCreated'), 'success');
       setShowCreateRoom(false);
       await loadOnlineRooms();
       setRoomAndQuery(r.id);
@@ -188,7 +190,7 @@ export default function OnlineGamePage() {
 
   const parseBatch = async () => {
     if (!roomId) {
-      showToast('请先选择或创建「线上场」房间', 'error');
+      showToast(t('online.selectRoomFirst'), 'error');
       return;
     }
     const lines = urlsText
@@ -196,7 +198,7 @@ export default function OnlineGamePage() {
       .map((s) => s.trim())
       .filter(Boolean);
     if (lines.length === 0) {
-      showToast('请粘贴至少一条牌谱链接（每行一条）', 'error');
+      showToast(t('online.pasteAtLeastOne'), 'error');
       return;
     }
 
@@ -243,7 +245,7 @@ export default function OnlineGamePage() {
           original_line: orig,
           source_url: (r as { source_url: string }).source_url,
           ok: false,
-          error: (r as { error?: string }).error || '解析失败',
+          error: (r as { error?: string }).error || t('online.parseFailed'),
           bindings: {},
           import_selected: false,
         };
@@ -257,11 +259,11 @@ export default function OnlineGamePage() {
       } else {
         setShowBatchBindModal(false);
       }
-      showToast(`已解析 ${next.filter((x) => x.ok).length} / ${next.length} 条`, 'success');
+      showToast(t('online.parsedCount', { ok: next.filter((x) => x.ok).length, total: next.length }), 'success');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || (err instanceof Error ? err.message : '解析失败');
+         || (err instanceof Error ? err.message : t('online.parseFailed'));
       setParseError(msg);
       setRows([]);
       showToast(msg, 'error');
@@ -308,7 +310,7 @@ export default function OnlineGamePage() {
     setBindingForUid(bindContext.uid, player.id);
     void refreshPlayersDirectory();
     closeBindModal();
-    showToast('已绑定', 'success');
+    showToast(t('online.bound'), 'success');
   };
 
   const handleCreatePlayerAndBind = async (e: React.FormEvent) => {
@@ -316,7 +318,7 @@ export default function OnlineGamePage() {
     if (!bindContext) return;
     const nick = newPlayerNickname.trim();
     if (!nick) {
-      showToast('请填写雀士称呼', 'error');
+      showToast(t('online.fillNickname'), 'error');
       return;
     }
     setCreatePlayerLoading(true);
@@ -338,14 +340,14 @@ export default function OnlineGamePage() {
         }
         const msg =
           (mErr as { response?: { data?: { error?: string } } })?.response?.data?.error
-          || '该雀魂 UID 已在系统中';
-        showToast(`${msg}。请从下方列表选择已有雀士。`, 'error');
+          || t('online.uidDuplicate');
+        showToast(`${msg}${t('online.uidDuplicateHint')}`, 'error');
         return;
       }
       setBindingForUid(bindContext.uid, created.id);
       await refreshPlayersDirectory();
       closeBindModal();
-      showToast('已新建雀士并关联 UID', 'success');
+      showToast(t('online.playerCreated'), 'success');
     } catch (err) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error
@@ -444,9 +446,9 @@ export default function OnlineGamePage() {
         ...prev,
       ]);
       setRows((prev) => prev.filter((r) => r.id !== row.id));
-      showToast('已导入 1 局', 'success');
+      showToast(t('online.imported1'), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '导入失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('online.importFailed');
       showToast(msg, 'error');
     } finally {
       setImporting(false);
@@ -480,9 +482,9 @@ export default function OnlineGamePage() {
         }
       }
       setRows((prev) => prev.filter((r) => !doneIds.has(r.id)));
-      showToast(`已导入 ${n} 局`, 'success');
+      showToast(t('online.importedN', { n }), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '导入失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('online.importFailed');
       showToast(msg, 'error');
     } finally {
       setImporting(false);
@@ -495,7 +497,7 @@ export default function OnlineGamePage() {
       const games = await getAllGames({ game_type: 'online' });
       setOnlineGames(games.filter((g) => g.source_url));
     } catch {
-      showToast('加载线上对局列表失败', 'error');
+      showToast(t('online.loadOnlineGamesFailed'), 'error');
     } finally {
       setOnlineGamesLoaded(true);
     }
@@ -532,7 +534,7 @@ export default function OnlineGamePage() {
 
   const handleRetryAll = async () => {
     if (selectedRetryIds.size === 0) {
-      showToast('请先选择要对局', 'error');
+      showToast(t('online.selectGameFirst'), 'error');
       return;
     }
     const ids = [...selectedRetryIds];
@@ -555,7 +557,7 @@ export default function OnlineGamePage() {
       setRetryProgress({ current: i + 1, total: ids.length });
     }
     setRetrying(false);
-    showToast(`重新获取完成：${success} 成功，${fail} 失败`, success > 0 ? 'success' : 'error');
+    showToast(`${t('online.retryComplete')}${success} ${t('online.retrySuccess')}，${fail} 失败`, success > 0 ? 'success' : 'error');
     void loadOnlineGames();
   };
 
@@ -567,26 +569,26 @@ export default function OnlineGamePage() {
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
             <ListOrdered size={18} style={{ color: 'var(--color-primary-dark)' }} />
-            <h3 className="font-bold">1. 选择或创建「线上场」</h3>
+            <h3 className="font-bold">{t('online.step1Title')}</h3>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link to="/rooms" className="btn btn-sm btn-outline" style={{ textDecoration: 'none' }}>
-              <Home size={14} /> 房间管理
+              <Home size={14} /> {t('online.roomManagement')}
             </Link>
             <button type="button" className="btn btn-sm btn-primary" onClick={() => setShowCreateRoom(true)}>
-              新建线上场
+              {t('online.newOnlineRoom')}
             </button>
           </div>
         </div>
         <div className="form-group mb-0">
-          <label className="form-label">当前房间</label>
+          <label className="form-label">{t('online.currentRoom')}</label>
           <div className="flex flex-col sm:flex-row gap-2">
             <select
               className="form-input flex-1"
               value={roomId}
               onChange={(e) => setRoomAndQuery(e.target.value)}
             >
-              <option value="">— 请选择 —</option>
+              <option value="">{t('online.selectRoom')}</option>
               {onlineRooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}（{ROOM_TYPE_LABELS[r.room_type]}，{r.game_count} 局
@@ -598,12 +600,12 @@ export default function OnlineGamePage() {
         </div>
         {roomDetail && (
           <p className="text-sm mt-3" style={{ color: 'var(--color-text-light)' }}>
-            地点：{roomDetail.location || '—'}
-            {roomDetail.session_time && ` · 场次时间：${roomDetail.session_time}`}
+            {t('online.location')}{roomDetail.location || '—'}
+            {roomDetail.session_time && ` · ${t('online.sessionTime')}${roomDetail.session_time}`}
           </p>
         )}
         <div className="form-group mt-4">
-          <label className="form-label">对局时间（本页导入的默认时间）</label>
+          <label className="form-label">{t('online.defaultTimeLabel')}</label>
           <input
             type="datetime-local"
             className="form-input max-w-md"
@@ -612,7 +614,7 @@ export default function OnlineGamePage() {
             disabled={!roomId}
           />
           <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>
-            不修改则使用房间上的场次时间；两者皆可空（后端将用当前时间）。
+            {t('online.defaultTimeHint')}
           </p>
         </div>
       </div>
@@ -620,11 +622,11 @@ export default function OnlineGamePage() {
       <div className="card mb-6">
         <div className="flex items-center gap-2 mb-4">
           <Link2 size={18} style={{ color: 'var(--color-primary-dark)' }} />
-          <h3 className="font-bold">2. 批量粘贴牌谱链接</h3>
+          <h3 className="font-bold">{t('online.step2Title')}</h3>
         </div>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text-light)' }}>
-          每行一个链接；需先选择线上场。支持整段粘贴（如「雀魂牌谱 :https://…」），解析时会自动截取以 http(s) 开头的链接。
-          若与已有对局或本列表中其他行 URL 重复，默认不导入，需手动勾选「仍导入本条」后再导入。
+          {t('online.pasteHint')}
+          {t('online.dupHint')}
         </p>
         <textarea
           className="form-input w-full font-mono text-sm"
@@ -636,7 +638,7 @@ https://game.maj-soul.com/1/?paipu=..."
         />
         <div className="mt-3 flex flex-wrap gap-2">
           <button className="btn btn-primary" disabled={!roomId || parsing} onClick={() => { void parseBatch(); }}>
-            {parsing ? '解析中...' : '解析全部'}
+            {parsing ? t('online.parsing') : t('online.parseAll')}
           </button>
         </div>
       </div>
@@ -646,7 +648,7 @@ https://game.maj-soul.com/1/?paipu=..."
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div className="flex items-center gap-2">
             <RefreshCw size={18} style={{ color: 'var(--color-primary-dark)' }} />
-            <h3 className="font-bold">3. 重新获取线上牌谱时间</h3>
+            <h3 className="font-bold">{t('online.step3Title')}</h3>
           </div>
           <button
             type="button"
@@ -657,7 +659,7 @@ https://game.maj-soul.com/1/?paipu=..."
           </button>
         </div>
         <p className="text-sm mb-0" style={{ color: 'var(--color-text-light)' }}>
-          通过雀魂本地协议重新获取所有线上对局的开始/结束时间，并更新到数据库。限流 20 次/分钟。
+          {t('online.retryHint')}
         </p>
       </div>
 
@@ -666,7 +668,7 @@ https://game.maj-soul.com/1/?paipu=..."
           {!onlineGamesLoaded ? (
             <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>加载中...</p>
           ) : onlineGames.length === 0 ? (
-            <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>没有线上对局记录。</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>{t('online.noOnlineGames')}</p>
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -677,10 +679,10 @@ https://game.maj-soul.com/1/?paipu=..."
                     onClick={toggleRetrySelectAll}
                   >
                     {selectedRetryIds.size === onlineGames.length ? <CheckSquare size={14} /> : <Square size={14} />}
-                    {selectedRetryIds.size === onlineGames.length ? '取消全选' : '全选'}
+                    {selectedRetryIds.size === onlineGames.length ? t('online.deselectAll') : t('online.selectAll')}
                   </button>
                   <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
-                    已选 {selectedRetryIds.size} / {onlineGames.length} 局
+                    {t('online.selectedCount')} {selectedRetryIds.size} / {onlineGames.length} 局
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -693,7 +695,7 @@ https://game.maj-soul.com/1/?paipu=..."
                     }}
                     disabled={retrying || !onlineGamesLoaded}
                   >
-                    刷新列表
+                    {t('online.refreshList')}
                   </button>
                   <button
                     type="button"
@@ -702,7 +704,7 @@ https://game.maj-soul.com/1/?paipu=..."
                     onClick={() => { void handleRetryAll(); }}
                   >
                     <RefreshCw size={14} />
-                    {retrying ? `获取中 (${retryProgress.current}/${retryProgress.total})` : '开始获取'}
+                    {retrying ? `${t('online.fetching')} (${retryProgress.current}/${retryProgress.total})` : t('online.startFetch')}
                   </button>
                 </div>
               </div>
@@ -808,7 +810,7 @@ https://game.maj-soul.com/1/?paipu=..."
           >
             <AlertTriangle size={16} className="flex-shrink-0" style={{ marginTop: 2 }} />
             <div>
-              <div className="font-medium">解析失败</div>
+              <div className="font-medium">{t('online.parseFailed')}</div>
               <div className="mt-1" style={{ color: '#e74c3c' }}>{parseError}</div>
             </div>
           </div>
@@ -818,14 +820,14 @@ https://game.maj-soul.com/1/?paipu=..."
       {rows.length > 0 && (
         <div className="card mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-            <h3 className="font-bold m-0">解析结果与绑定</h3>
+            <h3 className="font-bold m-0">{t('online.parseResultTitle')}</h3>
             {unboundUidList.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="text-sm px-2 py-1 rounded-lg"
                   style={{ background: '#fff3e0', color: '#b45309', border: '1px solid #fed7aa' }}
                 >
-                  仍有 {unboundUidList.length} 个 UID 未关联
+                  {t('online.unboundUidCount')} {unboundUidList.length} {t('online.unboundUidSuffix')}
                 </span>
                 <button
                   type="button"
@@ -835,7 +837,7 @@ https://game.maj-soul.com/1/?paipu=..."
                     setShowBatchBindModal(true);
                   }}
                 >
-                  打开关联窗口
+                  {t('online.openBindWindow')}
                 </button>
               </div>
             )}
@@ -845,11 +847,11 @@ https://game.maj-soul.com/1/?paipu=..."
               className="p-3 rounded-xl mb-4 text-sm"
               style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}
             >
-              请先在弹窗中把本批牌谱里出现的待关联 UID（已去重）全部绑定到系统雀士，完成后即可使用「导入本局 / 导入全部已就绪」。
+              {t('online.bindInstruction')}
             </div>
           )}
           <p className="text-xs mb-3" style={{ color: 'var(--color-text-light)' }}>
-            不需要录入的对局可点「移除」，仅从本页列表删除，不影响已导入记录。
+            {t('online.removeUnusedHint')}
           </p>
           <div className="space-y-4">
             {rows.map((row) => {
@@ -866,7 +868,7 @@ https://game.maj-soul.com/1/?paipu=..."
                         className="btn btn-sm btn-outline inline-flex items-center gap-1"
                         style={{ fontSize: '0.6875rem' }}
                         onClick={() => removeParsedRow(row.id)}
-                        title="从列表移除"
+                        title={t('online.removeFromList')}
                       >
                         <Trash2 size={14} /> 移除
                       </button>
@@ -892,14 +894,14 @@ https://game.maj-soul.com/1/?paipu=..."
                       className="btn btn-sm btn-outline inline-flex items-center gap-1"
                       style={{ fontSize: '0.6875rem' }}
                       onClick={() => removeParsedRow(row.id)}
-                      title="本局不导入，从列表移除"
+                      title={t('online.removeFromListTitle')}
                     >
                       <Trash2 size={14} /> 移除
                     </button>
                   </div>
                   {row.original_line && row.original_line.trim() !== row.source_url.trim() && (
                     <div className="text-xs mb-1 rounded px-2 py-1" style={{ background: '#f3f4f6', color: 'var(--color-text-light)' }}>
-                      原始：{row.original_line}
+                      {t('online.originalLine')}{row.original_line}
                     </div>
                   )}
                   <div className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{row.source_url}</div>
@@ -910,18 +912,18 @@ https://game.maj-soul.com/1/?paipu=..."
                     >
                       <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
                       <div>
-                        {row.duplicate_in_db && <div>该牌谱链接与<strong>系统中已有线上对局</strong>重复。</div>}
-                        {row.duplicate_in_batch && <div>该链接在本批粘贴中<strong>与上文重复</strong>。</div>}
-                        <div className="mt-1">默认不导入；若仍要导入，请勾选下方「仍导入本条」。</div>
+                        {row.duplicate_in_db && <div>{t('online.dupInDb')}</div>}
+                        {row.duplicate_in_batch && <div>{t('online.dupInBatch')}</div>}
+                        <div className="mt-1">{t('online.dupImportHint')}</div>
                       </div>
                     </div>
                   )}
                   <div className="text-sm mb-2">
-                    模式 {d.game_mode === 'east_wind' ? '东风' : '半庄'} / {d.player_count} 人 · 分数和 {sum} / {exp}
+                    {t('online.mode')} {d.game_mode === 'east_wind' ? '东风' : '半庄'} / {d.player_count} 人 · {t('online.scoreSum')} {sum} / {exp}
                     {sum === exp ? ' ✓' : ' ✗'}
                     {d.start_time && (
                       <span className="ml-2 text-xs" style={{ color: 'var(--color-text-light)' }}>
-                        时间 {d.start_time}{d.end_time ? ` ~ ${d.end_time}` : ''}
+                        {t('online.time')} {d.start_time}{d.end_time ? ` ~ ${d.end_time}` : ''}
                       </span>
                     )}
                   </div>
@@ -966,19 +968,19 @@ https://game.maj-soul.com/1/?paipu=..."
                                 )}
                                 <div className="text-left min-w-0">
                                   <div className="text-sm font-medium truncate" style={{ maxWidth: '8rem' }}>{boundPlayer.nickname}</div>
-                                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>系统雀士</div>
+                                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('online.systemPlayer')}</div>
                                 </div>
                               </div>
                             )}
                             {bound && !boundPlayer && (
-                              <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>已关联雀士（加载中…）</span>
+                              <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('online.boundLoading')}</span>
                             )}
                             <button
                               type="button"
                               className="btn btn-sm btn-outline"
                               onClick={() => openBindModal(p.uid, p.nickname)}
                             >
-                              {bound ? '更换' : '绑定雀士'}
+                              {bound ? t('online.changeBind') : t('online.bindPlayer')}
                             </button>
                           </div>
                         </div>
@@ -993,7 +995,7 @@ https://game.maj-soul.com/1/?paipu=..."
                         checked={row.import_selected}
                         onChange={() => toggleRowImportSelected(row.id)}
                       />
-                      <span style={{ color: 'var(--color-text)' }}>仍导入本条（将写入一条新的线上对局记录）</span>
+                      <span style={{ color: 'var(--color-text)' }}>{t('online.importThis')}</span>
                     </label>
                   )}
                   <div className="mt-3 flex justify-end">
@@ -1003,7 +1005,7 @@ https://game.maj-soul.com/1/?paipu=..."
                       disabled={importing || !canImportOne(row)}
                       onClick={() => { void handleImportOne(row); }}
                     >
-                      <Download size={14} /> 导入本局
+                      <Download size={14} /> {t('online.importOne')}
                     </button>
                   </div>
                 </div>
@@ -1018,7 +1020,7 @@ https://game.maj-soul.com/1/?paipu=..."
                 disabled={importing || !canImportAll()}
                 onClick={() => { void handleImportAll(); }}
               >
-                导入全部已就绪
+                {t('online.importAll')}
               </button>
             </div>
           )}
@@ -1027,7 +1029,7 @@ https://game.maj-soul.com/1/?paipu=..."
 
       {importedGames.length > 0 && (
         <div className="card">
-          <h3 className="font-bold mb-3">本次已导入对局 ({importedGames.length})</h3>
+          <h3 className="font-bold mb-3">{t('online.importedTitle')} ({importedGames.length})</h3>
           <div className="space-y-2">
             {importedGames.map((game) => (
               <div key={game.id} className="p-3 rounded-xl" style={{ border: '1px solid var(--color-border)', background: 'white' }}>
@@ -1057,7 +1059,7 @@ https://game.maj-soul.com/1/?paipu=..."
                     style={{ color: 'var(--color-secondary-dark)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                     onClick={() => setPaipuOpenUrl(game.source_url.trim())}
                   >
-                    <ExternalLink size={10} /> 查看牌谱
+                    <ExternalLink size={10} /> {t('online.viewPaipu')}
                   </button>
                 )}
               </div>
@@ -1066,13 +1068,13 @@ https://game.maj-soul.com/1/?paipu=..."
         </div>
       )}
 
-      <Modal open={Boolean(paipuOpenUrl)} onClose={() => setPaipuOpenUrl(null)} title="打开雀魂牌谱">
-        <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>即将在新标签页打开外部网站，是否继续？</p>
+      <Modal open={Boolean(paipuOpenUrl)} onClose={() => setPaipuOpenUrl(null)} title={t('online.openMajsoulPaipuTitle')}>
+        <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>{t('online.openExternalConfirm')}</p>
         {paipuOpenUrl && (
           <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>{paipuOpenUrl}</p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuOpenUrl(null)}>取消</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuOpenUrl(null)}>{t('common.cancel')}</button>
           <button
             type="button"
             className="btn btn-primary btn-sm inline-flex items-center gap-1"
@@ -1086,24 +1088,24 @@ https://game.maj-soul.com/1/?paipu=..."
         </div>
       </Modal>
 
-      <Modal open={showCreateRoom} onClose={() => setShowCreateRoom(false)} title="新建线上场">
+      <Modal open={showCreateRoom} onClose={() => setShowCreateRoom(false)} title={t('online.createOnlineRoomTitle')}>
         <form onSubmit={(e) => { void handleCreateOnlineRoom(e); }}>
           <div className="form-group">
-            <label className="form-label">房间名称 *</label>
-            <input name="name" className="form-input" required placeholder="如：周六友人线上" autoFocus />
+            <label className="form-label">{t('online.roomNameLabel')}</label>
+            <input name="name" className="form-input" required placeholder={t('online.roomNamePlaceholder')} autoFocus />
           </div>
           <div className="form-group">
-            <label className="form-label">地点/备注</label>
-            <input name="location" className="form-input" placeholder="默认可留空，将记为 线上" />
+            <label className="form-label">{t('online.locationLabel')}</label>
+            <input name="location" className="form-input" placeholder={t('online.locationPlaceholder')} />
           </div>
           <div className="form-group">
-            <label className="form-label">场次时间</label>
+            <label className="form-label">{t('online.sessionTimeLabel')}</label>
             <input name="session_time" type="datetime-local" className="form-input" />
           </div>
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreateRoom(false)}>取消</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreateRoom(false)}>{t('common.cancel')}</button>
             <button type="submit" className="btn btn-primary btn-sm" disabled={roomCreateLoading}>
-              {roomCreateLoading ? '创建中' : '创建'}
+              {roomCreateLoading ? t('online.creating') : t('common.create')}
             </button>
           </div>
         </form>
@@ -1114,13 +1116,13 @@ https://game.maj-soul.com/1/?paipu=..."
         onClose={() => setShowBatchBindModal(false)}
         title={
           unboundUidList.length > 0
-            ? `关联雀士（${unboundUidList.length} 个 UID 待关联）`
-            : '关联雀士（已全部完成）'
+            ? `${t('online.bindPlayer')}（${unboundUidList.length} 个 UID 待关联）`
+            : t('online.allBoundTitle')
         }
       >
         {unboundUidList.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
-            本批牌谱中的雀魂账号均已关联到系统雀士，可关闭本窗口，在下方核对分数后导入对局。
+            {t('online.allBoundDesc')}
           </p>
         ) : (
           <ul className="space-y-2 max-h-72 overflow-y-auto">
@@ -1131,7 +1133,7 @@ https://game.maj-soul.com/1/?paipu=..."
                 style={{ background: 'var(--color-primary-light)', border: '1px solid var(--color-border)' }}
               >
                 <div>
-                  <div className="font-medium text-sm">{nickname || '（无昵称）'}</div>
+                  <div className="font-medium text-sm">{nickname || t('online.noNickname')}</div>
                   <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>UID {uid}</div>
                 </div>
                 <button
@@ -1139,7 +1141,7 @@ https://game.maj-soul.com/1/?paipu=..."
                   className="btn btn-sm btn-primary"
                   onClick={() => openBindModal(uid, nickname, { fromBatch: true })}
                 >
-                  去关联
+                  {t('online.goBind')}
                 </button>
               </li>
             ))}
@@ -1147,7 +1149,7 @@ https://game.maj-soul.com/1/?paipu=..."
         )}
         <div className="mt-4 flex justify-end">
           <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowBatchBindModal(false)}>
-            关闭
+            {t('common.close')}
           </button>
         </div>
       </Modal>
@@ -1155,7 +1157,7 @@ https://game.maj-soul.com/1/?paipu=..."
       <Modal
         open={showBindModal}
         onClose={closeBindModal}
-        title={bindContext ? `绑定雀士 - ${bindContext.nickname} (UID: ${bindContext.uid})` : '绑定'}
+        title={bindContext ? `${t('online.bindPlayer')} - ${bindContext.nickname} (UID: ${bindContext.uid})` : t('online.bindPlayer')}
       >
         <form
           onSubmit={(e) => { void handleCreatePlayerAndBind(e); }}
@@ -1164,28 +1166,28 @@ https://game.maj-soul.com/1/?paipu=..."
         >
           <div className="flex items-center gap-2 mb-2">
             <UserPlus size={16} style={{ color: 'var(--color-primary-dark)' }} />
-            <span className="text-sm font-bold">没有该选手？快速新建</span>
+            <span className="text-sm font-bold">{t('online.noPlayerQuickCreate')}</span>
           </div>
           <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
-            称呼默认可用牌谱昵称；创建后会自动把当前 UID 记到该雀士档案。
+            {t('online.quickCreateHint')}
           </p>
           <div className="form-group mb-2">
-            <label className="form-label text-xs">雀士称呼 *</label>
+            <label className="form-label text-xs">{t('online.playerNameLabel')}</label>
             <input
               className="form-input"
               value={newPlayerNickname}
               onChange={(e) => setNewPlayerNickname(e.target.value)}
-              placeholder="显示名称"
+              placeholder={t('online.playerNamePlaceholder')}
               maxLength={100}
             />
           </div>
           <div className="form-group mb-3">
-            <label className="form-label text-xs">真实姓名（选填）</label>
+            <label className="form-label text-xs">{t('online.realNameOptional')}</label>
             <input
               className="form-input"
               value={newPlayerRealName}
               onChange={(e) => setNewPlayerRealName(e.target.value)}
-              placeholder="可空"
+              placeholder={t('online.realNameOptionalPlaceholder')}
               maxLength={50}
             />
           </div>
@@ -1194,10 +1196,10 @@ https://game.maj-soul.com/1/?paipu=..."
             className="btn btn-sm btn-primary w-full"
             disabled={createPlayerLoading}
           >
-            {createPlayerLoading ? '创建中…' : '创建并绑定此 UID'}
+            {createPlayerLoading ? t('online.creating') : t('online.createAndBind')}
           </button>
         </form>
-        <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-light)' }}>或选择已有雀士</p>
+        <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text-light)' }}>{t('online.orSelectExisting')}</p>
         <SearchBar
           query={playerQuery}
           onQueryChange={(q) => {

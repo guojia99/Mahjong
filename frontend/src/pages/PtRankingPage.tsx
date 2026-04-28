@@ -4,6 +4,7 @@ import { getPtRanking } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import type { PtRankingItem } from '@/types';
 import { Trophy } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -24,13 +25,14 @@ export default function PtRankingPage() {
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [ptScope, setPtScope] = useState<PtScope>('');
   const { showToast, ToastComponent } = useToast();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const params: Record<string, string> = {};
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (ptScope) params.game_type = ptScope;
-    getPtRanking(params).then(setRankings).catch(() => showToast('加载排名失败'));
+    getPtRanking(params).then(setRankings).catch(() => showToast(t('ptRanking.loadFailed')));
   }, [playerCount, gameMode, ptScope, showToast]);
 
   const maxPt = rankings.length > 0 ? Math.max(...rankings.map(r => r.total_pt)) : 1;
@@ -42,7 +44,7 @@ export default function PtRankingPage() {
       {ToastComponent}
       <div className="flex items-center gap-2 mb-6">
         <Trophy size={20} style={{ color: '#f0b830' }} />
-        <h2 className="text-lg font-bold">PT排名</h2>
+        <h2 className="text-lg font-bold">{t('ptRanking.title')}</h2>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6 items-center">
@@ -52,9 +54,9 @@ export default function PtRankingPage() {
         >
           {(
             [
-              { v: '' as const, label: '全部对局' },
-              { v: 'offline' as const, label: '仅线下' },
-              { v: 'online' as const, label: '仅线上' },
+              { v: '' as const, label: t('ptRanking.allGames') },
+              { v: 'offline' as const, label: t('ptRanking.offlineOnly') },
+              { v: 'online' as const, label: t('ptRanking.onlineOnly') },
             ] as const
           ).map(({ v, label }, i) => (
             <button
@@ -73,20 +75,20 @@ export default function PtRankingPage() {
           ))}
         </div>
         <select value={playerCount} onChange={(e) => setPlayerCount(e.target.value as typeof playerCount)} style={SELECT_STYLE}>
-          <option value="">全部人数</option>
-          <option value="4">四麻</option>
-          <option value="3">三麻</option>
+          <option value="">{t('ptRanking.allPlayerCount')}</option>
+          <option value="4">{t('playerCount.yonma')}</option>
+          <option value="3">{t('playerCount.sanma')}</option>
         </select>
         <select value={gameMode} onChange={(e) => setGameMode(e.target.value as typeof gameMode)} style={SELECT_STYLE}>
-          <option value="">全部模式</option>
-          <option value="east_wind">东风</option>
-          <option value="half_match">半庄</option>
+          <option value="">{t('ptRanking.allMode')}</option>
+          <option value="east_wind">{t('gameMode.eastWind')}</option>
+          <option value="half_match">{t('gameMode.halfMatch')}</option>
         </select>
       </div>
 
       {rankings.length === 0 ? (
         <div className="empty-state card">
-          <p className="text-sm">暂无数据</p>
+          <p className="text-sm">{t('ptRanking.noData')}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -114,7 +116,7 @@ export default function PtRankingPage() {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{item.player.nickname}</div>
-                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>{item.game_count} 局</div>
+                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>{item.game_count} {t('common.unit.round')}</div>
                   <div className="mt-1 h-2 rounded-full overflow-hidden" style={{ background: '#f0f0f0', width: '100%' }}>
                     <div style={{
                       width: `${Math.max(barWidth, 4)}%`,
