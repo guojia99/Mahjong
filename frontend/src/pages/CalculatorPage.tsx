@@ -34,8 +34,8 @@ const TILE_ROWS = [
 const RED_TILES = ['0m', '0p', '0s'];
 
 const YAKU_OPTIONS = [
-    {value: 'riichi'}, {value: 'double-riichi'},
-    {value: 'ippatsu'}, {value: 'haite'},
+    {value: 'riichi'}, {value: 'doubleRiichi'},
+    {value: 'ippatsu'}, {value: 'haitei'},
     {value: 'houte'}, {value: 'rinnshann'},
     {value: 'chankan'}, {value: 'tenhou'}, {value: 'chiihou'},
 ];
@@ -77,8 +77,8 @@ function cvtFuro(s: { type: string; name: string; red?: boolean }): Block {
 
 function cvtYaku(x: string): number {
     const m: Record<string, number> = {
-        riichi: RIICHI, 'double-riichi': DOUBLE_RIICHI, ippatsu: IPPATSU,
-        haite: HAITEI_RAOYUE, houte: HOUTEI_RAOYUI, rinnshann: RINNSHANN_KAIHOU,
+        riichi: RIICHI, doubleRiichi: DOUBLE_RIICHI, ippatsu: IPPATSU,
+        haitei: HAITEI_RAOYUE, houte: HOUTEI_RAOYUI, rinnshann: RINNSHANN_KAIHOU,
         chankan: CHANKAN, tenhou: TENHOU, chiihou: CHIIHOU,
     };
     return m[x] || 0;

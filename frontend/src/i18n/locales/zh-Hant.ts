@@ -27,6 +27,8 @@ const zhHant: Record<string, string> = {
   'common.unit.round': '局',
   'common.unit.person': '人',
   'common.unit.score': '分',
+  'common.gamesUnit': '局',
+  'common.peopleUnit': '人',
 
   // ===== App =====
   'app.name': '嘉の雀樁',
@@ -211,6 +213,7 @@ const zhHant: Record<string, string> = {
   'gameDetail.yakumanRecord': '役満牌譜',
   'gameDetail.deleteGame': '刪除對局',
   'gameDetail.editGame': '編輯',
+  'gameDetail.editGameModalTitle': '編輯對局資訊',
   'gameDetail.playerCountLabel': '對局選手',
   'gameDetail.totalLabel': '合計:',
   'gameDetail.dealerStart': '東起',
@@ -426,6 +429,7 @@ const zhHant: Record<string, string> = {
   'calculator.load': '載入',
   'calculator.back': '返回',
   'calculator.close': '關閉',
+  'calculator.cancel': '取消',
   'calculator.selectChiSequence': '選擇吃的順子：',
   'calculator.currentSelection': '當前選擇',
   'calculator.handLabel': '手牌',
@@ -440,6 +444,7 @@ const zhHant: Record<string, string> = {
   'calculator.fuCalcProcess': '符計算過程',
   'calculator.noYaku': '無役/無和牌型',
   'calculator.yakumanResult': '倍役満',
+  'calculator.hanUnit': '翻',
   'calculator.handUnit': '手牌',
 
   // ===== PracticePage =====
@@ -543,7 +548,7 @@ const zhHant: Record<string, string> = {
   'playerProfile.filterAll': '全部',
   'playerProfile.gameSource': '對局來源',
   'playerProfile.chartRounds': '曲線局數',
-  'playerProfile.recentN': '最近{n}局',
+  'playerProfile.recentN': '最近{{n}}局',
   'playerProfile.totalGamesLabel': '總對局',
   'playerProfile.totalPt': '總PT',
   'playerProfile.rankRateTitle': '位率',
@@ -556,7 +561,7 @@ const zhHant: Record<string, string> = {
   'playerProfile.cumPtUnit': 'pt',
   'playerProfile.noDataInCondition': '該條件下暫無資料',
   'playerProfile.noGameRecords': '暫無對局記錄',
-  'playerProfile.rankN': '第{n}名',
+  'playerProfile.rankN': '第{{n}}名',
   'playerProfile.noYakumanRecords': '暫無役満記錄',
   'playerProfile.nicknameLabel': '暱稱',
   'playerProfile.realNameLabel': '真實姓名',

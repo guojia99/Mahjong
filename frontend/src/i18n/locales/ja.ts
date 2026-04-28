@@ -27,6 +27,8 @@ const ja: Record<string, string> = {
   'common.unit.round': '局',
   'common.unit.person': '人',
   'common.unit.score': '点',
+  'common.gamesUnit': '局',
+  'common.peopleUnit': '人',
 
   // ===== App =====
   'app.name': '嘉の雀桩',
@@ -211,6 +213,7 @@ const ja: Record<string, string> = {
   'gameDetail.yakumanRecord': '役満牌譜',
   'gameDetail.deleteGame': '対局を削除',
   'gameDetail.editGame': '編集',
+  'gameDetail.editGameModalTitle': '対局情報の編集',
   'gameDetail.playerCountLabel': '対局者',
   'gameDetail.totalLabel': '合計:',
   'gameDetail.dealerStart': '東起',
@@ -426,6 +429,7 @@ const ja: Record<string, string> = {
   'calculator.load': '読み込む',
   'calculator.back': '戻る',
   'calculator.close': '閉じる',
+  'calculator.cancel': 'キャンセル',
   'calculator.selectChiSequence': 'チーの順子を選択：',
   'calculator.currentSelection': '現在の選択',
   'calculator.handLabel': '手牌',
@@ -440,6 +444,7 @@ const ja: Record<string, string> = {
   'calculator.fuCalcProcess': '符計算過程',
   'calculator.noYaku': '役なし/和了形なし',
   'calculator.yakumanResult': '倍役満',
+  'calculator.hanUnit': '翻',
   'calculator.handUnit': '手牌',
 
   // ===== PracticePage =====
@@ -543,7 +548,7 @@ const ja: Record<string, string> = {
   'playerProfile.filterAll': '全て',
   'playerProfile.gameSource': '対局ソース',
   'playerProfile.chartRounds': 'チャート表示局数',
-  'playerProfile.recentN': '最近{n}局',
+  'playerProfile.recentN': '最近{{n}}局',
   'playerProfile.totalGamesLabel': '総対局',
   'playerProfile.totalPt': '総PT',
   'playerProfile.rankRateTitle': '位率',
@@ -556,7 +561,7 @@ const ja: Record<string, string> = {
   'playerProfile.cumPtUnit': 'pt',
   'playerProfile.noDataInCondition': 'この条件ではデータがありません',
   'playerProfile.noGameRecords': '対局記録がありません',
-  'playerProfile.rankN': '第{n}位',
+  'playerProfile.rankN': '第{{n}}位',
   'playerProfile.noYakumanRecords': '役満記録がありません',
   'playerProfile.nicknameLabel': 'ニックネーム',
   'playerProfile.realNameLabel': '本名',

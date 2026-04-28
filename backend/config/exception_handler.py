@@ -1,13 +1,10 @@
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from rest_framework import status
-from django.utils.translation import gettext_lazy
 
 
 def _resolve(s):
-    if isinstance(s, gettext_lazy):
-        return str(s)
-    return s
+    return str(s) if s else ''
 
 
 def custom_exception_handler(exc, context):
