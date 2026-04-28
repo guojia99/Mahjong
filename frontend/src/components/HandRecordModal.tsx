@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { GamePlayerInfo, MeldInfo } from '@/types';
 import { YAKUMAN_LIST, TILE_ORDER, HAND_RECORD_TYPE_LABELS } from '@/types';
 
@@ -99,6 +100,7 @@ interface MeldInputProps {
 }
 
 function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
+  const { t } = useTranslation();
   const [activeMeld, setActiveMeld] = useState(-1);
   const newMeld = () => {
     if (melds.length >= 4) return;
@@ -145,8 +147,8 @@ function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold">吃碰杠（最多4组）</span>
-        <button type="button" onClick={newMeld} className="btn btn-sm btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.625rem' }} disabled={melds.length >= 4}>+ 添加</button>
+        <span className="text-xs font-semibold">{t('handRecord.meldHint')}</span>
+        <button type="button" onClick={newMeld} className="btn btn-sm btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.625rem' }} disabled={melds.length >= 4}>{t('handRecord.addMeld')}</button>
       </div>
       {melds.map((meld, mIdx) => (
         <div key={mIdx} style={{
@@ -163,14 +165,14 @@ function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
               }}
               style={{ padding: '0.125rem 0.375rem', fontSize: '0.625rem', borderRadius: '0.25rem', border: '1px solid var(--color-border)' }}
             >
-              <option value="chi">吃</option>
-              <option value="pon">碰</option>
-              <option value="kan">杠</option>
+              <option value="chi">{t('handRecord.meldChi')}</option>
+              <option value="pon">{t('handRecord.meldPon')}</option>
+              <option value="kan">{t('handRecord.meldKan')}</option>
             </select>
             <button type="button" onClick={() => setActiveMeld(mIdx)} className="text-xs" style={{ color: 'var(--color-primary-dark)', background: 'none', border: 'none', cursor: 'pointer' }}>
-              {activeMeld === mIdx ? '编辑中' : '编辑'}
+              {activeMeld === mIdx ? t('handRecord.editing') : t('handRecord.edit')}
             </button>
-            <button type="button" onClick={() => removeMeld(mIdx)} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>删除</button>
+            <button type="button" onClick={() => removeMeld(mIdx)} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>{t('handRecord.delete')}</button>
           </div>
           {meld.tiles.length > 0 && (() => {
             const groups: { type: 'stack' | 'single'; tile: string; orientation: 'h' | 'v'; indices: number[] }[] = [];
@@ -251,7 +253,7 @@ function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
       {activeMeld >= 0 && (
         <div className="p-2 rounded-xl" style={{ border: '1px solid var(--color-primary)', background: '#fff5f9' }}>
           <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-primary-dark)' }}>
-            横摆牌
+            {t('handRecord.horizontalTile')}
           </div>
           <div className="flex flex-wrap gap-1 mb-2">
             {TILE_ORDER.map((tile) => {
@@ -300,7 +302,7 @@ function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
             })}
           </div>
           <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-primary-dark)' }}>
-            竖牌
+            {t('handRecord.verticalTile')}
           </div>
           <div className="flex flex-wrap gap-1">
             {[...TILE_ORDER, 'B' as const].map((tile) => {
@@ -330,7 +332,7 @@ function MeldInput({ melds, onChange, handTiles }: MeldInputProps) {
                     flexShrink: 0,
                   }}
                 >
-                  <img src={tileImgSrc(tile)} alt={isBack ? '暗杠盖牌' : tile} draggable={false}
+                  <img src={tileImgSrc(tile)} alt={isBack ? t('handRecord.ankanTile') : tile} draggable={false}
                     style={{ height: '100%', width: 'auto', borderRadius: '0.2rem' }} />
                   {count > 0 && (
                     <span style={{
@@ -370,6 +372,7 @@ interface Props {
 }
 
 export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
+  const { t } = useTranslation();
   const [playerId, setPlayerId] = useState('');
   const [recordType, setRecordType] = useState<string>('yakuman');
   const [selectedYakumans, setSelectedYakumans] = useState<string[]>([]);
@@ -440,13 +443,13 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ maxWidth: '42rem' }} onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold mb-4">添加役满牌谱</h3>
+        <h3 className="text-lg font-bold mb-4">{t('handRecord.addTitle')}</h3>
 
         <div className="space-y-4">
           <div className="form-group">
-            <label className="form-label">雀士</label>
+            <label className="form-label">{t('handRecord.playerLabel')}</label>
             <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="form-input">
-              <option value="">选择雀士</option>
+              <option value="">{t('handRecord.selectPlayer')}</option>
               {players.map((gp) => (
                 <option key={gp.player.id} value={gp.player.id}>{gp.player.nickname}</option>
               ))}
@@ -454,7 +457,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">类型</label>
+            <label className="form-label">{t('handRecord.typeLabel')}</label>
             <select
               value={recordType}
               onChange={(e) => {
@@ -471,7 +474,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           </div>
 
           <div className="form-group">
-            <label className="form-label">役种（可多选，至少一个）</label>
+            <label className="form-label">{t('handRecord.yakuLabel')}</label>
             <div className="flex flex-wrap gap-1.5">
               {YAKUMAN_LIST.map((y) => (
                 <button
@@ -495,7 +498,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
 
           {recordType === 'yakuman' && (
           <div className="form-group">
-            <label className="form-label">胡牌方式</label>
+            <label className="form-label">{t('handRecord.winMethodLabel')}</label>
             <div className="flex gap-2">
               {(['tsumo', 'ron'] as const).map((wt) => (
                 <button
@@ -520,7 +523,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
 
           <div className="form-group">
             <div className="flex items-center gap-2 flex-wrap">
-              <label className="form-label" style={{ marginBottom: 0, minWidth: '2.5rem' }}>手牌</label>
+              <label className="form-label" style={{ marginBottom: 0, minWidth: '2.5rem' }}>{t('handRecord.handLabel')}</label>
               <button type="button" onClick={() => setSelectingFor(selectingFor === 'hand' ? null : 'hand')}
                 className="btn btn-sm" style={{
                   padding: '0.125rem 0.5rem', fontSize: '0.625rem',
@@ -528,11 +531,11 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
                   color: selectingFor === 'hand' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
                   border: selectingFor === 'hand' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
                 }}>
-                {selectingFor === 'hand' ? '选择中...' : '选牌'}
+                {selectingFor === 'hand' ? t('handRecord.selecting') : t('handRecord.selectTile')}
               </button>
               {handTiles.length > 0 && (
                 <button type="button" onClick={() => setHandTiles([])}
-                  className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>清空</button>
+                  className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>{t('handRecord.clearHand')}</button>
               )}
             </div>
           </div>
@@ -540,7 +543,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           {recordType === 'yakuman' && (
             <div className="form-group">
               <div className="flex items-center gap-2 flex-wrap">
-                <label className="form-label" style={{ marginBottom: 0, minWidth: '2.5rem' }}>和牌</label>
+                <label className="form-label" style={{ marginBottom: 0, minWidth: '2.5rem' }}>{t('handRecord.winningLabel')}</label>
                 <button
                   type="button"
                   onClick={() => setSelectingFor(selectingFor === 'winning' ? null : 'winning')}
@@ -552,7 +555,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
                     border: selectingFor === 'winning' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
                   }}
                 >
-                  {selectingFor === 'winning' ? '选择中...' : '选和牌'}
+                  {selectingFor === 'winning' ? t('handRecord.selecting') : t('handRecord.selectWinning')}
                 </button>
                 {winningTile && (
                   <button
@@ -561,7 +564,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
                     className="text-xs"
                     style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                   >
-                    清除
+                    {t('handRecord.clearWinning')}
                   </button>
                 )}
               </div>
@@ -571,7 +574,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           {selectingFor && (
             <div className="p-3 rounded-xl" style={{ border: '1px solid var(--color-primary)', background: '#fff5f9' }}>
               <div className="text-xs font-semibold mb-2" style={{ color: 'var(--color-primary-dark)' }}>
-                {selectingFor === 'hand' ? '点击选择手牌' : selectingFor === 'winning' ? '点击选择和牌（胡牌张）' : ''}
+                {selectingFor === 'hand' ? t('handRecord.clickSelectHand') : selectingFor === 'winning' ? t('handRecord.clickSelectWinning') : ''}
               </div>
               <div className="flex flex-wrap gap-1">
                 {TILE_ORDER.map((tile) => {
@@ -600,7 +603,7 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           <div className="p-2 rounded-xl" style={{ border: '1px solid var(--color-border)', background: '#fafafa' }}>
             <div className="flex items-end gap-0.5 flex-wrap">
               {sortedHand.length === 0 ? (
-                <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>最多{maxHandTiles}张，红5与正常5共享数量</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('handRecord.handMaxHint', { n: maxHandTiles })}</span>
               ) : (
                 sortedHand.map((tile, index) => {
                   return (
@@ -666,19 +669,19 @@ export default function HandRecordModal({ players, onSubmit, onClose }: Props) {
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setMeldExpand(!meldExpand)}
               className="btn btn-sm btn-outline" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}>
-              {meldExpand ? '收起' : '添加'}吃碰杠
+              {meldExpand ? t('handRecord.meldExpanded') : t('handRecord.meldCollapsed')}
             </button>
             {melds.length > 0 && (
-              <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>（点击牌可移除）</span>
+              <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('handRecord.meldRemoveHint')}</span>
             )}
           </div>
           {meldExpand && <MeldInput melds={melds} onChange={setMelds} handTiles={handTiles} />}
 
           <div className="flex gap-2 mt-4">
             <button className="btn btn-primary flex-1" onClick={handleSubmit} disabled={!canSubmit}>
-              添加
+              {t('handRecord.submit')}
             </button>
-            <button className="btn btn-outline" onClick={onClose}>取消</button>
+            <button className="btn btn-outline" onClick={onClose}>{t('handRecord.cancel')}</button>
           </div>
         </div>
       </div>

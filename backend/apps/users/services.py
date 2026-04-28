@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
+from django.utils.translation import gettext_lazy as _
 from common.exceptions import BusinessException
 
 
@@ -8,9 +9,9 @@ class AuthService:
     def login(request, username, password):
         user = authenticate(request, username=username, password=password)
         if user is None:
-            raise BusinessException('用户名或密码错误', code=401)
+            raise BusinessException(_('用户名或密码错误'), code=401)
         if not user.is_staff:
-            raise BusinessException('仅管理员可登录', code=403)
+            raise BusinessException(_('仅管理员可登录'), code=403)
         token, _ = Token.objects.get_or_create(user=user)
         return {'user': user, 'token': token.key}
 

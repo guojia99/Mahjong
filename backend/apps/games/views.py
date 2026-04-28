@@ -24,6 +24,7 @@ from .services import (
     game_detail_with_pt,
 )
 from common.exceptions import BusinessException
+from django.utils.translation import gettext_lazy as _
 from apps.players.models import Player, MahjongSoulAccount
 
 logger = logging.getLogger(__name__)
@@ -80,7 +81,7 @@ class RoomDetailView(APIView):
     def delete(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
         if room.games.exists():
-            raise BusinessException('该房间存在对局记录，无法删除')
+            raise BusinessException(_('该房间存在对局记录，无法删除'))
         room.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -137,7 +138,7 @@ class RoomGameListView(APIView):
     def post(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
         if room.status == 'closed':
-            return Response({'error': '房间已关闭，无法新增对局'}, status=400)
+            return Response({'error': _('房间已关闭，无法新增对局')}, status=400)
         copy_from = request.data.get('copy_from')
         if copy_from:
             from_game = get_object_or_404(Game, pk=copy_from)
@@ -236,7 +237,7 @@ class GameShuffleSeatsView(APIView):
     def post(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
         if game.is_scored:
-            return Response({'error': '对局已录分，无法调整席次'}, status=400)
+            return Response({'error': _('对局已录分，无法调整席次')}, status=400)
         gps = list(game.game_players.all())
         seats = list(range(len(gps)))
         random.shuffle(seats)
@@ -258,16 +259,16 @@ class OnlineGameParseView(APIView):
         raw = request.query_params.get('url', '')
         source_url = normalize_paipu_input_url(raw)
         if not source_url:
-            return Response({'error': '请提供牌谱链接（需包含 https:// 或 http://）'}, status=400)
+            return Response({'error': _('请提供牌谱链接（需包含 https:// 或 http://）')}, status=400)
 
         try:
             result = analyze_paipu_url(source_url)
         except Exception as e:
             logger.error(f"解析牌谱失败: {e}", exc_info=True)
-            return Response({'error': f'解析牌谱失败: {str(e)}'}, status=500)
+            return Response({'error': str(_('解析牌谱失败: %(e)s') % {'e': str(e)})}, status=500)
 
         if not result:
-            return Response({'error': '未找到牌谱数据，请检查链接是否有效'}, status=404)
+            return Response({'error': _('未找到牌谱数据，请检查链接是否有效')}, status=404)
 
         uid_list = [p['uid'] for p in result['players']]
         bound_accounts = MahjongSoulAccount.objects.filter(uid__in=uid_list).select_related('player')
@@ -308,18 +309,18 @@ class OnlineGameParseBatchView(APIView):
     def post(self, request):
         urls = request.data.get('urls')
         if not isinstance(urls, list) or not urls:
-            return Response({'error': '请提供 urls 数组'}, status=400)
+            return Response({'error': str(_('请提供 urls 数组'))}, status=400)
         from services.majsoul import analyze_paipu_url, normalize_paipu_input_url
 
         results = []
         for u in urls:
             line = (u or '').strip() if isinstance(u, str) else ''
             if not line:
-                results.append({'source_url': '', 'ok': False, 'error': '空行'})
+                results.append({'source_url': '', 'ok': False, 'error': str(_('空行'))})
                 continue
             normalized = normalize_paipu_input_url(line)
             if not normalized:
-                results.append({'source_url': line, 'ok': False, 'error': '未识别到有效的 http(s) 牌谱链接'})
+                results.append({'source_url': line, 'ok': False, 'error': str(_('未识别到有效的 http(s) 牌谱链接'))})
                 continue
             try:
                 result = analyze_paipu_url(normalized)
@@ -372,9 +373,9 @@ class OnlineGameImportView(APIView):
         room_id = data['room_id']
         room = get_object_or_404(Room, pk=room_id)
         if room.room_type != 'online':
-            return Response({'error': '请选择「线上场」房间'}, status=400)
+            return Response({'error': str(_('请选择「线上场」房间'))}, status=400)
         if room.status != 'open':
-            return Response({'error': '房间已关闭，无法导入'}, status=400)
+            return Response({'error': str(_('房间已关闭，无法导入'))}, status=400)
 
         from services.majsoul import normalize_paipu_input_url
 
@@ -392,7 +393,7 @@ class OnlineGameImportView(APIView):
             if exists and not allow_duplicate_url:
                 return Response(
                     {
-                        'error': '该牌谱链接已在系统中存在对局。若仍要再导入一条记录，请在导入页勾选「仍导入本条」后重试。',
+                        'error': str(_('该牌谱链接已在系统中存在对局。若仍要再导入一条记录，请在导入页勾选「仍导入本条」后重试。')),
                     },
                     status=400,
                 )
@@ -418,12 +419,12 @@ class BindMajsoulAccountView(APIView):
         account_id = request.data.get('account_id')
         player_id = request.data.get('player_id')
         if not account_id or not player_id:
-            return Response({'error': '请提供account_id和player_id'}, status=400)
+            return Response({'error': str(_('请提供account_id和player_id'))}, status=400)
 
         try:
             player = Player.objects.get(pk=player_id)
         except Player.DoesNotExist:
-            return Response({'error': '雀士不存在'}, status=404)
+            return Response({'error': str(_('雀士不存在'))}, status=404)
 
         try:
             account = PlayerService.bind_majsoul_account(account_id, player)
@@ -544,7 +545,7 @@ class PlayerStatsView(APIView):
 
         rank_rates = {}
         for rank, count in rank_distribution.items():
-            rank_rates[f'{rank}位率'] = round(count / total_games * 100, 1) if total_games > 0 else 0
+            rank_rates[f'{rank}'] = round(count / total_games * 100, 1) if total_games > 0 else 0
 
         recent_slice = rows[:recent_limit]
         recent_ranking = recent_slice
@@ -753,24 +754,24 @@ class OnlineGameRetryView(APIView):
     def post(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
         if game.game_type != 'online':
-            return Response({'error': '仅线上对局可重新获取'}, status=400)
+            return Response({'error': str(_('仅线上对局可重新获取'))}, status=400)
         if not game.source_url:
-            return Response({'error': '该对局无牌谱链接，无法重新获取'}, status=400)
+            return Response({'error': str(_('该对局无牌谱链接，无法重新获取'))}, status=400)
 
         from services.majsoul import fetch_paipu_records, normalize_paipu_input_url, extract_paipu_uuid
 
         url = normalize_paipu_input_url(game.source_url)
         if not url:
-            return Response({'error': '牌谱链接无效'}, status=400)
+            return Response({'error': str(_('牌谱链接无效'))}, status=400)
 
         try:
             records = fetch_paipu_records([url])
         except Exception as e:
             logger.error('重新获取牌谱失败 game=%s: %s', pk, e, exc_info=True)
-            return Response({'error': f'牌谱获取失败: {e}'}, status=500)
+            return Response({'error': str(_('牌谱获取失败: %(e)s') % {'e': e})}, status=500)
 
         if not records or len(records) == 0:
-            return Response({'error': '未获取到牌谱数据'}, status=404)
+            return Response({'error': str(_('未获取到牌谱数据'))}, status=404)
 
         rec = records[0]
         uuid_val = rec.get('uuid', '')

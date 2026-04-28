@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   QUICK_TABLE_FU,
   MANGAN_ROW_LABELS,
@@ -15,9 +16,9 @@ import { Table, X } from 'lucide-react';
 
 const HAN_ROWS = [1, 2, 3, 4] as const;
 
-function fuHeaderLabel(fu: number): string {
-  if (fu === 20) return '20\n平和自摸';
-  if (fu === 25) return '25\n七对子';
+function fuHeaderLabel(fu: number, t: (key: string) => string): string {
+  if (fu === 20) return t('pointsRef.fu20Label');
+  if (fu === 25) return t('pointsRef.fu25Label');
   return String(fu);
 }
 
@@ -60,7 +61,7 @@ function QuickCellDisplay({ parts }: { parts: QuickCellParts }) {
   );
 }
 
-function TablePanel({ dealer }: { dealer: boolean }) {
+function TablePanel({ dealer, t }: { dealer: boolean; t: (key: string) => string }) {
   const rule = new Rule();
   return (
     <>
@@ -72,7 +73,7 @@ function TablePanel({ dealer }: { dealer: boolean }) {
           className="text-xs font-medium underline-offset-2 hover:underline"
           style={{ color: '#1565c0' }}
         >
-          维基教科书 · 点数计算规则
+          {t('pointsRef.wikiLink')}
         </a>
       </div>
 
@@ -88,7 +89,7 @@ function TablePanel({ dealer }: { dealer: boolean }) {
                   borderBottom: '2px solid rgba(0,0,0,0.15)',
                 }}
               >
-                翻 \ 符
+                {t('pointsRef.hanFuHeader')}
               </th>
               {QUICK_TABLE_FU.map(fu => (
                 <th
@@ -101,7 +102,7 @@ function TablePanel({ dealer }: { dealer: boolean }) {
                     minWidth: '3.25rem',
                   }}
                 >
-                  {fuHeaderLabel(fu)}
+                  {fuHeaderLabel(fu, t)}
                 </th>
               ))}
             </tr>
@@ -122,7 +123,7 @@ function TablePanel({ dealer }: { dealer: boolean }) {
                     borderColor: 'var(--color-border)',
                   }}
                 >
-                  {han} 番
+                  {han} {t('pointsRef.hanUnit')}
                 </td>
                 {buildFuRowSegments(han, rule).map((seg, si) => {
                   if (seg.type === 'single') {
@@ -182,14 +183,17 @@ function TablePanel({ dealer }: { dealer: boolean }) {
       </div>
 
       <p className="mt-2.5 text-[0.68rem] leading-relaxed px-1" style={{ color: 'var(--color-text-light)' }}>
-        表内为<strong>无场棒</strong>时的点数。荣和为点炮者支付总额；子家表自摸第二行为<strong>闲家/庄家</strong>各付（斜杠分隔）。
-        20 符 1 翻、25 符 1 翻及 2–4 翻 20 符荣和格按常见速查表省略；计算与站内算分器规则一致。满贯为以下<strong>任一</strong>：<strong>3 翻且 70 符及以上</strong>、<strong>4 翻且 40 符及以上</strong>，或<strong>5 翻及以上</strong>（均按满贯基本点 2000 计）。
+        {t('pointsRef.tableNote')}
+      </p>
+      <p className="mt-1.5 text-[0.68rem] leading-relaxed px-1" style={{ color: 'var(--color-text-light)' }}>
+        {t('pointsRef.tableNote2')}
       </p>
     </>
   );
 }
 
 export default function PointsQuickReference() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<'oya' | 'ko'>('ko');
   const [open, setOpen] = useState(false);
 
@@ -225,7 +229,7 @@ export default function PointsQuickReference() {
         }}
       >
         <Table size={18} className="text-[#2d7d5e]" />
-        点数速查表
+        {t('pointsRef.title')}
       </button>
 
       {open ? (
@@ -234,7 +238,7 @@ export default function PointsQuickReference() {
             type="button"
             className="absolute inset-0 cursor-default border-0 p-0"
             style={{ background: 'rgba(15, 23, 42, 0.55)' }}
-            aria-label="关闭对话框"
+            aria-label={t('pointsRef.close')}
             onClick={() => setOpen(false)}
           />
           <div
@@ -259,7 +263,7 @@ export default function PointsQuickReference() {
               <div className="flex items-center gap-2 min-w-0">
                 <Table size={22} className="shrink-0 text-[#2d7d5e]" />
                 <h2 id="points-quick-ref-title" className="text-base font-bold truncate" style={{ color: 'var(--color-primary-dark)' }}>
-                  点数速查表
+                  {t('pointsRef.title')}
                 </h2>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -274,7 +278,7 @@ export default function PointsQuickReference() {
                       boxShadow: tab === 'oya' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                     }}
                   >
-                    亲家
+                    {t('pointsRef.oya')}
                   </button>
                   <button
                     type="button"
@@ -286,13 +290,13 @@ export default function PointsQuickReference() {
                       boxShadow: tab === 'ko' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
                     }}
                   >
-                    子家
+                    {t('pointsRef.ko')}
                   </button>
                 </div>
                 <button
                   type="button"
                   className="p-2 rounded-full transition-colors hover:bg-black/5 outline-none"
-                  aria-label="关闭"
+                  aria-label={t('common.close')}
                   onClick={() => setOpen(false)}
                 >
                   <X size={22} style={{ color: 'var(--color-text)' }} />
@@ -305,7 +309,7 @@ export default function PointsQuickReference() {
             </p>
 
             <div className="overflow-y-auto flex-1 px-3 sm:px-4 py-3 min-h-0" aria-describedby="points-quick-ref-desc">
-              <TablePanel dealer={tab === 'oya'} />
+              <TablePanel dealer={tab === 'oya'} t={t} />
             </div>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { Player } from '@/types';
 
 interface Props {
@@ -21,6 +22,7 @@ export default function PlayerCard({
   removable,
   onRemove,
 }: Props) {
+  const { t } = useTranslation();
   const isSmall = size === 'sm';
 
   return (
@@ -47,7 +49,7 @@ export default function PlayerCard({
           <span className={`font-semibold truncate ${isSmall ? 'text-sm' : ''}`}>{player.nickname}</span>
           {isDealer && (
             <span className="badge" style={{ background: '#fff3e0', color: '#e68a00', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>
-              东
+              {t('wind.east')}
             </span>
           )}
         </div>

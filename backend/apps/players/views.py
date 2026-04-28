@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils.translation import gettext_lazy as _
 from common.permissions import IsAdminUserOrReadOnly
 from django.shortcuts import get_object_or_404
 from .models import Player, MahjongSoulAccount
@@ -31,7 +32,7 @@ class PlayerAvatarBatchView(APIView):
     def post(self, request):
         ids = request.data.get('ids')
         if not isinstance(ids, list):
-            return Response({'error': '需要 ids 数组'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(_('需要 ids 数组'))}, status=status.HTTP_400_BAD_REQUEST)
         ids = [str(x) for x in ids if x][: self._MAX]
         return Response(self._build_map(ids))
 

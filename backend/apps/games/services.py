@@ -1,4 +1,5 @@
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 from common.exceptions import (
     BusinessException, ScoreValidationError,
     PlayerAlreadyInGame, GameAlreadyScored,
@@ -14,7 +15,7 @@ class RoomService:
     @staticmethod
     def close_room(room):
         if room.status == 'closed':
-            raise BusinessException('房间已关闭')
+            raise BusinessException(_('房间已关闭'))
         room.status = 'closed'
         room.closed_at = timezone.now()
         room.save()
@@ -24,9 +25,9 @@ class RoomService:
     def add_player(room, player):
         from .models import RoomPlayer
         if room.room_players.filter(player=player).exists():
-            raise BusinessException('该雀士已在房间中', code=409)
+            raise BusinessException(_('该雀士已在房间中'), code=409)
         if room.status == 'closed':
-            raise BusinessException('房间已关闭，无法添加玩家')
+            raise BusinessException(_('房间已关闭，无法添加玩家'))
         return RoomPlayer.objects.create(room=room, player=player)
 
     @staticmethod
@@ -36,7 +37,7 @@ class RoomService:
             rp = room.room_players.get(player=player)
             rp.delete()
         except room.room_players.model.DoesNotExist:
-            raise BusinessException('该雀士不在房间中')
+            raise BusinessException(_('该雀士不在房间中'))
 
     @staticmethod
     def get_open_rooms():
@@ -51,7 +52,7 @@ class GameService:
         from apps.players.models import Player
 
         if room and room.status == 'closed':
-            raise BusinessException('房间已关闭，无法创建对局')
+            raise BusinessException(_('房间已关闭，无法创建对局'))
 
         if 'player_count' not in kwargs:
             kwargs['player_count'] = len(player_ids)
@@ -63,7 +64,7 @@ class GameService:
                 player = Player.objects.get(pk=player_id)
             except Player.DoesNotExist:
                 game.delete()
-                raise BusinessException(f'雀士不存在: {player_id}')
+                raise BusinessException(_('雀士不存在: %(player_id)s') % {'player_id': player_id})
             GamePlayer.objects.create(
                 game=game, player=player, seat_number=i
             )
@@ -80,7 +81,7 @@ class GameService:
     @staticmethod
     def update_game_players(game, player_ids):
         if game.is_scored:
-            raise GameAlreadyScored('对局已录分，无法更换选手')
+            raise GameAlreadyScored(_('对局已录分，无法更换选手'))
         from .models import GamePlayer
         from apps.players.models import Player
 
@@ -89,7 +90,7 @@ class GameService:
             try:
                 player = Player.objects.get(pk=player_id)
             except Player.DoesNotExist:
-                raise BusinessException(f'雀士不存在: {player_id}')
+                raise BusinessException(_('雀士不存在: %(player_id)s') % {'player_id': player_id})
             GamePlayer.objects.create(
                 game=game, player=player, seat_number=i
             )
@@ -102,9 +103,9 @@ class GameService:
         total = sum(s['score'] for s in scores_data)
 
         if player_count == 4 and total != 1000:
-            raise ScoreValidationError(f'4人对局分数总和必须为1000，当前为{total}')
+            raise ScoreValidationError(_('4人对局分数总和必须为1000，当前为%(total)s') % {'total': total})
         elif player_count == 3 and total != 1050:
-            raise ScoreValidationError(f'3人对局分数总和必须为1050，当前为{total}')
+            raise ScoreValidationError(_('3人对局分数总和必须为1050，当前为%(total)s') % {'total': total})
 
         gps = []
         for score_data in scores_data:
@@ -115,7 +116,7 @@ class GameService:
                 gp.seat_number = score_data.get('seat_number', gp.seat_number)
                 gps.append(gp)
             except GamePlayer.DoesNotExist:
-                raise BusinessException(f'选手不在对局中: {score_data["player_id"]}')
+                raise BusinessException(_('选手不在对局中: %(player_id)s') % {'player_id': score_data["player_id"]})
 
         from django.db import transaction
         with transaction.atomic():
@@ -255,11 +256,11 @@ class HandRecordService:
     def create_hand_record(game, **kwargs):
         from .models import HandRecord
         if not game.is_scored:
-            raise BusinessException('对局未录分，无法添加牌谱')
+            raise BusinessException(_('对局未录分，无法添加牌谱'))
         yakuman_names = kwargs.get('yakuman_names', [])
         for name in yakuman_names:
             if not validate_yakuman(name):
-                raise BusinessException(f'无效的役种: {name}')
+                raise BusinessException(_('无效的役种: %(name)s') % {'name': name})
         return HandRecord.objects.create(game=game, **kwargs)
 
     @staticmethod

@@ -10,6 +10,7 @@ import SortablePlayerList, { type SortableItem } from '@/components/SortablePlay
 import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function gpToSortable(gp: GamePlayerInfo): SortableItem {
   return { id: gp.player.id, nickname: gp.player.nickname, avatar: gp.player.avatar };
@@ -43,6 +44,7 @@ export default function GameDetailPage() {
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
+  const { t } = useTranslation();
 
   const [scoreItems, setScoreItems] = useState<SortableItem[]>([]);
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
@@ -65,7 +67,7 @@ export default function GameDetailPage() {
       setScoreData(sd);
       setSelectedPlayerIds(data.players.map((gp) => gp.player.id));
     } catch {
-      showToast('加载对局数据失败');
+      showToast(t('gameDetail.loadFailed'));
     }
   }, [gameId, showToast]);
 
@@ -108,9 +110,9 @@ export default function GameDetailPage() {
       const updated = await submitGameScores(gameId, scoreList);
       setGame(updated);
       setShowScoreInput(false);
-      showToast('分数录入成功', 'success');
+      showToast(t('gameDetail.scoresSuccess'), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '录分失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('gameDetail.scoresFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -124,9 +126,9 @@ export default function GameDetailPage() {
       const updated = await updateGamePlayers(gameId, selectedPlayerIds);
       setGame(updated);
       setShowChangePlayers(false);
-      showToast('选手已更换', 'success');
+      showToast(t('gameDetail.playersSwapped'), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '更换失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('gameDetail.swapFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -140,9 +142,9 @@ export default function GameDetailPage() {
       const updated = await shuffleGameSeats(gameId);
       setGame(updated);
       setScoreItems(updated.players.map(gpToSortable));
-      showToast('已随机分配桩位', 'success');
+      showToast(t('gameDetail.seatsShuffled'), 'success');
     } catch {
-      showToast('分配失败');
+      showToast(t('gameDetail.shuffleFailed'));
     } finally {
       setLoading(false);
     }
@@ -155,7 +157,7 @@ export default function GameDetailPage() {
       const newGame = await createNextGame(roomId, gameId);
       navigate(`/rooms/${roomId}/games/${newGame.id}`);
     } catch {
-      showToast('创建下一局失败');
+      showToast(t('gameDetail.nextGameFailed'));
     } finally {
       setLoading(false);
     }
@@ -181,9 +183,9 @@ export default function GameDetailPage() {
         });
       }
       setShowHandRecordModal(false);
-      showToast('牌谱添加成功', 'success');
+      showToast(t('gameDetail.handRecordAdded'), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '添加失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('gameDetail.handRecordAddFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -200,21 +202,21 @@ export default function GameDetailPage() {
           hand_records: (game.hand_records || []).filter((r) => r.id !== recordId),
         });
       }
-      showToast('牌谱已删除', 'success');
+      showToast(t('gameDetail.handRecordDeleted'), 'success');
     } catch {
-      showToast('删除失败');
+      showToast(t('gameDetail.handRecordDeleteFailed'));
     }
   };
 
   const handleDeleteGame = async () => {
     if (!gameId || !roomId) return;
-    if (!confirm('确定删除该对局吗？此操作不可恢复。')) return;
+    if (!confirm(t('gameDetail.deleteGameConfirm'))) return;
     try {
       await deleteGame(gameId);
-      showToast('对局已删除', 'success');
+      showToast(t('gameDetail.gameDeleted'), 'success');
       navigate(`/rooms/${roomId}`);
     } catch {
-      showToast('删除失败');
+      showToast(t('gameDetail.handRecordDeleteFailed'));
     }
   };
 
@@ -230,9 +232,9 @@ export default function GameDetailPage() {
       const updated = await updateGame(gameId, payload);
       setGame(updated);
       setShowEditGame(false);
-      showToast('对局信息已更新', 'success');
+      showToast(t('gameDetail.gameUpdated'), 'success');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '修改失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('gameDetail.updateFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -240,7 +242,7 @@ export default function GameDetailPage() {
   };
 
   if (!game) {
-    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
+    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</div>;
   }
 
   const toggleSelected = (playerId: string) => {
@@ -260,7 +262,7 @@ export default function GameDetailPage() {
     <div>
       {ToastComponent}
       <button className="btn btn-sm btn-outline mb-4" onClick={() => navigate(`/rooms/${roomId}`)}>
-        <ArrowLeft size={14} /> 返回房间
+        <ArrowLeft size={14} /> {t('gameDetail.backToRoom')}
       </button>
 
       <div className="card mb-6">
@@ -281,26 +283,26 @@ export default function GameDetailPage() {
                 {!game.is_scored && (
                   <>
                     <button className="btn btn-sm btn-accent" onClick={handleShuffleSeats} disabled={loading}>
-                      <Shuffle size={14} /> 随机桩位
+                      <Shuffle size={14} /> {t('gameDetail.randomSeats')}
                     </button>
                     <button className="btn btn-sm btn-outline" onClick={() => setShowChangePlayers(true)}>
-                      <RefreshCw size={14} /> 更换选手
+                      <RefreshCw size={14} /> {t('gameDetail.swapPlayers')}
                     </button>
                   </>
                 )}
                 <button className="btn btn-sm btn-primary" onClick={() => setShowScoreInput(true)}>
-                  <Save size={14} /> {game.is_scored ? '修改分数' : '录入分数'}
+                  <Save size={14} /> {game.is_scored ? t('gameDetail.editScores') : t('gameDetail.enterScores')}
                 </button>
                 <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
-                  <Copy size={14} /> 再开一局
+                  <Copy size={14} /> {t('gameDetail.nextGame')}
                 </button>
                 {game.is_scored && (
                   <button className="btn btn-sm btn-outline" onClick={() => setShowHandRecordModal(true)} style={{ borderColor: '#f0b830', color: '#e65100' }}>
-                    <Sparkles size={14} /> 役满牌谱
+                    <Sparkles size={14} /> {t('gameDetail.yakumanRecord')}
                   </button>
                 )}
                 <button className="btn btn-sm btn-outline" onClick={handleDeleteGame} style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}>
-                  <Trash2 size={14} /> 删除对局
+                  <Trash2 size={14} /> {t('gameDetail.deleteGame')}
                 </button>
                 <button className="btn btn-sm btn-outline" onClick={() => {
                   setEditStartTime(toDatetimeLocal(game.start_time));
@@ -308,7 +310,7 @@ export default function GameDetailPage() {
                   setEditGameMode(game.game_mode);
                   setShowEditGame(true);
                 }}>
-                  <Pencil size={14} /> 编辑
+                  <Pencil size={14} /> {t('gameDetail.editGame')}
                 </button>
               </>
             )}
@@ -318,10 +320,10 @@ export default function GameDetailPage() {
 
       <div className="card">
         <h3 className="font-bold mb-4">
-          对局选手 ({game.players.length}人)
+          {t('gameDetail.playerCountLabel')} ({game.players.length}{t('common.peopleUnit')})
           {game.is_scored && (
             <span className="text-xs font-normal ml-2" style={{ color: 'var(--color-text-light)' }}>
-              合计: {scoredTotal}
+              {t('gameDetail.totalLabel')} {scoredTotal}
             </span>
           )}
         </h3>
@@ -355,7 +357,7 @@ export default function GameDetailPage() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{gp.player.nickname}</span>
                     {gp.is_dealer_start && (
-                      <span className="badge" style={{ background: '#fff3e0', color: '#e68a00', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>东起</span>
+                      <span className="badge" style={{ background: '#fff3e0', color: '#e68a00', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>{t('gameDetail.dealerStart')}</span>
                     )}
                     {game.is_scored && idx === 0 && (
                       <span className="badge" style={{ background: '#fff8e1', color: '#f0b830', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>Top</span>
@@ -372,7 +374,7 @@ export default function GameDetailPage() {
       {game.hand_records && game.hand_records.length > 0 && (
         <div className="card mt-4">
           <h3 className="font-bold mb-3 flex items-center gap-2">
-            <Sparkles size={16} style={{ color: '#e65100' }} /> 役满牌谱
+            <Sparkles size={16} style={{ color: '#e65100' }} /> {t('gameDetail.yakumanRecord')}
           </h3>
           <div className="space-y-3">
             {game.hand_records.map((hr) => (
@@ -393,14 +395,14 @@ export default function GameDetailPage() {
                     )}
                   </div>
                   {admin && (
-                    <button onClick={() => { if (window.confirm('确定删除此牌谱？')) handleDeleteHandRecord(hr.id); }} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <button onClick={() => { if (window.confirm(t('common.confirmDelete'))) handleDeleteHandRecord(hr.id); }} className="text-xs" style={{ color: '#e74c3c', background: 'none', border: 'none', cursor: 'pointer' }}>
                       <Trash2 size={14} />
                     </button>
                   )}
                 </div>
                 {hr.hand_tiles && hr.hand_tiles.length > 0 && (
                   <div className="flex items-end gap-0.5 mb-2">
-                    <span className="text-xs" style={{ color: 'var(--color-text-light)', marginRight: '0.375rem', alignSelf: 'center' }}>手牌:</span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-light)', marginRight: '0.375rem', alignSelf: 'center' }}>{t('gameDetail.handTiles')}</span>
                     {hr.hand_tiles.map((t, i) => (
                       <img key={i} src={`/marjongs/${t}.webp`} alt={t} draggable={false}
                         style={{ height: '2.5rem', width: 'auto', borderRadius: '0.15rem' }} />
@@ -416,7 +418,7 @@ export default function GameDetailPage() {
                     {hr.melds.map((m, i) => (
                       <div key={i} className="flex items-center gap-0.5" style={{ padding: '0.125rem', borderRadius: '0.375rem', background: '#f3e8ff' }}>
                         <span className="text-xs" style={{ color: '#9c27b0', fontWeight: 600 }}>
-                          {m.type === 'chi' ? '吃' : m.type === 'pon' ? '碰' : '杠'}
+                          {m.type === 'chi' ? t('gameDetail.meldChi') : m.type === 'pon' ? t('gameDetail.meldPon') : t('gameDetail.meldKan')}
                         </span>
                         <div className="flex items-end gap-0.5">
                           {(() => {
@@ -498,21 +500,21 @@ export default function GameDetailPage() {
 
       {game.source_url && (
         <div className="card mt-4">
-          <h3 className="font-bold mb-2">牌谱链接</h3>
+          <h3 className="font-bold mb-2">{t('gameDetail.paipuLinkTitle')}</h3>
           <p className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{game.source_url}</p>
           <button
             type="button"
             className="btn btn-sm btn-outline inline-flex items-center gap-1"
             onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
           >
-            <ExternalLink size={14} /> 在浏览器中打开牌谱
+            <ExternalLink size={14} /> {t('gameDetail.openPaipu')}
           </button>
         </div>
       )}
 
-      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title="打开雀魂牌谱">
+      <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title={t('gameDetail.openPaipuTitle')}>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>
-          即将在新标签页打开外部网站。若为误触可取消。
+          {t('gameDetail.openPaipuWarn')}
         </p>
         {paipuConfirmUrl && (
           <p className="text-xs font-mono break-all mb-4 p-2 rounded-lg" style={{ background: '#f5f5f5', color: 'var(--color-text-light)' }}>
@@ -520,7 +522,7 @@ export default function GameDetailPage() {
           </p>
         )}
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuConfirmUrl(null)}>取消</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setPaipuConfirmUrl(null)}>{t('common.cancel')}</button>
           <button
             type="button"
             className="btn btn-primary btn-sm inline-flex items-center gap-1"
@@ -529,15 +531,15 @@ export default function GameDetailPage() {
               setPaipuConfirmUrl(null);
             }}
           >
-            <ExternalLink size={14} /> 打开
+            <ExternalLink size={14} /> {t('common.open')}
           </button>
         </div>
       </Modal>
 
-      <Modal open={showScoreInput} onClose={() => setShowScoreInput(false)} title="录入分数">
+      <Modal open={showScoreInput} onClose={() => setShowScoreInput(false)} title={t('gameDetail.scoreModalTitle')}>
         <p className="text-sm mb-4" style={{ color: 'var(--color-text-light)' }}>
-          {playerCount === 4 ? '4人对局' : '3人对局'}，分数总和需为 <strong>{expectedTotal}</strong>
-          ，拖拽调整席次
+          {playerCount === 4 ? t('gameDetail.scoreModalHint4') : t('gameDetail.scoreModalHint3')}，{t('gameDetail.scoreModalSum')} <strong>{expectedTotal}</strong>
+          ，{t('gameDetail.scoreModalDrag')}
         </p>
         <SortablePlayerList items={scoreItems} onReorder={setScoreItems}>
           {(item) => (
@@ -566,7 +568,7 @@ export default function GameDetailPage() {
                     checked={scoreData[item.id]?.is_dealer_start || false}
                     onChange={() => handleDealerChange(item.id)}
                   />
-                  东起
+                  {t('gameDetail.dealerStart')}
                 </label>
               </div>
               <input
@@ -574,7 +576,7 @@ export default function GameDetailPage() {
                 value={scoreData[item.id]?.score || ''}
                 onChange={(e) => handleScoreChange(item.id, e.target.value)}
                 className="form-input"
-                placeholder="输入分数 (可为负数)"
+                placeholder={t('gameDetail.scorePlaceholder')}
               />
             </div>
           )}
@@ -587,20 +589,20 @@ export default function GameDetailPage() {
             color: isScoreValid ? '#2d9d78' : '#e68a00',
           }}
         >
-          当前合计: {totalScore} / {expectedTotal}
-          {!hasDealer && ' · 未指定东起'}
+          {t('gameDetail.currentTotal')} {totalScore} / {expectedTotal}
+          {!hasDealer && ' · ' + t('gameDetail.noDealerSet')}
         </div>
         <div className="flex gap-3 justify-end mt-4">
-          <button className="btn btn-outline btn-sm" onClick={() => setShowScoreInput(false)}>取消</button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowScoreInput(false)}>{t('common.cancel')}</button>
           <button className="btn btn-primary btn-sm" disabled={loading || !isScoreValid} onClick={handleSubmitScores}>
-            {loading ? '提交中...' : '确认录分'}
+            {loading ? t('gameDetail.submitting') : t('gameDetail.confirmScore')}
           </button>
         </div>
       </Modal>
 
-      <Modal open={showChangePlayers} onClose={() => setShowChangePlayers(false)} title="更换选手">
+      <Modal open={showChangePlayers} onClose={() => setShowChangePlayers(false)} title={t('gameDetail.swapModalTitle')}>
         <p className="text-sm mb-3" style={{ color: 'var(--color-text-light)' }}>
-          选择 {playerCount} 名选手 (已选 {selectedPlayerIds.length}/{playerCount})
+          {t('gameDetail.swapSelectHint')} {playerCount} {t('gameDetail.swapOf')} ({t('gameDetail.swapSelected')} {selectedPlayerIds.length}/{playerCount})
         </p>
         <div className="space-y-2 max-h-60 overflow-y-auto">
           {allPlayers.map((p) => (
@@ -621,9 +623,9 @@ export default function GameDetailPage() {
           ))}
         </div>
         <div className="flex gap-3 justify-end mt-4">
-          <button className="btn btn-outline btn-sm" onClick={() => setShowChangePlayers(false)}>取消</button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowChangePlayers(false)}>{t('common.cancel')}</button>
           <button className="btn btn-primary btn-sm" disabled={loading || selectedPlayerIds.length !== playerCount} onClick={handleSwapPlayers}>
-            确认更换
+            {t('gameDetail.confirmSwap')}
           </button>
         </div>
       </Modal>
@@ -636,26 +638,26 @@ export default function GameDetailPage() {
         />
       )}
 
-      <Modal open={showEditGame} onClose={() => setShowEditGame(false)} title="编辑对局信息">
+      <Modal open={showEditGame} onClose={() => setShowEditGame(false)} title={t('gameDetail.editGameModalTitle')}>
         <div className="form-group">
-          <label className="form-label">对局模式</label>
+          <label className="form-label">{t('gameDetail.gameModeLabel')}</label>
           <select value={editGameMode} onChange={(e) => setEditGameMode(e.target.value)} className="form-input" disabled={game.is_scored}>
-            <option value="east_wind">东风局</option>
-            <option value="half_match">半庄</option>
+            <option value="east_wind">{t('gameMode.eastWindFull')}</option>
+            <option value="half_match">{t('gameMode.halfMatchFull')}</option>
           </select>
-          {game.is_scored && <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>已录分，无法修改模式</p>}
+          {game.is_scored && <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('gameDetail.modeLocked')}</p>}
         </div>
         <div className="form-group">
-          <label className="form-label">开始时间</label>
+          <label className="form-label">{t('gameDetail.startTimeLabel')}</label>
           <input type="datetime-local" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="form-input" />
         </div>
         <div className="form-group">
-          <label className="form-label">结束时间（可选）</label>
+          <label className="form-label">{t('gameDetail.endTimeOptionalLabel')}</label>
           <input type="datetime-local" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="form-input" />
         </div>
         <div className="flex gap-3 justify-end">
-          <button className="btn btn-outline btn-sm" onClick={() => setShowEditGame(false)}>取消</button>
-          <button className="btn btn-primary btn-sm" disabled={loading} onClick={handleEditGame}>保存</button>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowEditGame(false)}>{t('common.cancel')}</button>
+          <button className="btn btn-primary btn-sm" disabled={loading} onClick={handleEditGame}>{t('common.save')}</button>
         </div>
       </Modal>
     </div>

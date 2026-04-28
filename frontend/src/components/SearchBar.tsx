@@ -1,17 +1,20 @@
+import { useTranslation } from 'react-i18next';
+
 interface Props {
   query: string;
   onQueryChange: (q: string) => void;
   placeholder?: string;
 }
 
-export default function SearchBar({ query, onQueryChange, placeholder = '搜索...' }: Props) {
+export default function SearchBar({ query, onQueryChange, placeholder }: Props) {
+  const { t } = useTranslation();
   return (
     <div className="relative">
       <input
         type="text"
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder || t('searchBar.placeholder')}
         className="form-input pl-10"
       />
       <svg

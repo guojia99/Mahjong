@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getRoom, addPlayerToRoom, removePlayerFromRoom, getRoomGames, createRoomGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
@@ -12,6 +13,7 @@ import { GAME_MODE_LABELS, ROOM_STATUS_LABELS, ROOM_TYPE_LABELS } from '@/types'
 import { Plus, MapPin, Clock, Play, Globe } from 'lucide-react';
 
 export default function RoomDetailPage() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [room, setRoom] = useState<Room | null>(null);
@@ -35,7 +37,7 @@ export default function RoomDetailPage() {
       setRoom(roomData);
       setGames(gamesData);
     } catch {
-      showToast('加载房间数据失败');
+      showToast(t('roomDetail.loadFailed'));
     }
   }, [id, showToast]);
 
@@ -57,10 +59,10 @@ export default function RoomDetailPage() {
     if (!id) return;
     try {
       await addPlayerToRoom(id, playerId);
-      showToast('雀士已加入房间', 'success');
+      showToast(t('roomDetail.playerJoined'), 'success');
       loadData();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '添加失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('roomDetail.joinFailed');
       showToast(msg);
     }
   };
@@ -69,10 +71,10 @@ export default function RoomDetailPage() {
     if (!id) return;
     try {
       await removePlayerFromRoom(id, playerId);
-      showToast('雀士已移出房间', 'success');
+      showToast(t('roomDetail.playerRemoved'), 'success');
       loadData();
     } catch {
-      showToast('移除失败');
+      showToast(t('roomDetail.removeFailed'));
     }
   };
 
@@ -85,7 +87,7 @@ export default function RoomDetailPage() {
   const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || selectedPlayers.length < 3 || selectedPlayers.length > 4) {
-      showToast('对局需要3-4名选手');
+      showToast(t('roomDetail.gamePlayersRequired'));
       return;
     }
     setLoading(true);
@@ -96,13 +98,13 @@ export default function RoomDetailPage() {
         end_time: endTime || null,
         player_ids: selectedPlayers,
       });
-      showToast('对局创建成功', 'success');
+      showToast(t('roomDetail.createGameSuccess'), 'success');
       setShowNewGame(false);
       setSelectedPlayers([]);
       setEndTime('');
       loadData();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '创建失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('roomDetail.createGameFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -115,7 +117,7 @@ export default function RoomDetailPage() {
   const defaultTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   if (!room) {
-    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
+    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</div>;
   }
 
   const scoredGames = games.filter(g => g.is_scored && g.pt);
@@ -152,7 +154,7 @@ export default function RoomDetailPage() {
                 </span>
               )}
               {room.session_time && (
-                <span className="flex items-center gap-1"><Clock size={14} /> 场次 {room.session_time}</span>
+                <span className="flex items-center gap-1"><Clock size={14} /> {t('rooms.sessionLabel')} {room.session_time}</span>
               )}
               {room.location && (
                 <span className="flex items-center gap-1"><MapPin size={14} /> {room.location}</span>
@@ -170,15 +172,15 @@ export default function RoomDetailPage() {
                   className="btn btn-sm"
                   style={{ textDecoration: 'none', background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}
                 >
-                  <Globe size={14} /> 线上牌谱导入
+                  <Globe size={14} /> {t('roomDetail.onlineImport')}
                 </Link>
               )}
               <button className="btn btn-sm btn-outline" onClick={() => setShowAddPlayer(true)}>
-                <Plus size={14} /> 添加雀士
+                <Plus size={14} /> {t('roomDetail.addPlayer')}
               </button>
               {availableForGame.length >= 3 && (
                 <button className="btn btn-sm btn-accent" onClick={() => setShowNewGame(true)}>
-                  <Play size={14} /> 新建对局
+                  <Play size={14} /> {t('roomDetail.newGame')}
                 </button>
               )}
             </div>
@@ -188,7 +190,7 @@ export default function RoomDetailPage() {
 
       {room.room_players && room.room_players.length > 0 && (
         <div className="card mb-6">
-          <h3 className="font-bold mb-3">房间成员 ({room.room_players.length}人)</h3>
+          <h3 className="font-bold mb-3">{t('roomDetail.membersTitle', { count: room.room_players.length })}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {room.room_players.map((rp) => (
               <PlayerCard
@@ -205,7 +207,7 @@ export default function RoomDetailPage() {
 
       {sortedPtList.length > 0 && (
         <div className="card mb-6">
-          <h3 className="font-bold mb-3">PT排行 ({scoredGames.length}局已录分)</h3>
+          <h3 className="font-bold mb-3">{t('roomDetail.ptRankingTitle', { count: scoredGames.length })}</h3>
           <div className="space-y-2">
             {sortedPtList.map((item, idx) => {
               const maxPt = Math.max(...sortedPtList.map(x => Math.abs(x.pt)), 1);
@@ -226,7 +228,7 @@ export default function RoomDetailPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold truncate">{item.player?.nickname}</span>
-                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{item.count}局</span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{item.count}{t('common.gamesUnit')}</span>
                     </div>
                     <div className="mt-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#f0f0f0' }}>
                       <div style={{
@@ -250,10 +252,10 @@ export default function RoomDetailPage() {
       )}
 
       <div className="card">
-        <h3 className="font-bold mb-3">对局记录 ({games.length}局)</h3>
+        <h3 className="font-bold mb-3">{t('roomDetail.gameRecordTitle', { count: games.length })}</h3>
         {games.length === 0 ? (
           <div className="empty-state">
-            <p className="text-sm">暂无对局记录</p>
+            <p className="text-sm">{t('roomDetail.noGameRecords')}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -293,7 +295,7 @@ export default function RoomDetailPage() {
                       </div>
                     ))}
                     {!game.is_scored && (
-                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>未录分</span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('roomDetail.notScored')}</span>
                     )}
                   </div>
                 </div>
@@ -303,12 +305,12 @@ export default function RoomDetailPage() {
         )}
       </div>
 
-      <Modal open={showAddPlayer} onClose={() => setShowAddPlayer(false)} title="添加雀士到房间">
-        <SearchBar query={playerQuery} onQueryChange={setPlayerQuery} placeholder="搜索雀士..." />
+      <Modal open={showAddPlayer} onClose={() => setShowAddPlayer(false)} title={t('roomDetail.addPlayerModalTitle')}>
+        <SearchBar query={playerQuery} onQueryChange={setPlayerQuery} placeholder={t('roomDetail.playerSearchPlaceholder')} />
         <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
           {filteredPlayers.length === 0 ? (
             <p className="text-sm text-center py-4" style={{ color: 'var(--color-text-light)' }}>
-              {playerQuery ? '未找到雀士' : '所有雀士都已在房间中'}
+              {playerQuery ? t('roomDetail.noPlayerFound') : t('roomDetail.noPlayerFound')}
             </p>
           ) : (
             filteredPlayers.map((p) => (
@@ -333,10 +335,10 @@ export default function RoomDetailPage() {
         </div>
       </Modal>
 
-      <Modal open={showNewGame} onClose={() => { setShowNewGame(false); setSelectedPlayers([]); setEndTime(''); }} title="新建对局">
+      <Modal open={showNewGame} onClose={() => { setShowNewGame(false); setSelectedPlayers([]); setEndTime(''); }} title={t('roomDetail.newGameModalTitle')}>
         <form onSubmit={handleCreateGame}>
           <div className="form-group">
-            <label className="form-label">选择选手 (3-4人)</label>
+            <label className="form-label">{t('roomDetail.selectPlayers')}</label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {availableForGame.map((p) => (
                 <label
@@ -362,18 +364,18 @@ export default function RoomDetailPage() {
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">对局模式</label>
+            <label className="form-label">{t('roomDetail.gameModeLabel')}</label>
             <select
               value={gameMode}
               onChange={(e) => setGameMode(e.target.value)}
               className="form-input"
             >
-              <option value="east_wind">东风局</option>
-              <option value="half_match">半庄</option>
+              <option value="east_wind">{t('gameMode.eastWindFull')}</option>
+              <option value="half_match">{t('gameMode.halfMatchFull')}</option>
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">对局时间</label>
+            <label className="form-label">{t('roomDetail.gameTimeLabel')}</label>
             <input
               type="datetime-local"
               value={startTime || defaultTime}
@@ -382,7 +384,7 @@ export default function RoomDetailPage() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">结束时间（可选）</label>
+            <label className="form-label">{t('roomDetail.endTimeLabel')}</label>
             <input
               type="datetime-local"
               value={endTime}
@@ -392,10 +394,10 @@ export default function RoomDetailPage() {
           </div>
           <div className="flex gap-3 justify-end">
             <button type="button" className="btn btn-outline btn-sm" onClick={() => { setShowNewGame(false); setSelectedPlayers([]); setEndTime(''); }}>
-              取消
+              {t('common.cancel')}
             </button>
             <button type="submit" disabled={loading || selectedPlayers.length < 3} className="btn btn-primary btn-sm">
-              创建对局
+              {t('roomDetail.createGame')}
             </button>
           </div>
         </form>

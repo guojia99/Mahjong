@@ -14,6 +14,7 @@ from threading import Lock
 from typing import Any
 
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -93,12 +94,12 @@ def _call_node_paipu(paipu_list: list[str]) -> list[dict[str, Any]]:
 
     node_script = _node_script_path()
     if not node_script:
-        raise RuntimeError('未配置 MAJSOUL_NODE_SCRIPT_DIR')
+        raise RuntimeError(str(_('未配置 MAJSOUL_NODE_SCRIPT_DIR')))
 
     account, password = _get_credentials()
     print(account,password)
     if not account or not password:
-        raise RuntimeError('未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）')
+        raise RuntimeError(str(_('未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）')))
 
     cmd = [
         'node', node_script,
@@ -119,20 +120,20 @@ def _call_node_paipu(paipu_list: list[str]) -> list[dict[str, Any]]:
     if result.returncode != 0:
         stderr = result.stderr.strip()
         logger.error('Node paipu.js 执行失败 (exit=%d): %s', result.returncode, stderr)
-        raise RuntimeError(f'牌谱获取失败: {stderr}')
+        raise RuntimeError(str(_('牌谱获取失败: %(stderr)s') % {'stderr': stderr}))
 
     output = result.stdout.strip()
     if not output:
-        raise RuntimeError('Node paipu.js 无输出')
+        raise RuntimeError(str(_('Node paipu.js 无输出')))
 
     try:
         data = json.loads(output)
     except json.JSONDecodeError:
         logger.error('Node 输出非 JSON: %s', output[:500])
-        raise RuntimeError('牌谱获取返回了无效数据')
+        raise RuntimeError(str(_('牌谱获取返回了无效数据')))
 
     if isinstance(data, dict) and 'error' in data:
-        raise RuntimeError(f"牌谱获取失败: {data['error']}")
+        raise RuntimeError(str(_('牌谱获取失败: %(error)s') % {'error': data['error']}))
 
     return data if isinstance(data, list) else []
 
@@ -155,22 +156,22 @@ def _detect_game_mode(uuid_val: str) -> str:
 def analyze_paipu_url(source_url: str) -> dict:
     url = normalize_paipu_input_url(source_url)
     if not url:
-        raise ValueError('空链接或未识别到有效的 http(s) 牌谱链接')
+        raise ValueError(str(_('空链接或未识别到有效的 http(s) 牌谱链接')))
     paipu_uuid = extract_paipu_uuid(url) or url
 
     try:
         records = _call_node_paipu([url])
     except Exception as e:
         logger.error('牌谱解析失败: %s', e, exc_info=True)
-        raise RuntimeError(f'牌谱解析失败: {e}') from e
+        raise RuntimeError(str(_('牌谱解析失败: %(e)s') % {'e': e})) from e
 
     if not records or len(records) == 0:
-        raise RuntimeError('未返回牌谱数据，请检查链接是否有效')
+        raise RuntimeError(str(_('未返回牌谱数据，请检查链接是否有效')))
 
     rec = records[0]
     players = _normalize_node_players(rec.get('players', []))
     if not players:
-        raise RuntimeError('未解析到有效玩家行')
+        raise RuntimeError(str(_('未解析到有效玩家行')))
 
     n = len(players)
     if n not in (3, 4):

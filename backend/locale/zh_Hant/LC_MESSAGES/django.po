@@ -1,0 +1,183 @@
+# Simplified Chinese -> Traditional Chinese translation for Mahjong app.
+# Copyright (C) 2026
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-27 00:00+0800\n"
+"PO-Revision-Date: 2026-04-27 00:00+0800\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: zh_Hant\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "用户名或密码错误"
+msgstr "使用者名稱或密碼錯誤"
+
+msgid "仅管理员可登录"
+msgstr "僅管理員可登入"
+
+msgid "已登出"
+msgstr "已登出"
+
+msgid "该UID已绑定其他雀士"
+msgstr "該UID已綁定其他雀士"
+
+msgid "无效的雀魂 UID"
+msgstr "無效的雀魂 UID"
+
+msgid "该雀魂 UID 已绑定其他雀士，无法随对局导入写入"
+msgstr "該雀魂 UID 已綁定其他雀士，無法隨對局匯入寫入"
+
+msgid "雀魂账号不存在"
+msgstr "雀魂帳號不存在"
+
+msgid "该账号已绑定其他雀士"
+msgstr "該帳號已綁定其他雀士"
+
+msgid "需要 ids 数组"
+msgstr "需要 ids 陣列"
+
+msgid "房间已关闭"
+msgstr "房間已關閉"
+
+msgid "该雀士已在房间中"
+msgstr "該雀士已在房間中"
+
+msgid "房间已关闭，无法添加玩家"
+msgstr "房間已關閉，無法新增雀士"
+
+msgid "该雀士不在房间中"
+msgstr "該雀士不在房間中"
+
+msgid "房间已关闭，无法创建对局"
+msgstr "房間已關閉，無法建立對局"
+
+msgid "雀士不存在: %(player_id)s"
+msgstr "雀士不存在: %(player_id)s"
+
+msgid "对局已录分，无法更换选手"
+msgstr "對局已錄分，無法更換選手"
+
+msgid "4人对局分数总和必须为1000，当前为%(total)s"
+msgstr "4人對局分數總和必須為1000，目前為%(total)s"
+
+msgid "3人对局分数总和必须为1050，当前为%(total)s"
+msgstr "3人對局分數總和必須為1050，目前為%(total)s"
+
+msgid "选手不在对局中: %(player_id)s"
+msgstr "選手不在對局中: %(player_id)s"
+
+msgid "对局未录分，无法添加牌谱"
+msgstr "對局未錄分，無法新增牌譜"
+
+msgid "无效的役种: %(name)s"
+msgstr "無效的役種: %(name)s"
+
+msgid "该房间存在对局记录，无法删除"
+msgstr "該房間存在對局記錄，無法刪除"
+
+msgid "房间已关闭，无法新增对局"
+msgstr "房間已關閉，無法新增對局"
+
+msgid "对局已录分，无法调整席次"
+msgstr "對局已錄分，無法調整席次"
+
+msgid "请提供牌谱链接（需包含 https:// 或 http://）"
+msgstr "請提供牌譜連結（需包含 https:// 或 http://）"
+
+msgid "解析牌谱失败: %(e)s"
+msgstr "解析牌譜失敗: %(e)s"
+
+msgid "未找到牌谱数据，请检查链接是否有效"
+msgstr "未找到牌譜資料，請檢查連結是否有效"
+
+msgid "请提供 urls 数组"
+msgstr "請提供 urls 陣列"
+
+msgid "空行"
+msgstr "空行"
+
+msgid "未识别到有效的 http(s) 牌谱链接"
+msgstr "未識別到有效的 http(s) 牌譜連結"
+
+msgid "请选择「线上场」房间"
+msgstr "請選擇「線上場」房間"
+
+msgid "房间已关闭，无法导入"
+msgstr "房間已關閉，無法匯入"
+
+msgid "该牌谱链接已在系统中存在对局。若仍要再导入一条记录，请在导入页勾选「仍导入本条」后重试。"
+msgstr "該牌譜連結已在系統中存在對局。若仍要再匯入一筆記錄，請在匯入頁勾選「仍匯入本條」後重試。"
+
+msgid "请提供account_id和player_id"
+msgstr "請提供account_id和player_id"
+
+msgid "雀士不存在"
+msgstr "雀士不存在"
+
+msgid "仅线上对局可重新获取"
+msgstr "僅線上對局可重新取得"
+
+msgid "该对局无牌谱链接，无法重新获取"
+msgstr "該對局無牌譜連結，無法重新取得"
+
+msgid "牌谱链接无效"
+msgstr "牌譜連結無效"
+
+msgid "牌谱获取失败: %(e)s"
+msgstr "牌譜取得失敗: %(e)s"
+
+msgid "未获取到牌谱数据"
+msgstr "未取得牌譜資料"
+
+msgid "存在重复的选手"
+msgstr "存在重複的選手"
+
+msgid "必须指定一名东起选手"
+msgstr "必須指定一名東起選手"
+
+msgid "至少需要选择一个役种"
+msgstr "至少需要選擇一個役種"
+
+msgid "未配置 MAJSOUL_NODE_SCRIPT_DIR"
+msgstr "未設定 MAJSOUL_NODE_SCRIPT_DIR"
+
+msgid "未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）"
+msgstr "未設定雀魂帳號密碼（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）"
+
+msgid "牌谱获取失败: %(stderr)s"
+msgstr "牌譜取得失敗: %(stderr)s"
+
+msgid "Node paipu.js 无输出"
+msgstr "Node paipu.js 無輸出"
+
+msgid "牌谱获取返回了无效数据"
+msgstr "牌譜取得回傳了無效資料"
+
+msgid "牌谱获取失败: %(error)s"
+msgstr "牌譜取得失敗: %(error)s"
+
+msgid "空链接或未识别到有效的 http(s) 牌谱链接"
+msgstr "空連結或未識別到有效的 http(s) 牌譜連結"
+
+msgid "牌谱解析失败: %(e)s"
+msgstr "牌譜解析失敗: %(e)s"
+
+msgid "未返回牌谱数据，请检查链接是否有效"
+msgstr "未回傳牌譜資料，請檢查連結是否有效"
+
+msgid "未解析到有效玩家行"
+msgstr "未解析到有效玩家行"
+
+msgid "排位分重新结算完成"
+msgstr "排位分重新結算完成"
+
+msgid "重算失败: %(e)s"
+msgstr "重算失敗: %(e)s"
+
+msgid "仅四麻半庄计算排位分"
+msgstr "僅四麻半莊計算排位分"

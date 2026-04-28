@@ -1,3 +1,4 @@
+from django.utils.translation import gettext_lazy as _
 from common.exceptions import BusinessException
 
 
@@ -23,7 +24,7 @@ class PlayerService:
     def add_majsoul_account(player, uid, nickname):
         from .models import MahjongSoulAccount
         if MahjongSoulAccount.objects.filter(uid=uid).exists():
-            raise BusinessException('该UID已绑定其他雀士', code=409)
+            raise BusinessException(_('该UID已绑定其他雀士'), code=409)
         return MahjongSoulAccount.objects.create(
             player=player, uid=uid, nickname=nickname
         )
@@ -39,7 +40,7 @@ class PlayerService:
         try:
             uid = int(uid)
         except (TypeError, ValueError):
-            raise BusinessException('无效的雀魂 UID')
+            raise BusinessException(_('无效的雀魂 UID'))
 
         existing = MahjongSoulAccount.objects.filter(uid=uid).first()
         if existing:
@@ -48,7 +49,7 @@ class PlayerService:
                     existing.nickname = nickname
                     existing.save(update_fields=['nickname'])
                 return existing
-            raise BusinessException('该雀魂 UID 已绑定其他雀士，无法随对局导入写入', code=409)
+            raise BusinessException(_('该雀魂 UID 已绑定其他雀士，无法随对局导入写入'), code=409)
         return MahjongSoulAccount.objects.create(player=player, uid=uid, nickname=nickname)
 
     @staticmethod
@@ -61,9 +62,9 @@ class PlayerService:
         try:
             account = MahjongSoulAccount.objects.get(pk=account_id)
         except MahjongSoulAccount.DoesNotExist:
-            raise BusinessException('雀魂账号不存在')
+            raise BusinessException(_('雀魂账号不存在'))
         if account.player_id and account.player_id != player.id:
-            raise BusinessException('该账号已绑定其他雀士', code=409)
+            raise BusinessException(_('该账号已绑定其他雀士'), code=409)
         account.player = player
         account.save()
         return account

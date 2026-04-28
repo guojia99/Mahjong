@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { HandRecord } from '@/types';
 import { HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS, GAME_MODE_LABELS } from '@/types';
 
@@ -6,6 +7,7 @@ export default function YakumanCard({ record, showPlayer = true, showLink = fals
   showPlayer?: boolean;
   showLink?: boolean;
 }) {
+  const { t } = useTranslation();
   const bgColors: Record<string, string> = {
     yakuman: '#fffbeb',
     yakuman_confirmed: '#fff3e0',
@@ -34,7 +36,7 @@ export default function YakumanCard({ record, showPlayer = true, showLink = fals
 
       {record.hand_tiles && record.hand_tiles.length > 0 && (
         <div className="flex items-end gap-0.5 mb-2">
-          <span className="text-xs" style={{ color: 'var(--color-text-light)', marginRight: '0.375rem', alignSelf: 'center' }}>手牌:</span>
+          <span className="text-xs" style={{ color: 'var(--color-text-light)', marginRight: '0.375rem', alignSelf: 'center' }}>{t('yakumanCard.handLabel')}</span>
           {record.hand_tiles.map((t, i) => (
             <img key={i} src={`/marjongs/${t}.webp`} alt={t} draggable={false}
               style={{ height: '2rem', width: 'auto', borderRadius: '0.15rem' }} />
@@ -51,7 +53,7 @@ export default function YakumanCard({ record, showPlayer = true, showLink = fals
           {record.melds.map((m, i) => (
             <div key={i} className="flex items-center gap-0.5" style={{ padding: '0.125rem', borderRadius: '0.375rem', background: '#f3e8ff' }}>
               <span className="text-xs" style={{ color: '#9c27b0', fontWeight: 600 }}>
-                {m.type === 'chi' ? '吃' : m.type === 'pon' ? '碰' : '杠'}
+                {m.type === 'chi' ? t('yakumanCard.meldChi') : m.type === 'pon' ? t('yakumanCard.meldPon') : t('yakumanCard.meldKan')}
               </span>
               <div className="flex items-end gap-0.5">
                 {(() => {

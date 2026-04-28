@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getPlayers, createPlayer, deletePlayer, updatePlayer, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
@@ -16,6 +17,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export default function PlayersPage() {
+  const { t } = useTranslation();
   const [players, setPlayers] = useState<Player[]>([]);
   const [query, setQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -29,7 +31,7 @@ export default function PlayersPage() {
       const data = await getPlayers(query);
       setPlayers(data);
     } catch {
-      showToast('加载雀士列表失败');
+      showToast(t('players.loadFailed'));
     }
   }, [query, showToast]);
 
@@ -51,11 +53,11 @@ export default function PlayersPage() {
         avatar = await fileToBase64(avatarInput.files[0]);
       }
       await createPlayer({ nickname, real_name, avatar });
-      showToast('雀士创建成功', 'success');
+      showToast(t('players.createSuccess'), 'success');
       setShowCreate(false);
       loadPlayers();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '创建失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('players.createFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -78,11 +80,11 @@ export default function PlayersPage() {
       const payload: { nickname: string; real_name?: string; avatar?: string } = { nickname, real_name };
       if (avatar) payload.avatar = avatar;
       await updatePlayer(editingPlayer.id, payload);
-      showToast('雀士更新成功', 'success');
+      showToast(t('players.updateSuccess'), 'success');
       setEditingPlayer(null);
       loadPlayers();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '更新失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('players.updateFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -90,13 +92,13 @@ export default function PlayersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除该雀士吗？')) return;
+    if (!confirm(t('players.deleteConfirm'))) return;
     try {
       await deletePlayer(id);
-      showToast('雀士已删除', 'success');
+      showToast(t('players.deleteSuccess'), 'success');
       loadPlayers();
     } catch {
-      showToast('删除失败');
+      showToast(t('players.deleteFailed'));
     }
   };
 
@@ -104,9 +106,9 @@ export default function PlayersPage() {
     <div>
       {ToastComponent}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <SearchBar query={query} onQueryChange={setQuery} placeholder="搜索雀士..." />
+        <SearchBar query={query} onQueryChange={setQuery} placeholder={t('players.searchPlaceholder')} />
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <Plus size={16} /> 添加雀士
+          <Plus size={16} /> {t('players.addPlayer')}
         </button>
       </div>
 
@@ -115,9 +117,9 @@ export default function PlayersPage() {
           <div style={{ margin: '0 auto 1rem' }}>
             <Users size={48} />
           </div>
-          <p>暂无雀士</p>
+          <p>{t('players.noPlayers')}</p>
           <button className="btn btn-outline btn-sm mt-3" onClick={() => setShowCreate(true)}>
-            添加第一位雀士
+            {t('players.addFirstPlayer')}
           </button>
         </div>
       ) : (
@@ -146,21 +148,21 @@ export default function PlayersPage() {
                 <button
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-blue-500 transition-colors"
                   onClick={() => setUidModal(player)}
-                  title="管理雀魂账号"
+                  title={t('players.manageMajsoulTitle')}
                 >
                   <LinkIcon size={14} />
                 </button>
                 <button
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-orange-500 transition-colors"
                   onClick={() => setEditingPlayer(player)}
-                  title="编辑"
+                  title={t('players.editTitle')}
                 >
                   <Edit2 size={14} />
                 </button>
                 <button
                   className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-red-500 transition-colors"
                   onClick={() => handleDelete(player.id)}
-                  title="删除"
+                  title={t('players.deleteTitle')}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -170,54 +172,54 @@ export default function PlayersPage() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="添加雀士">
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t('players.addModalTitle')}>
         <form onSubmit={handleCreate}>
           <div className="form-group">
-            <label className="form-label">昵称 *</label>
-            <input name="nickname" className="form-input" placeholder="雀士昵称" required autoFocus />
+            <label className="form-label">{t('players.nicknameLabel')}</label>
+            <input name="nickname" className="form-input" placeholder={t('players.nicknamePlaceholder')} required autoFocus />
           </div>
           <div className="form-group">
-            <label className="form-label">真实姓名</label>
-            <input name="real_name" className="form-input" placeholder="选填" />
+            <label className="form-label">{t('players.realNameLabel')}</label>
+            <input name="real_name" className="form-input" placeholder={t('players.realNamePlaceholder')} />
           </div>
           <div className="form-group">
-            <label className="form-label">头像</label>
+            <label className="form-label">{t('players.avatarLabel')}</label>
             <input name="avatar_file" type="file" accept="image/*" className="form-input" />
           </div>
           <div className="flex gap-3 justify-end">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreate(false)}>取消</button>
-            <button type="submit" disabled={loading} className="btn btn-primary btn-sm">创建</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
+            <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{t('common.create')}</button>
           </div>
         </form>
       </Modal>
 
-      <Modal open={!!editingPlayer} onClose={() => setEditingPlayer(null)} title="编辑雀士">
+      <Modal open={!!editingPlayer} onClose={() => setEditingPlayer(null)} title={t('players.editModalTitle')}>
         {editingPlayer && (
           <form onSubmit={handleUpdate}>
             <div className="form-group">
-              <label className="form-label">昵称 *</label>
+              <label className="form-label">{t('players.nicknameLabel')}</label>
               <input name="nickname" className="form-input" defaultValue={editingPlayer.nickname} required />
             </div>
             <div className="form-group">
-              <label className="form-label">真实姓名</label>
+              <label className="form-label">{t('players.realNameLabel')}</label>
               <input name="real_name" className="form-input" defaultValue={editingPlayer.real_name} />
             </div>
             <div className="form-group">
-              <label className="form-label">头像</label>
+              <label className="form-label">{t('players.avatarLabel')}</label>
               <input name="avatar_file" type="file" accept="image/*" className="form-input" />
               {editingPlayer.avatar && (
-                <img src={editingPlayer.avatar} alt="当前头像" className="avatar mt-2" />
+                <img src={editingPlayer.avatar} alt={t('players.currentAvatar')} className="avatar mt-2" />
               )}
             </div>
             <div className="flex gap-3 justify-end">
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingPlayer(null)}>取消</button>
-              <button type="submit" disabled={loading} className="btn btn-primary btn-sm">保存</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditingPlayer(null)}>{t('common.cancel')}</button>
+              <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{t('common.save')}</button>
             </div>
           </form>
         )}
       </Modal>
 
-      <Modal open={!!uidModal} onClose={() => setUidModal(null)} title="雀魂账号管理">
+      <Modal open={!!uidModal} onClose={() => setUidModal(null)} title={t('players.majsoulModalTitle')}>
         {uidModal && <UidModalContent player={uidModal} onClose={() => { setUidModal(null); loadPlayers(); }} />}
       </Modal>
     </div>
@@ -236,6 +238,7 @@ function Users({ size }: { size?: number }) {
 }
 
 function UidModalContent({ player, onClose }: { player: Player; onClose: () => void }) {
+  const { t } = useTranslation();
   const [accounts, setAccounts] = useState<MajsoulAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
@@ -253,13 +256,13 @@ function UidModalContent({ player, onClose }: { player: Player; onClose: () => v
     setLoading(true);
     try {
       await addMajsoulAccount(player.id, uid, nickname);
-      showToast('添加成功', 'success');
+      showToast(t('players.bindAddSuccess'), 'success');
       const updated = await getMajsoulAccounts(player.id);
       setAccounts(updated);
       (form.elements.namedItem('uid') as HTMLInputElement).value = '';
       (form.elements.namedItem('ms_nickname') as HTMLInputElement).value = '';
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || '添加失败';
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('players.bindAddFailed');
       showToast(msg);
     } finally {
       setLoading(false);
@@ -270,9 +273,9 @@ function UidModalContent({ player, onClose }: { player: Player; onClose: () => v
     try {
       await deleteMajsoulAccount(accountId);
       setAccounts((prev) => prev.filter((a) => a.id !== accountId));
-      showToast('已移除', 'success');
+      showToast(t('players.bindRemoveSuccess'), 'success');
     } catch {
-      showToast('移除失败');
+      showToast(t('players.bindRemoveFailed'));
     }
   };
 
@@ -280,7 +283,7 @@ function UidModalContent({ player, onClose }: { player: Player; onClose: () => v
     <>
       {ToastComponent}
       <p className="text-sm mb-4" style={{ color: 'var(--color-text-light)' }}>
-        {player.nickname} 的雀魂账号
+        {player.nickname}{t('players.majsoulAccountOf')}
       </p>
       {accounts.length > 0 && (
         <div className="space-y-2 mb-4">
@@ -290,7 +293,7 @@ function UidModalContent({ player, onClose }: { player: Player; onClose: () => v
                 <div className="text-sm font-medium">{acc.nickname}</div>
                 <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>UID: {acc.uid}</div>
               </div>
-              <button className="text-red-400 hover:text-red-500 text-xs" onClick={() => handleRemove(acc.id)}>移除</button>
+              <button className="text-red-400 hover:text-red-500 text-xs" onClick={() => handleRemove(acc.id)}>{t('common.remove')}</button>
             </div>
           ))}
         </div>
@@ -298,15 +301,15 @@ function UidModalContent({ player, onClose }: { player: Player; onClose: () => v
       <form onSubmit={handleAdd}>
         <div className="form-group">
           <label className="form-label">UID</label>
-          <input name="uid" type="number" className="form-input" placeholder="雀魂UID" required />
+          <input name="uid" type="number" className="form-input" placeholder={t('players.uidLabel')} required />
         </div>
         <div className="form-group">
-          <label className="form-label">雀魂昵称</label>
-          <input name="ms_nickname" className="form-input" placeholder="雀魂昵称" required />
+          <label className="form-label">{t('players.majsoulNicknameLabel')}</label>
+          <input name="ms_nickname" className="form-input" placeholder={t('players.majsoulNicknamePlaceholder')} required />
         </div>
         <div className="flex gap-3 justify-end">
-          <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>关闭</button>
-          <button type="submit" disabled={loading} className="btn btn-primary btn-sm">添加</button>
+          <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>{t('common.close')}</button>
+          <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{t('common.add')}</button>
         </div>
       </form>
     </>

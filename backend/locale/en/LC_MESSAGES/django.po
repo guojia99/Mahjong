@@ -1,0 +1,183 @@
+# English translation for Mahjong app.
+# Copyright (C) 2026
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-04-27 00:00+0800\n"
+"PO-Revision-Date: 2026-04-27 00:00+0800\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "用户名或密码错误"
+msgstr "Invalid username or password"
+
+msgid "仅管理员可登录"
+msgstr "Only administrators can log in"
+
+msgid "已登出"
+msgstr "Logged out"
+
+msgid "该UID已绑定其他雀士"
+msgstr "This UID is already bound to another player"
+
+msgid "无效的雀魂 UID"
+msgstr "Invalid Mahjong Soul UID"
+
+msgid "该雀魂 UID 已绑定其他雀士，无法随对局导入写入"
+msgstr "This Mahjong Soul UID is already bound to another player and cannot be imported with the game record"
+
+msgid "雀魂账号不存在"
+msgstr "Mahjong Soul account does not exist"
+
+msgid "该账号已绑定其他雀士"
+msgstr "This account is already bound to another player"
+
+msgid "需要 ids 数组"
+msgstr "An ids array is required"
+
+msgid "房间已关闭"
+msgstr "The room has been closed"
+
+msgid "该雀士已在房间中"
+msgstr "This player is already in the room"
+
+msgid "房间已关闭，无法添加玩家"
+msgstr "The room has been closed, cannot add players"
+
+msgid "该雀士不在房间中"
+msgstr "This player is not in the room"
+
+msgid "房间已关闭，无法创建对局"
+msgstr "The room has been closed, cannot create game"
+
+msgid "雀士不存在: %(player_id)s"
+msgstr "Player not found: %(player_id)s"
+
+msgid "对局已录分，无法更换选手"
+msgstr "Scores have been recorded, cannot replace players"
+
+msgid "4人对局分数总和必须为1000，当前为%(total)s"
+msgstr "4-player game scores must sum to 1000, current sum is %(total)s"
+
+msgid "3人对局分数总和必须为1050，当前为%(total)s"
+msgstr "3-player game scores must sum to 1050, current sum is %(total)s"
+
+msgid "选手不在对局中: %(player_id)s"
+msgstr "Player is not in this game: %(player_id)s"
+
+msgid "对局未录分，无法添加牌谱"
+msgstr "Scores not yet recorded, cannot add paipu"
+
+msgid "无效的役种: %(name)s"
+msgstr "Invalid yaku: %(name)s"
+
+msgid "该房间存在对局记录，无法删除"
+msgstr "This room has game records and cannot be deleted"
+
+msgid "房间已关闭，无法新增对局"
+msgstr "The room has been closed, cannot add game"
+
+msgid "对局已录分，无法调整席次"
+msgstr "Scores have been recorded, cannot adjust seats"
+
+msgid "请提供牌谱链接（需包含 https:// 或 http://）"
+msgstr "Please provide a paipu URL (must include https:// or http://)"
+
+msgid "解析牌谱失败: %(e)s"
+msgstr "Failed to parse paipu: %(e)s"
+
+msgid "未找到牌谱数据，请检查链接是否有效"
+msgstr "No paipu data found, please check if the URL is valid"
+
+msgid "请提供 urls 数组"
+msgstr "A urls array is required"
+
+msgid "空行"
+msgstr "Empty line"
+
+msgid "未识别到有效的 http(s) 牌谱链接"
+msgstr "No valid http(s) paipu URL recognized"
+
+msgid "请选择「线上场」房间"
+msgstr "Please select an \"Online\" room"
+
+msgid "房间已关闭，无法导入"
+msgstr "The room has been closed, cannot import"
+
+msgid "该牌谱链接已在系统中存在对局。若仍要再导入一条记录，请在导入页勾选「仍导入本条」后重试。"
+msgstr "A game already exists in the system for this paipu URL. If you still want to import another record, check \"Force import\" on the import page and retry."
+
+msgid "请提供account_id和player_id"
+msgstr "Please provide account_id and player_id"
+
+msgid "雀士不存在"
+msgstr "Player not found"
+
+msgid "仅线上对局可重新获取"
+msgstr "Only online games can be re-fetched"
+
+msgid "该对局无牌谱链接，无法重新获取"
+msgstr "This game has no paipu URL, cannot re-fetch"
+
+msgid "牌谱链接无效"
+msgstr "Invalid paipu URL"
+
+msgid "牌谱获取失败: %(e)s"
+msgstr "Failed to fetch paipu: %(e)s"
+
+msgid "未获取到牌谱数据"
+msgstr "No paipu data retrieved"
+
+msgid "存在重复的选手"
+msgstr "Duplicate players found"
+
+msgid "必须指定一名东起选手"
+msgstr "Must specify an East-start player"
+
+msgid "至少需要选择一个役种"
+msgstr "At least one yaku must be selected"
+
+msgid "未配置 MAJSOUL_NODE_SCRIPT_DIR"
+msgstr "MAJSOUL_NODE_SCRIPT_DIR is not configured"
+
+msgid "未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）"
+msgstr "Mahjong Soul credentials not configured (MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD)"
+
+msgid "牌谱获取失败: %(stderr)s"
+msgstr "Failed to fetch paipu: %(stderr)s"
+
+msgid "Node paipu.js 无输出"
+msgstr "Node paipu.js produced no output"
+
+msgid "牌谱获取返回了无效数据"
+msgstr "Paipu fetch returned invalid data"
+
+msgid "牌谱获取失败: %(error)s"
+msgstr "Failed to fetch paipu: %(error)s"
+
+msgid "空链接或未识别到有效的 http(s) 牌谱链接"
+msgstr "Empty URL or no valid http(s) paipu URL recognized"
+
+msgid "牌谱解析失败: %(e)s"
+msgstr "Failed to parse paipu: %(e)s"
+
+msgid "未返回牌谱数据，请检查链接是否有效"
+msgstr "No paipu data returned, please check if the URL is valid"
+
+msgid "未解析到有效玩家行"
+msgstr "No valid player rows parsed"
+
+msgid "排位分重新结算完成"
+msgstr "Ranking score recalculation completed"
+
+msgid "重算失败: %(e)s"
+msgstr "Recalculation failed: %(e)s"
+
+msgid "仅四麻半庄计算排位分"
+msgstr "Ranking score is only calculated for 4-player hanchan games"

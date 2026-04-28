@@ -35,10 +35,15 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+LOCALE_PATHS = [
+    BASE_DIR / 'locale',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -76,6 +81,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = 'zh-hans'
+
+LANGUAGES = [
+    ('zh-hans', '简体中文'),
+    ('zh-hant', '繁體中文'),
+    ('en', 'English'),
+    ('ja', '日本語'),
+]
 
 TIME_ZONE = 'Asia/Shanghai'
 

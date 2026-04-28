@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { getPlayer, getPlayerGames } from '@/api/players';
 import { getPlayerStats } from '@/api/games';
 import { getPlayerYakumans } from '@/api/players';
@@ -19,18 +20,25 @@ function ScoreTag({ score }: { score: number | null }) {
 }
 
 const GAME_TABS = [
-  { player_count: 4, game_mode: 'east_wind', label: '四麻东风' },
-  { player_count: 4, game_mode: 'half_match', label: '四麻半庄' },
-  { player_count: 3, game_mode: 'east_wind', label: '三麻东风' },
-  { player_count: 3, game_mode: 'half_match', label: '三麻半庄' },
+  { player_count: 4, game_mode: 'east_wind', i18nKey: 'playerProfile.yonmaEastWind' },
+  { player_count: 4, game_mode: 'half_match', i18nKey: 'playerProfile.yonmaHalfMatch' },
+  { player_count: 3, game_mode: 'east_wind', i18nKey: 'playerProfile.sanmaEastWind' },
+  { player_count: 3, game_mode: 'half_match', i18nKey: 'playerProfile.sanmaHalfMatch' },
 ];
 
 const RANK_RATE_ORDER = ['1位率', '2位率', '3位率', '4位率'] as const;
+const RANK_RATE_I18N_KEYS: Record<string, string> = {
+  '1位率': 'playerProfile.rank1stRate',
+  '2位率': 'playerProfile.rank2ndRate',
+  '3位率': 'playerProfile.rank3rdRate',
+  '4位率': 'playerProfile.rank4thRate',
+};
 
 const RECENT_LIMIT_OPTIONS = [10, 20, 50, 100] as const;
 
 export default function PlayerProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
   const [player, setPlayer] = useState<Player | null>(null);
   const [games, setGames] = useState<Game[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
@@ -61,12 +69,12 @@ export default function PlayerProfilePage() {
 
   useEffect(() => {
     if (!id) return;
-    getPlayer(id).then(setPlayer).catch(() => showToast('加载雀士失败'));
-    getPlayerGames(id).then(setGames).catch(() => showToast('加载对局失败'));
+    getPlayer(id).then(setPlayer).catch(() => showToast(t('playerProfile.loadPlayerFailed')));
+    getPlayerGames(id).then(setGames).catch(() => showToast(t('playerProfile.loadGamesFailed')));
     getPlayerYakumans(id).then(setYakumans).catch(() => setYakumans([]));
     getPlayerRanking(id).then(setRanking).catch(() => setRanking(null));
     getPlayerGameRankingResults(id).then(setGameRankingResults).catch(() => setGameRankingResults({}));
-  }, [id, showToast]);
+  }, [id, showToast, t]);
 
   useEffect(() => {
     loadStats(filterPlayerCount || undefined, filterGameMode || undefined, filterGameType, recentLimit);
@@ -98,7 +106,7 @@ export default function PlayerProfilePage() {
   }, [stats, games]);
 
   if (!player) {
-    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>加载中...</div>;
+    return <div className="card text-center py-8" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</div>;
   }
 
   const filteredGames = games.filter((g) => {
@@ -109,13 +117,13 @@ export default function PlayerProfilePage() {
 
   const activeTabLabel = filterPlayerCount && filterGameMode
     ? `${PLAYER_COUNT_LABELS[parseInt(filterPlayerCount)]}${GAME_MODE_FULL_LABELS[filterGameMode] || GAME_MODE_LABELS[filterGameMode]}`
-    : '全部';
+    : t('playerProfile.filterAll');
 
   const activeSourceLabel =
-    filterGameType === 'offline' ? '线下' : filterGameType === 'online' ? '线上' : '';
+    filterGameType === 'offline' ? t('gameType.offline') : filterGameType === 'online' ? t('gameType.online') : '';
 
   const currentTab = GAME_TABS.find(
-    (t) => t.player_count === parseInt(filterPlayerCount || '0') && t.game_mode === filterGameMode
+    (tabItem) => tabItem.player_count === parseInt(filterPlayerCount || '0') && tabItem.game_mode === filterGameMode
   );
 
   const maxRankForChart =
@@ -155,7 +163,7 @@ export default function PlayerProfilePage() {
     <div>
       {ToastComponent}
       <Link to="/player-list" className="btn btn-sm btn-outline mb-4 inline-flex">
-        <ArrowLeft size={14} /> 返回列表
+        <ArrowLeft size={14} /> {t('playerProfile.backToList')}
       </Link>
 
       <div className="card mb-6">
@@ -205,7 +213,7 @@ export default function PlayerProfilePage() {
             <RankTierBadge tier={ranking.tier} score={ranking.score} size="lg" />
             <div className="text-right">
               <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                排位分 (四麻半庄)
+                {t('playerProfile.rankingScoreLabel')}
               </div>
               <div
                 className="text-2xl font-bold"
@@ -216,7 +224,7 @@ export default function PlayerProfilePage() {
                 {Math.round(ranking.score * 100) / 100}
               </div>
               <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                {ranking.game_count} 局
+                {ranking.game_count} {t('common.unit.round')}
               </div>
             </div>
           </div>
@@ -232,10 +240,10 @@ export default function PlayerProfilePage() {
             <div className="mt-3 pt-3" style={{ borderTop: '1px dashed var(--color-border)' }}>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                  距下一级 <span className="font-semibold" style={{ color: ranking.next_tier.bg_color }}>{ranking.next_tier.name}</span>
+                  {t('playerProfile.nextTierDistance')} <span className="font-semibold" style={{ color: ranking.next_tier.bg_color }}>{ranking.next_tier.name}</span>
                 </span>
                 <span className="text-xs font-mono" style={{ color: 'var(--color-text-light)' }}>
-                  {ranking.next_tier.needed} 分
+                  {ranking.next_tier.needed} {t('playerProfile.neededPoints')}
                 </span>
               </div>
               <div
@@ -263,7 +271,7 @@ export default function PlayerProfilePage() {
           {!ranking.next_tier && ranking.tier.level_order >= 15 && (
             <div className="mt-3 pt-3" style={{ borderTop: '1px dashed var(--color-border)' }}>
               <div className="text-xs text-center font-semibold" style={{ color: ranking.tier.bg_color }}>
-                已达最高段位
+                {t('playerProfile.maxTierReached')}
               </div>
             </div>
           )}
@@ -280,7 +288,7 @@ export default function PlayerProfilePage() {
           }}
           onClick={() => setTab('stats')}
         >
-          统计数据
+          {t('playerProfile.tabStats')}
         </button>
         <button
           className="btn btn-sm"
@@ -291,7 +299,7 @@ export default function PlayerProfilePage() {
           }}
           onClick={() => setTab('games')}
         >
-          对局记录
+          {t('playerProfile.tabGames')}
         </button>
         <button
           className="btn btn-sm"
@@ -302,7 +310,7 @@ export default function PlayerProfilePage() {
           }}
           onClick={() => setTab('info')}
         >
-          个人信息
+          {t('playerProfile.tabInfo')}
         </button>
         <button
           className="btn btn-sm"
@@ -313,7 +321,7 @@ export default function PlayerProfilePage() {
           }}
           onClick={() => setTab('yakumans')}
         >
-          <Sparkles size={14} /> 役满列表
+          <Sparkles size={14} /> {t('playerProfile.tabYakumans')}
         </button>
       </div>
 
@@ -328,20 +336,20 @@ export default function PlayerProfilePage() {
             }}
             onClick={() => { setFilterPlayerCount(''); setFilterGameMode(''); }}
           >
-            全部
+            {t('playerProfile.filterAll')}
           </button>
-          {GAME_TABS.map((t) => (
+          {GAME_TABS.map((tabItem) => (
             <button
-              key={t.label}
+              key={tabItem.i18nKey}
               className="btn btn-sm"
               style={{
-                background: currentTab?.label === t.label ? 'var(--color-accent)' : 'transparent',
-                color: currentTab?.label === t.label ? '#4a4a4a' : 'var(--color-text-light)',
-                border: currentTab?.label === t.label ? '1px solid var(--color-accent-dark)' : '1px solid var(--color-border)',
+                background: currentTab?.i18nKey === tabItem.i18nKey ? 'var(--color-accent)' : 'transparent',
+                color: currentTab?.i18nKey === tabItem.i18nKey ? '#4a4a4a' : 'var(--color-text-light)',
+                border: currentTab?.i18nKey === tabItem.i18nKey ? '1px solid var(--color-accent-dark)' : '1px solid var(--color-border)',
               }}
-              onClick={() => { setFilterPlayerCount(String(t.player_count) as '' | '3' | '4'); setFilterGameMode(t.game_mode as '' | 'east_wind' | 'half_match'); }}
+              onClick={() => { setFilterPlayerCount(String(tabItem.player_count) as '' | '3' | '4'); setFilterGameMode(tabItem.game_mode as '' | 'east_wind' | 'half_match'); }}
             >
-              {t.label}
+              {t(tabItem.i18nKey)}
             </button>
           ))}
         </div>
@@ -350,9 +358,9 @@ export default function PlayerProfilePage() {
       {tab === 'stats' && (
         <div className="flex flex-col gap-2 mb-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>对局来源</span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.gameSource')}</span>
             {(['', 'offline', 'online'] as const).map((gt) => {
-              const label = gt === '' ? '全部' : gt === 'offline' ? '线下' : '线上';
+              const label = gt === '' ? t('playerProfile.filterAll') : gt === 'offline' ? t('gameType.offline') : t('gameType.online');
               const active = filterGameType === gt;
               return (
                 <button
@@ -372,7 +380,7 @@ export default function PlayerProfilePage() {
             })}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>曲线局数</span>
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.chartRounds')}</span>
             {RECENT_LIMIT_OPTIONS.map((n) => {
               const active = recentLimit === n;
               return (
@@ -387,7 +395,7 @@ export default function PlayerProfilePage() {
                   }}
                   onClick={() => setRecentLimit(n)}
                 >
-                  最近{n}局
+                  {t('playerProfile.recentN', { n })}
                 </button>
               );
             })}
@@ -404,20 +412,20 @@ export default function PlayerProfilePage() {
                   <div>
                     <div className="text-3xl font-bold">{stats.total_games}</div>
                     <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                      {activeTabLabel}{activeSourceLabel ? ` · ${activeSourceLabel}` : ''}总对局
+                      {activeTabLabel}{activeSourceLabel ? ` · ${activeSourceLabel}` : ''}{t('playerProfile.totalGamesLabel')}
                     </div>
                   </div>
                   <div>
                     <div className="text-3xl font-bold" style={{ color: stats.total_pt >= 0 ? '#2d9d78' : '#e74c3c' }}>
                       {(() => { const v = Math.round(stats.total_pt * 100) / 100; return v > 0 ? `+${v}` : v; })()}
                     </div>
-                    <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>总PT</div>
+                    <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.totalPt')}</div>
                   </div>
                 </div>
               </div>
 
               <div className="card">
-                <h3 className="font-bold mb-3" style={{ fontSize: '0.875rem' }}>位率</h3>
+                <h3 className="font-bold mb-3" style={{ fontSize: '0.875rem' }}>{t('playerProfile.rankRateTitle')}</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {RANK_RATE_ORDER.map((label) => {
                     const rate = stats.rank_distribution[label];
@@ -431,7 +439,7 @@ export default function PlayerProfilePage() {
                     return (
                       <div key={label} className="text-center p-3 rounded-xl" style={{ background: `${colors[label] || '#f0f0f0'}15` }}>
                         <div className="text-2xl font-bold" style={{ color: colors[label] || '#999' }}>{rate}%</div>
-                        <div className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{label}</div>
+                        <div className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t(RANK_RATE_I18N_KEYS[label])}</div>
                       </div>
                     );
                   })}
@@ -441,9 +449,9 @@ export default function PlayerProfilePage() {
               {chartSeries.length > 0 && (
                 <>
                   <div className="card">
-                    <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>最近对局排名折线</h3>
+                    <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>{t('playerProfile.rankLineTitle')}</h3>
                     <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
-                      纵轴为顺位（靠上为高位）；横轴为时间正序的局序号。悬停查看每局得点、PT、三麻/四麻、场别与来源。
+                      {t('playerProfile.rankLineHint')}
                     </p>
                     <PlayerStatsLineChart
                       chartKind="rank"
@@ -462,9 +470,9 @@ export default function PlayerProfilePage() {
                     </div>
                   </div>
                   <div className="card">
-                    <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>PT 累计曲线</h3>
+                    <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>{t('playerProfile.cumPtTitle')}</h3>
                     <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
-                      从第 0 局 0pt 起按时间顺序累加所选「最近 N 局」的 PT。悬停查看每局及累计详情（含三麻/四麻区分）。
+                      {t('playerProfile.cumPtHint')}
                     </p>
                     <PlayerStatsLineChart
                       chartKind="cum_pt"
@@ -474,9 +482,9 @@ export default function PlayerProfilePage() {
                       points={cumPtLinePoints}
                     />
                     <div className="flex justify-between mt-1">
-                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>起点 0pt</span>
+                      <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.cumPtStart')}</span>
                       <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                        末局累计 {chartSeries[chartSeries.length - 1]?.cumulative_pt ?? '-'}pt
+                        {t('playerProfile.cumPtEnd')} {chartSeries[chartSeries.length - 1]?.cumulative_pt ?? '-'}pt
                       </span>
                     </div>
                   </div>
@@ -486,7 +494,7 @@ export default function PlayerProfilePage() {
           ) : (
             <div className="card">
               <div className="empty-state">
-                <p className="text-sm">该条件下暂无数据</p>
+                <p className="text-sm">{t('playerProfile.noDataInCondition')}</p>
               </div>
             </div>
           )}
@@ -497,7 +505,7 @@ export default function PlayerProfilePage() {
         <div className="card">
           {filteredGames.length === 0 ? (
             <div className="empty-state">
-              <p className="text-sm">暂无对局记录</p>
+              <p className="text-sm">{t('playerProfile.noGameRecords')}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -511,7 +519,7 @@ export default function PlayerProfilePage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`badge ${game.player_count === 3 ? 'badge-sanma' : 'badge-yonma'}`}>
-                          {PLAYER_COUNT_LABELS[game.player_count] || `${game.player_count}麻`}
+                          {PLAYER_COUNT_LABELS[game.player_count] || `${game.player_count}`}
                         </span>
                         <span className="badge badge-mode">{GAME_MODE_LABELS[game.game_mode]}</span>
                         <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
@@ -528,7 +536,7 @@ export default function PlayerProfilePage() {
                           color: myRank === 1 ? '#f0b830' : '#999',
                           fontSize: '0.625rem', padding: '0.125rem 0.5rem',
                         }}>
-                          第{myRank}名
+                          {t('playerProfile.rankN', { n: myRank })}
                         </span>
                         <ScoreTag score={myGp?.score || null} />
                         <span style={{
@@ -595,11 +603,11 @@ export default function PlayerProfilePage() {
       {tab === 'yakumans' && (
         <div className="card">
           <h3 className="font-bold mb-3 flex items-center gap-2">
-            <Sparkles size={16} style={{ color: '#e65100' }} /> 役满列表
+            <Sparkles size={16} style={{ color: '#e65100' }} /> {t('playerProfile.tabYakumans')}
           </h3>
           {yakumans.length === 0 ? (
             <div className="empty-state">
-              <p className="text-sm">暂无役满记录</p>
+              <p className="text-sm">{t('playerProfile.noYakumanRecords')}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -615,22 +623,22 @@ export default function PlayerProfilePage() {
         <div className="card">
           <div className="space-y-4">
             <div>
-              <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>昵称</div>
+              <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.nicknameLabel')}</div>
               <div>{player.nickname}</div>
             </div>
             {player.real_name && (
               <div>
-                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>真实姓名</div>
+                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.realNameLabel')}</div>
                 <div>{player.real_name}</div>
               </div>
             )}
             <div>
-              <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>注册时间</div>
+              <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.createdAtLabel')}</div>
               <div className="text-sm">{player.created_at}</div>
             </div>
             {player.majsoul_accounts && player.majsoul_accounts.length > 0 && (
               <div>
-                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>雀魂账号</div>
+                <div className="text-xs font-semibold mb-1" style={{ color: 'var(--color-text-light)' }}>{t('playerProfile.majsoulAccountLabel')}</div>
                 {player.majsoul_accounts.map((acc) => (
                   <div key={acc.id} className="text-sm">
                     {acc.nickname} (UID: {acc.uid})

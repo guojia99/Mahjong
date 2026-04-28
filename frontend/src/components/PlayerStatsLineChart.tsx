@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CSSProperties, ReactNode } from 'react';
 import {
   Chart as ChartJS,
@@ -35,6 +36,7 @@ function StatGameTooltipBody({
   chartKind: 'rank' | 'cum_pt';
   filterPlayerCount: '' | '3' | '4';
 }) {
+  const { t } = useTranslation();
   const cardStyle: CSSProperties = {
     minWidth: '200px',
     maxWidth: '260px',
@@ -50,8 +52,8 @@ function StatGameTooltipBody({
   if (chartKind === 'cum_pt' && !row) {
     return (
       <div style={cardStyle}>
-        <div className="font-bold" style={{ marginBottom: '0.25rem' }}>起点</div>
-        <div style={{ color: 'var(--color-text-light)' }}>累计 PT 为 0，尚未计入任何对局。</div>
+        <div className="font-bold" style={{ marginBottom: '0.25rem' }}>{t('chart.startPoint')}</div>
+        <div style={{ color: 'var(--color-text-light)' }}>{t('chart.startPointDesc')}</div>
       </div>
     );
   }
@@ -67,10 +69,10 @@ function StatGameTooltipBody({
   return (
     <div style={cardStyle}>
       <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-        {pc === 3 && <span className="badge badge-sanma">三麻</span>}
-        {pc === 4 && <span className="badge badge-yonma">四麻</span>}
+        {pc === 3 && <span className="badge badge-sanma">{t('playerCount.sanma')}</span>}
+        {pc === 4 && <span className="badge badge-yonma">{t('playerCount.yonma')}</span>}
         {pc !== 3 && pc !== 4 && (
-          <span className="badge" style={{ background: '#ececec', color: '#666', fontSize: '0.625rem' }}>三麻/四麻未标</span>
+          <span className="badge" style={{ background: '#ececec', color: '#666', fontSize: '0.625rem' }}>{t('chart.sanmaYonmaUnknown')}</span>
         )}
         <span className="badge badge-mode" style={{ fontSize: '0.625rem' }}>{modeLabel}</span>
         <span
@@ -84,12 +86,12 @@ function StatGameTooltipBody({
         </span>
       </div>
       <div style={{ color: 'var(--color-text-light)', marginBottom: '0.35rem' }}>{row.start_time || '—'}</div>
-      <div><strong>顺位</strong> 第 {row.rank} 位</div>
-      <div><strong>得点</strong> {scoreDisp}</div>
-      <div><strong>本局 PT</strong> {fmtSignedPt(row.pt)} pt</div>
+      <div><strong>{t('chart.rankLabel')}</strong> {t('chart.rankN')} {row.rank} {t('chart.rankPosition')}</div>
+      <div><strong>{t('chart.scoreLabel')}</strong> {scoreDisp}</div>
+      <div><strong>{t('chart.gamePt')}</strong> {fmtSignedPt(row.pt)} pt</div>
       {chartKind === 'cum_pt' && row.cumulative_pt !== undefined && (
         <div style={{ marginTop: '0.35rem', paddingTop: '0.35rem', borderTop: '1px dashed var(--color-border)' }}>
-          <strong>至本局累计 PT</strong> {fmtSignedPt(row.cumulative_pt)} pt
+          <strong>{t('chart.cumPtLabel')}</strong> {fmtSignedPt(row.cumulative_pt)} pt
         </div>
       )}
     </div>
@@ -117,6 +119,7 @@ export default function PlayerStatsLineChart({
   maxRankForChart,
   points,
 }: PlayerStatsLineChartProps) {
+  const { t } = useTranslation();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{ ox: number; oy: number; wrapWidth: number; node: ReactNode } | null>(null);
 
@@ -134,7 +137,7 @@ export default function PlayerStatsLineChart({
     () => ({
       datasets: [
         {
-          label: chartKind === 'rank' ? '顺位趋势' : '累计 PT',
+          label: chartKind === 'rank' ? t('chart.rankTrend') : t('chart.cumPt'),
           data: points.map((p) => ({ x: p.x, y: p.y })),
           borderColor: chartColors.border,
           backgroundColor:
@@ -186,7 +189,7 @@ export default function PlayerStatsLineChart({
           type: 'linear',
           title: {
             display: true,
-            text: chartKind === 'rank' ? '局序号（时间正序）' : '局序号（0 为起点）',
+            text: chartKind === 'rank' ? t('chart.gameIndexLabel') : t('chart.gameIndexZeroLabel'),
             color: '#888',
             font: { size: 10 },
             padding: { top: 4 },
@@ -212,7 +215,7 @@ export default function PlayerStatsLineChart({
                   callback: (tickValue) => {
                     const v = Number(tickValue);
                     const rank = maxRankForChart + 1 - Math.round(v);
-                    return `${rank}位`;
+                    return `${rank}${t('chart.rankPosition')}`;
                   },
                 },
                 grid: { color: 'rgba(0,0,0,0.06)' },
