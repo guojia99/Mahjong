@@ -1,9 +1,222 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Any
+
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from common.exceptions import (
     BusinessException, ScoreValidationError,
     PlayerAlreadyInGame, GameAlreadyScored,
 )
+
+
+def _paipu_actions_from_game_data(paipu_data: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(paipu_data, dict) or not paipu_data:
+        return []
+    actions = paipu_data.get('actions')
+    if isinstance(actions, list) and actions:
+        return [a for a in actions if isinstance(a, dict)]
+    nested = paipu_data.get('majsoul_record_detail')
+    if isinstance(nested, dict):
+        actions = nested.get('actions')
+        if isinstance(actions, list) and actions:
+            return [a for a in actions if isinstance(a, dict)]
+    return []
+
+
+def _paipu_players_list(paipu_data: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not isinstance(paipu_data, dict):
+        return []
+    nested = paipu_data.get('majsoul_record_detail')
+    if isinstance(nested, dict):
+        pl = nested.get('players')
+        if isinstance(pl, list):
+            return [p for p in pl if isinstance(p, dict)]
+    pl = paipu_data.get('players')
+    if isinstance(pl, list):
+        return [p for p in pl if isinstance(p, dict)]
+    return []
+
+
+def _paipu_uuid_for_dedupe(paipu_data: dict[str, Any] | None, source_url: str) -> str | None:
+    if isinstance(paipu_data, dict):
+        nested = paipu_data.get('majsoul_record_detail')
+        if isinstance(nested, dict):
+            u = nested.get('uuid')
+            if u:
+                return str(u)
+        u = paipu_data.get('uuid')
+        if u:
+            return str(u)
+    from services.majsoul import extract_paipu_uuid, normalize_paipu_input_url
+    url = normalize_paipu_input_url(source_url or '')
+    if url:
+        return extract_paipu_uuid(url)
+    return None
+
+
+def _paipu_dedupe_key(game) -> tuple[str, str]:
+    """同牌谱链接只统计一次；无 uuid 时退回规范化 URL 或对局 id。"""
+    from services.majsoul import extract_paipu_uuid, normalize_paipu_input_url
+    pd = getattr(game, 'paipu_data', None) or {}
+    u = _paipu_uuid_for_dedupe(pd if isinstance(pd, dict) else None, getattr(game, 'source_url', '') or '')
+    if u:
+        return 'uuid', u
+    url = normalize_paipu_input_url(getattr(game, 'source_url', '') or '')
+    u2 = extract_paipu_uuid(url) if url else None
+    if u2:
+        return 'uuid', u2
+    if url:
+        return 'url', url
+    return 'id', str(game.pk)
+
+
+def _read_float_array(data: dict[str, Any], max_n: int = 4) -> list[float]:
+    raw = data.get('delta_scores')
+    if raw is None:
+        raw = data.get('deltaScores')
+    if not isinstance(raw, list):
+        return []
+    out: list[float] = []
+    for x in raw[:max_n]:
+        try:
+            out.append(float(x))
+        except (TypeError, ValueError):
+            out.append(0.0)
+    return out
+
+
+def _seat_uid_map(players_list: list[dict[str, Any]]) -> dict[int, int]:
+    m: dict[int, int] = {}
+    for p in players_list:
+        seat = p.get('seat')
+        aid = p.get('accountId')
+        if aid is None:
+            aid = p.get('account_id')
+        if seat is None or aid is None:
+            continue
+        try:
+            m[int(seat)] = int(aid)
+        except (TypeError, ValueError):
+            continue
+    return m
+
+
+def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[int, dict[str, int]], int]:
+    """
+    单局牌谱：按座位统计立直次数、荣和、自摸、放铳次数；返回 (seat->counts, 完结局数)。
+    counts: riichi, ron, tsumo, deal_in
+    """
+    seat_stat = defaultdict(lambda: {'riichi': 0, 'ron': 0, 'tsumo': 0, 'deal_in': 0})
+    hands = 0
+
+    for act in actions:
+        name = str(act.get('name') or '')
+        data = act.get('data')
+        if not isinstance(data, dict):
+            continue
+
+        if name.endswith('RecordDiscardTile'):
+            seat = data.get('seat')
+            try:
+                si = int(seat)
+            except (TypeError, ValueError):
+                continue
+            if si < 0 or si > 3:
+                continue
+            if data.get('is_liqi') or data.get('is_wliqi'):
+                seat_stat[si]['riichi'] += 1
+
+        elif name.endswith('RecordHule'):
+            deltas = _read_float_array(data, 4)
+            payer_seat = -1
+            if len(deltas) >= 4:
+                min_v = 0.0
+                for i in range(4):
+                    dv = deltas[i]
+                    if dv < min_v:
+                        min_v = dv
+                        payer_seat = i
+
+            hules = data.get('hules')
+            any_ron = False
+            if isinstance(hules, list):
+                for raw in hules:
+                    if not isinstance(raw, dict):
+                        continue
+                    seat = raw.get('seat')
+                    try:
+                        si = int(seat)
+                    except (TypeError, ValueError):
+                        continue
+                    if si < 0 or si > 3:
+                        continue
+                    zimo = bool(raw.get('zimo'))
+                    if zimo:
+                        seat_stat[si]['tsumo'] += 1
+                    else:
+                        seat_stat[si]['ron'] += 1
+                        any_ron = True
+            if any_ron and payer_seat >= 0:
+                seat_stat[payer_seat]['deal_in'] += 1
+            hands += 1
+
+        elif name.endswith('RecordLiuJu') or name.endswith('RecordNoTile'):
+            hands += 1
+
+    return dict(seat_stat), hands
+
+
+def fun_ranking_paipu_aggregates(
+    games_qs,
+    uid_to_player_id: dict[int, str],
+) -> dict[str, dict[str, float | int]]:
+    """
+    遍历线上对局牌谱（调用方保证仅 online、已去重、含 actions）。
+    以雀魂 accountId -> 绑定 Player 为准累计。
+    """
+    buckets: dict[str, dict[str, float | int]] = {}
+
+    def _ensure(pid: str) -> dict[str, float | int]:
+        if pid not in buckets:
+            buckets[pid] = {
+                'games': 0,
+                'rounds': 0,
+                'riichi': 0,
+                'deal_in': 0,
+                'tsumo': 0,
+                'ron': 0,
+            }
+        return buckets[pid]
+
+    for game in games_qs:
+        pd = game.paipu_data if isinstance(getattr(game, 'paipu_data', None), dict) else {}
+        actions = _paipu_actions_from_game_data(pd)
+        if not actions:
+            continue
+        players_l = _paipu_players_list(pd)
+        seat_uid = _seat_uid_map(players_l)
+        seat_stat, hands = aggregate_paipu_per_game_stats(actions)
+        if hands <= 0:
+            continue
+
+        for seat, uid in seat_uid.items():
+            pid = uid_to_player_id.get(uid)
+            if not pid:
+                continue
+            st = seat_stat.get(seat)
+            if not st:
+                st = {'riichi': 0, 'ron': 0, 'tsumo': 0, 'deal_in': 0}
+            b = _ensure(pid)
+            b['games'] = int(b['games']) + 1
+            b['rounds'] = int(b['rounds']) + hands
+            b['riichi'] = int(b['riichi']) + int(st['riichi'])
+            b['deal_in'] = int(b['deal_in']) + int(st['deal_in'])
+            b['tsumo'] = int(b['tsumo']) + int(st['tsumo'])
+            b['ron'] = int(b['ron']) + int(st['ron'])
+
+    return buckets
 
 
 class RoomService:
@@ -154,6 +367,27 @@ class GameService:
         if start_time is None:
             start_time = room.session_time or datetime.now()
 
+        from services.majsoul import build_majsoul_record_detail_blob
+
+        paipu_data = dict(paipu_data or {})
+        if (
+            paipu_data.get('detail')
+            and paipu_data.get('actions') is not None
+            and 'majsoul_record_detail' not in paipu_data
+        ):
+            paipu_data['majsoul_record_detail'] = build_majsoul_record_detail_blob(
+                {
+                    'uuid': paipu_data.get('uuid'),
+                    'start_time': paipu_data.get('start_time'),
+                    'end_time': paipu_data.get('end_time'),
+                    'players': paipu_data.get('players'),
+                    'result': paipu_data.get('result'),
+                    'actions': paipu_data.get('actions'),
+                },
+                validation_ok=bool(paipu_data.get('validation_ok', True)),
+                validation_errors=list(paipu_data.get('validation_errors') or []),
+            )
+
         with transaction.atomic():
             game = Game.objects.create(
                 room=room,
@@ -163,7 +397,7 @@ class GameService:
                 start_time=start_time,
                 end_time=end_time,
                 source_url=source_url,
-                paipu_data=paipu_data or {},
+                paipu_data=paipu_data,
                 created_by=user,
             )
 
@@ -234,7 +468,7 @@ def calculate_pt(game):
 
 
 def annotate_serialized_games_with_pt(games, data_list):
-    """GameListSerializer 结果不含 pt；与全服对局列表一致为每条附带 calculate_pt 结果。"""
+    """列表序列化本身不含 pt；此处为每条注入 calculate_pt。列表亦不含 paipu_data 全文，仅有 has_paipu_data / paipu_has_actions。"""
     game_list = list(games)
     for item in data_list:
         gid = item.get('id')
@@ -244,8 +478,17 @@ def annotate_serialized_games_with_pt(games, data_list):
 
 
 def game_detail_with_pt(game):
+    from .models import Game
     from .serializers import GameDetailSerializer
 
+    game = (
+        Game.objects.prefetch_related(
+            'game_players__player__majsoul_accounts',
+            'hand_records__player',
+        )
+        .select_related('room')
+        .get(pk=game.pk)
+    )
     data = GameDetailSerializer(game).data
     data['pt'] = calculate_pt(game)
     return data

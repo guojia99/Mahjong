@@ -239,7 +239,21 @@ export interface FunRankingItem {
 }
 
 export async function getFunRanking(params?: {
-  rank_type?: '1st' | '2nd' | '3rd' | '4th' | 'avg_rank' | 'avg_score' | 'high_score' | 'low_score';
+  rank_type?:
+    | '1st'
+    | '2nd'
+    | '3rd'
+    | '4th'
+    | 'avg_rank'
+    | 'avg_score'
+    | 'high_score'
+    | 'low_score'
+    | 'avg_riichi'
+    | 'riichi_rate'
+    | 'avg_deal_in'
+    | 'deal_in_rate'
+    | 'tsumo_rate'
+    | 'win_rate';
   player_count?: number;
   game_mode?: string;
   game_type?: 'offline' | 'online';

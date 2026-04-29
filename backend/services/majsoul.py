@@ -2,14 +2,16 @@
 雀魂牌谱：通过本地 Node 脚本调用雀魂 WebSocket 协议获取牌谱详情。
 
 环境变量可覆盖配置：MAJSOUL_ACCOUNT、MAJSOUL_PASSWORD、MAJSOUL_RATE_LIMIT_PER_MINUTE
+
+--detail 与 majsoul_paipu_demo 行为一致：每条 action.data 为 protobuf toJSON() 原文。
 """
-import asyncio
 import json
 import logging
 import re
 import subprocess
 import time
 from collections import deque
+from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 
@@ -89,7 +91,7 @@ def _get_credentials() -> tuple[str, str]:
     return account, password
 
 
-def _call_node_paipu(paipu_list: list[str]) -> list[dict[str, Any]]:
+def _call_node_paipu(paipu_list: list[str], *, detail: bool = False) -> list[dict[str, Any]]:
     _wait_for_rate_limit()
 
     node_script = _node_script_path()
@@ -97,16 +99,17 @@ def _call_node_paipu(paipu_list: list[str]) -> list[dict[str, Any]]:
         raise RuntimeError(str(_('未配置 MAJSOUL_NODE_SCRIPT_DIR')))
 
     account, password = _get_credentials()
-    print(account,password)
     if not account or not password:
         raise RuntimeError(str(_('未配置雀魂账号密码（MAJSOUL_ACCOUNT / MAJSOUL_PASSWORD）')))
 
-    cmd = [
-        'node', node_script,
+    cmd = ['node', node_script]
+    if detail:
+        cmd.append('--detail')
+    cmd.extend([
         json.dumps(paipu_list, ensure_ascii=False),
         account,
         password,
-    ]
+    ])
 
     script_dir = str(getattr(settings, 'MAJSOUL_NODE_SCRIPT_DIR', ''))
     result = subprocess.run(
@@ -160,7 +163,7 @@ def analyze_paipu_url(source_url: str) -> dict:
     paipu_uuid = extract_paipu_uuid(url) or url
 
     try:
-        records = _call_node_paipu([url])
+        records = _call_node_paipu([url], detail=True)
     except Exception as e:
         logger.error('牌谱解析失败: %s', e, exc_info=True)
         raise RuntimeError(str(_('牌谱解析失败: %(e)s') % {'e': e})) from e
@@ -169,7 +172,11 @@ def analyze_paipu_url(source_url: str) -> dict:
         raise RuntimeError(str(_('未返回牌谱数据，请检查链接是否有效')))
 
     rec = records[0]
-    players = _normalize_node_players(rec.get('players', []))
+    valid, val_errors = validate_paipu_detail_record(rec, paipu_uuid)
+    if not valid:
+        logger.warning('牌谱 detail 结构校验未通过: %s', val_errors)
+
+    players = _normalize_players_from_record(rec)
     if not players:
         raise RuntimeError(str(_('未解析到有效玩家行')))
 
@@ -198,16 +205,22 @@ def analyze_paipu_url(source_url: str) -> dict:
         'players': players,
         'raw_data': {
             'source': 'majsoul_local_node',
+            'detail': True,
             'url': url,
             'uuid': rec.get('uuid', ''),
             'start_time': start_time_val,
             'end_time': end_time_val,
             'players': rec.get('players', []),
+            'result': rec.get('result'),
+            'actions': rec.get('actions', []),
+            'validation_ok': valid,
+            'validation_errors': val_errors,
         },
     }
 
 
 def _normalize_node_players(players_list: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """fetchGameRecordsDetail（summary）节点：players 含 finalPoint / final_point。"""
     out = []
     for seat, item in enumerate(players_list or []):
         if not isinstance(item, dict):
@@ -229,6 +242,113 @@ def _normalize_node_players(players_list: list[dict[str, Any]]) -> list[dict[str
             'score': score,
         })
     return out
+
+
+def _normalize_node_players_from_detail(rec: dict[str, Any]) -> list[dict[str, Any]]:
+    """fetchGameRecord --detail：players 与 result.players 分表，用 seat 关联 part_point_1。"""
+    players = rec.get('players') or []
+    r_players = (rec.get('result') or {}).get('players') or []
+    seat_to_pr: dict[int, dict[str, Any]] = {}
+    for p in r_players:
+        if not isinstance(p, dict) or p.get('seat') is None:
+            continue
+        try:
+            seat_to_pr[int(p['seat'])] = p
+        except (TypeError, ValueError):
+            continue
+    out: list[dict[str, Any]] = []
+    for item in players:
+        if not isinstance(item, dict):
+            continue
+        uid = item.get('accountId') or item.get('account_id')
+        if uid is None:
+            continue
+        try:
+            seat = int(item.get('seat', 0))
+        except (TypeError, ValueError):
+            seat = 0
+        name = (item.get('nickName') or item.get('nickname') or '') or ''
+        pr = seat_to_pr.get(seat, {})
+        final_point = pr.get('part_point_1')
+        score = _point_to_table_hundred(final_point)
+        try:
+            uid = int(uid)
+        except (TypeError, ValueError):
+            continue
+        out.append({
+            'seat': seat,
+            'uid': uid,
+            'nickname': str(name)[:200],
+            'score': score,
+        })
+    out.sort(key=lambda x: x['seat'])
+    return out
+
+
+def _normalize_players_from_record(rec: dict[str, Any]) -> list[dict[str, Any]]:
+    players_list = rec.get('players') or []
+    if not players_list:
+        return []
+    first = players_list[0]
+    if isinstance(first, dict) and ('finalPoint' in first or 'final_point' in first):
+        return _normalize_node_players(players_list)
+    if isinstance(first, dict) and ('accountId' in first or 'account_id' in first):
+        return _normalize_node_players_from_detail(rec)
+    return _normalize_node_players(players_list)
+
+
+def validate_paipu_detail_record(
+    rec: dict[str, Any],
+    expected_uuid: str | None = None,
+) -> tuple[bool, list[str]]:
+    """校验 Node --detail 单条对局 JSON 结构（与 demo/paipu_raw 一致）。"""
+    errors: list[str] = []
+    if not isinstance(rec, dict):
+        return False, ['record_not_object']
+    if rec.get('error'):
+        return False, ['record_has_error_field']
+    if expected_uuid:
+        got = rec.get('uuid')
+        if got and str(got) != str(expected_uuid):
+            errors.append(f'uuid_mismatch expected={expected_uuid!r} got={got!r}')
+    acts = rec.get('actions')
+    if acts is None:
+        errors.append('actions_missing')
+    elif not isinstance(acts, list):
+        errors.append('actions_not_list')
+    elif len(acts) == 0:
+        errors.append('actions_empty')
+    else:
+        for i, a in enumerate(acts):
+            if not isinstance(a, dict):
+                errors.append(f'action_{i}_not_object')
+                continue
+            if a.get('name') in (None, ''):
+                errors.append(f'action_{i}_missing_name')
+            if 'step' not in a:
+                errors.append(f'action_{i}_missing_step')
+            if 'data' not in a:
+                errors.append(f'action_{i}_missing_data')
+    pl = rec.get('players')
+    if not pl or not isinstance(pl, list):
+        errors.append('players_missing_or_invalid')
+    return len(errors) == 0, errors
+
+
+def build_majsoul_record_detail_blob(rec: dict[str, Any], *, validation_ok: bool, validation_errors: list[str]) -> dict[str, Any]:
+    """写入 Game.paipu_data['majsoul_record_detail'] 的标准结构。"""
+    return {
+        'version': 1,
+        'fetched_at': datetime.now(timezone.utc).isoformat(),
+        'validation_ok': validation_ok,
+        'validation_errors': list(validation_errors),
+        'uuid': rec.get('uuid'),
+        'start_time': rec.get('start_time'),
+        'end_time': rec.get('end_time'),
+        'players': rec.get('players'),
+        'result': rec.get('result'),
+        'actions': rec.get('actions'),
+    }
 
 
 def _timestamp_to_str(ts) -> str:
@@ -259,12 +379,12 @@ def _timestamp_to_naive_dt(ts) -> 'datetime | None':
         return None
 
 
-def fetch_paipu_records(urls: list[str]) -> list[dict[str, Any]]:
-    """批量获取牌谱记录（供 retry 重试接口使用）。
+def fetch_paipu_records(urls: list[str], *, detail: bool = True) -> list[dict[str, Any]]:
+    """批量获取牌谱记录（供解析、重试等使用）。
 
-    返回与 _call_node_paipu 一致的列表。
+    默认 detail=True，与 majsoul_paipu_demo --detail 一致（含 actions 完整步进）。
     """
     valid_urls = [normalize_paipu_input_url(u) for u in urls if normalize_paipu_input_url(u)]
     if not valid_urls:
         return []
-    return _call_node_paipu(valid_urls)
+    return _call_node_paipu(valid_urls, detail=detail)

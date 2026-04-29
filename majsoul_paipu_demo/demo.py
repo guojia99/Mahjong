@@ -3,9 +3,9 @@
 雀魂牌谱拉取 Demo：
   通过 Node 脚本 (paipu.js) 调用雀魂 WebSocket 协议获取牌谱详情，
   本层 Python 负责：读取 config.yaml -> 调用 Node -> 解析 JSON 输出。
+  --detail 时，Node 输出的每条 action.data 均为 protobuf decode 后的 toJSON()，无额外转换。
 
 使用前：
-  1. cp config.example.yaml config.yaml  并填写 account / password
   2. cd node_demo && npm install
   3. python3 demo.py
 """
@@ -143,7 +143,15 @@ def main() -> None:
         password=str(cfg["password"]).strip(),
         detail=detail,
     )
-    print(json.dumps(records, ensure_ascii=False, indent=2))
+
+    d = json.dumps(records, ensure_ascii=False, indent=2)
+    print(d)
+
+    base = _script_dir()
+    paipu_path = base / "paipu.json"
+    with paipu_path.open("w", encoding="utf-8") as f:
+        f.write(d)
+    LOG.info("已写入 %s", paipu_path)
 
 
 if __name__ == "__main__":

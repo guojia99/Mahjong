@@ -29,22 +29,6 @@ let reqIndex = 1;
 const inflightRequests = {};
 const messageQueue = [];
 
-const TILES = [
-  "", "1m","2m","3m","4m","5m","6m","7m","8m","9m",
-  "1p","2p","3p","4p","5p","6p","7p","8p","9p",
-  "1s","2s","3s","4s","5s","6s","7s","8s","9s",
-  "东","南","西","北","白","发","中",
-];
-
-function tileStr(idx) {
-  if (idx === undefined || idx === null || idx === 0) return null;
-  return TILES[idx] || String(idx);
-}
-
-function arrMap(v) {
-  return Array.isArray(v) ? v.map(tileStr) : [];
-}
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -248,70 +232,13 @@ function decodeGameActions(dataBuf) {
     return { name, data: null };
   }
 
-  function humanize(name, d) {
-    if (!d || typeof d !== "object") return d;
-    if (name.endsWith("RecordNewRound")) return {
-      chang: d.chang, ju: d.ju, ben: d.ben,
-      dora: arrMap(d.doras),
-      tiles: arrMap(d.tiles),
-      scores: d.scores,
-    };
-    if (name.endsWith("RecordDiscardTile")) return {
-      seat: d.seat, tile: tileStr(d.tile),
-      is_liqi: d.is_liqi, moqie: d.moqie,
-      tingpais: arrMap(d.tingpais),
-    };
-    if (name.endsWith("RecordDealTile")) return {
-      seat: d.seat, tile: tileStr(d.tile),
-      left: d.left_tile_count,
-    };
-    if (name.endsWith("RecordChiPengGang")) return {
-      seat: d.seat, type: d.type,
-      tiles: arrMap(d.tiles),
-      froms: arrMap(d.froms),
-    };
-    if (name.endsWith("RecordAnGangAddGang")) return {
-      seat: d.seat, type: d.type,
-      tiles: arrMap(d.tiles),
-    };
-    if (name.endsWith("RecordHule")) return {
-      hules: (Array.isArray(d.hules) ? d.hules : []).map((h) => ({
-        seat: h.seat,
-        tiles: arrMap(h.tiles),
-        zimo: h.zimo,
-        point: h.point_rong || h.point_zimo,
-        fans: Array.isArray(h.fans)
-          ? h.fans.map((f) => f.name || f.val || f)
-          : [],
-      })),
-      gameend: d.gameend,
-    };
-    if (name.endsWith("RecordLiuJu")) return { type: d.type, gameend: d.gameend };
-    if (name.endsWith("RecordNoTile")) return { gameend: d.gameend };
-    if (name.endsWith("RecordRevealTile")) return {
-      seat: d.seat, tile: tileStr(d.tile), is_liqi: d.is_liqi,
-    };
-    if (name.endsWith("RecordBaBei")) return { seat: d.seat };
-    if (name.endsWith("RecordGangResult")) return {
-      gang_infos: Array.isArray(d.gang_infos) ? d.gang_infos.map((g) => ({
-        seat: g.seat, tiles: arrMap(g.tiles),
-      })) : [],
-    };
-    if (name.endsWith("RecordChangeTile")) return {
-      seat: d.seat,
-      in_tiles: arrMap(d.in_tiles),
-      out_tiles: arrMap(d.out_tiles),
-    };
-    return d;
-  }
-
   const actions = [];
   let step = 0;
   for (let i = 0; i < protoActions.length; i++) {
     const a = protoActions[i];
     if (a.type === 1 && a.result && a.result.length > 0) {
       const { name, data } = decodeActionResult(a.result);
-      actions.push({ step: step++, name, data: humanize(name, data) });
+      actions.push({ step: step++, name, data });
     }
   }
   return actions;

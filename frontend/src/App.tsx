@@ -40,6 +40,7 @@ function App() {
           <Route path="rooms/online" element={<AdminRoute><OnlineGamePage /></AdminRoute>} />
           <Route path="rooms/:id" element={<RoomDetailPage />} />
           <Route path="rooms/:roomId/games/:gameId" element={<GameDetailPage />} />
+          <Route path="games/:gameId" element={<GameDetailPage />} />
           <Route path="games" element={<GameListPage />} />
           <Route path="pt-ranking" element={<PtRankingPage />} />
           <Route path="fun-ranking" element={<FunRankingPage />} />
