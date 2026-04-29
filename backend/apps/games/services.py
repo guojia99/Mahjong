@@ -174,9 +174,11 @@ def _empty_seat_row() -> dict[str, int | float]:
         'damaten_wins': 0,
         'minkan_win_points_sum': 0,
         'minkan_win_hands': 0,
-        'riichi_discard_turn_sum': 0,
-        'riichi_tsumo_after_discards_sum': 0,
+        'riichi_self_draw_sum': 0,
+        'riichi_tsumo_after_self_draw_sum': 0,
         'riichi_tsumo_wins': 0,
+        'riichi_hu_after_self_draw_sum': 0,
+        'riichi_hu_wins': 0,
     }
 
 
@@ -186,15 +188,16 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
     立直质量：仅统计宣言立直当小局（riichi_hands）；和了/铳/流听等在该小局结算时写入。
     默听和了：和牌结算时该席本小局未立直且未鸣牌（吃碰明杠；暗杠仍计门清），荣和或自摸均计。
     明杠后和了打点：本小局该席曾明杠/加杠（RecordChiPengGang type==2）且该席和了时，累计谱面得分与次数。
-    巡：自 RecordNewRound 起，本小局内每次 RecordDiscardTile（含立直宣言打出的那张）计 1，第 n 次打牌为第 n 巡。
-    立直平均巡数：每次宣言立直时 n 的累加 ÷ 立直次数。
-    立直自摸和巡数：仅自摸和了时，从立直宣言打牌之后到和牌前（不含宣言巡）之间的打牌次数；累加 ÷ 立直后自摸次数。
+    巡（摸牌数）：自 RecordNewRound 起，该席每出现一次 RecordDealTile（seat 为该席）计 1；起手配牌不计入（仅牌谱中的摸牌记录）。
+    立直平均巡：每次宣言立直时该席当前摸牌累计值的累加 ÷ 立直次数。
+    立直后自摸巡：仅自摸和了时，和牌时刻该席摸牌累计与立直宣言时刻累计之差；累加 ÷ 立直后自摸次数。
+    立直后和牌巡：荣和或自摸和了时同上差；累加 ÷ 立直后和牌次数。
     """
     st: dict[int, dict[str, int | float]] = defaultdict(_empty_seat_row)
     hands = 0
 
-    discards_in_hand = 0
-    riichi_decl_seq: list[int | None] = [None, None, None, None]
+    draws_self = [0, 0, 0, 0]
+    riichi_decl_draws: list[int | None] = [None, None, None, None]
 
     round_liqi = [False, False, False, False]
     round_furo = [False, False, False, False]
@@ -241,14 +244,19 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
             row = st[si]
             row['win_points_sum'] = int(row['win_points_sum']) + pts
             row['wins'] = int(row['wins']) + 1
-            if kind == 'hule' and zimo and round_liqi[si]:
-                rs = riichi_decl_seq[si]
+            if kind == 'hule' and round_liqi[si]:
+                rs = riichi_decl_draws[si]
                 if rs is not None:
-                    after = max(0, int(discards_in_hand) - int(rs))
-                    row['riichi_tsumo_after_discards_sum'] = (
-                        int(row['riichi_tsumo_after_discards_sum']) + after
+                    after = max(0, int(draws_self[si]) - int(rs))
+                    row['riichi_hu_after_self_draw_sum'] = (
+                        int(row['riichi_hu_after_self_draw_sum']) + after
                     )
-                    row['riichi_tsumo_wins'] = int(row['riichi_tsumo_wins']) + 1
+                    row['riichi_hu_wins'] = int(row['riichi_hu_wins']) + 1
+                    if zimo:
+                        row['riichi_tsumo_after_self_draw_sum'] = (
+                            int(row['riichi_tsumo_after_self_draw_sum']) + after
+                        )
+                        row['riichi_tsumo_wins'] = int(row['riichi_tsumo_wins']) + 1
             if kind == 'hule' and round_minkan[si]:
                 row['minkan_win_points_sum'] = int(row['minkan_win_points_sum']) + pts
                 row['minkan_win_hands'] = int(row['minkan_win_hands']) + 1
@@ -317,9 +325,19 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
             continue
 
         if name.endswith('RecordNewRound'):
-            discards_in_hand = 0
-            riichi_decl_seq = [None, None, None, None]
+            draws_self = [0, 0, 0, 0]
+            riichi_decl_draws = [None, None, None, None]
             _reset_round_flags()
+            continue
+
+        if name.endswith('RecordDealTile'):
+            seat = data.get('seat')
+            try:
+                si = int(seat)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= si <= 3:
+                draws_self[si] += 1
             continue
 
         if name.endswith('RecordDiscardTile'):
@@ -330,12 +348,12 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
                 continue
             if si < 0 or si > 3:
                 continue
-            discards_in_hand += 1
             if data.get('is_liqi') or data.get('is_wliqi'):
                 any_before = any(round_liqi)
                 st[si]['riichi'] = int(st[si]['riichi']) + 1
-                st[si]['riichi_discard_turn_sum'] = int(st[si]['riichi_discard_turn_sum']) + discards_in_hand
-                riichi_decl_seq[si] = discards_in_hand
+                dcnt = int(draws_self[si])
+                st[si]['riichi_self_draw_sum'] = int(st[si]['riichi_self_draw_sum']) + dcnt
+                riichi_decl_draws[si] = dcnt
                 if not any_before:
                     st[si]['first_riichi_rounds'] = int(st[si]['first_riichi_rounds']) + 1
                 else:
@@ -389,7 +407,9 @@ def PAIPU_RANK_BUCKET_KEYS() -> tuple[str, ...]:
         'riichi_hands', 'riichi_win_hands', 'riichi_deal_hands', 'riichi_noten_hands', 'riichi_pt_sum',
         'damaten_wins',
         'minkan_win_points_sum', 'minkan_win_hands',
-        'riichi_discard_turn_sum', 'riichi_tsumo_after_discards_sum', 'riichi_tsumo_wins',
+        'riichi_self_draw_sum',
+        'riichi_tsumo_after_self_draw_sum', 'riichi_tsumo_wins',
+        'riichi_hu_after_self_draw_sum', 'riichi_hu_wins',
     )
 
 
@@ -445,7 +465,7 @@ PAIPU_STATS_RANK_TYPES = frozenset({
     'total_minkan', 'avg_minkan', 'minkan_rate', 'total_ankan', 'avg_ankan', 'ankan_rate',
     'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate', 'avg_riichi_pt', 'riichi_quality',
     'riichi_composite',
-    'avg_riichi_discard_turn', 'avg_riichi_tsumo_after_turn',
+    'avg_riichi_discard_turn', 'avg_riichi_tsumo_after_turn', 'avg_riichi_hu_after_turn',
 })
 
 
@@ -615,21 +635,33 @@ def paipu_stats_build_rank_items(
         elif rank_type == 'avg_riichi_discard_turn':
             if riichi <= 0:
                 continue
-            rsum = int(b['riichi_discard_turn_sum'])
+            rsum = int(b['riichi_self_draw_sum'])
             row = {'player_id': pid, 'rate': round(rsum / riichi, 2), 'count': rsum, 'total': riichi}
         elif rank_type == 'avg_riichi_tsumo_after_turn':
             rtw = int(b['riichi_tsumo_wins'])
             if rtw <= 0:
                 continue
-            tsum = int(b['riichi_tsumo_after_discards_sum'])
+            tsum = int(b['riichi_tsumo_after_self_draw_sum'])
             row = {'player_id': pid, 'rate': round(tsum / rtw, 2), 'count': tsum, 'total': rtw}
+        elif rank_type == 'avg_riichi_hu_after_turn':
+            rhw = int(b['riichi_hu_wins'])
+            if rhw <= 0:
+                continue
+            hsum = int(b['riichi_hu_after_self_draw_sum'])
+            row = {'player_id': pid, 'rate': round(hsum / rhw, 2), 'count': hsum, 'total': rhw}
         else:
             continue
 
         if row:
+            row['rounds'] = rounds
             items.append(row)
 
-    if rank_type == 'riichi_noten_rate':
+    if rank_type in (
+        'riichi_noten_rate',
+        'avg_riichi_discard_turn',
+        'avg_riichi_tsumo_after_turn',
+        'avg_riichi_hu_after_turn',
+    ):
         reverse = False
     else:
         reverse = True

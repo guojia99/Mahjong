@@ -679,6 +679,7 @@ class PaipuStatsRankingView(APIView):
                 'rate': item['rate'],
                 'count': item['count'],
                 'total': item['total'],
+                'rounds': item.get('rounds', 0),
             })
         return Response(result)
 

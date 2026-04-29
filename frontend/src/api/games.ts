@@ -236,6 +236,8 @@ export interface FunRankingItem {
   rate: number;
   count: number;
   total: number;
+  /** 牌谱统计排行：该玩家参与计分的小局总数（与 intro 中「率」分母一致） */
+  rounds?: number;
 }
 
 export async function getFunRanking(params?: {
@@ -278,7 +280,8 @@ export type PaipuStatRankType =
   | 'riichi_quality'
   | 'riichi_composite'
   | 'avg_riichi_discard_turn'
-  | 'avg_riichi_tsumo_after_turn';
+  | 'avg_riichi_tsumo_after_turn'
+  | 'avg_riichi_hu_after_turn';
 
 export async function getPaipuStatsRanking(params?: {
   rank_type?: PaipuStatRankType;
