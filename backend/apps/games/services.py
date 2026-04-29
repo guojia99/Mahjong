@@ -87,6 +87,41 @@ def _read_float_array(data: dict[str, Any], max_n: int = 4) -> list[float]:
     return out
 
 
+def _json_bool_loose(val: Any) -> bool | None:
+    """解析 protobuf/JSON 布尔；须避免 Python bool('false') is True。"""
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return bool(int(val))
+    if isinstance(val, str):
+        s = val.strip().lower()
+        if s in ('true', '1', 'yes', 'on', 'y'):
+            return True
+        if s in ('false', '0', 'no', 'off', 'n', ''):
+            return False
+        return None
+    return bool(val)
+
+
+def _notile_player_is_tenpai(p: dict[str, Any]) -> bool | None:
+    """
+    RecordNoTile 的 NoTilePlayerInfo：True=听牌，False=未听，None=无法从该对象判定。
+    无 seat 时由调用方按下标对应座位。听牌信息亦可来自非空的 tings。
+    """
+    for key in ('tingpai', 'tingPai', 'ting_pai'):
+        tb = _json_bool_loose(p.get(key))
+        if tb is not None:
+            return tb
+    tings = p.get('tings')
+    if tings is None:
+        tings = p.get('Tings')
+    if isinstance(tings, list):
+        return len(tings) > 0
+    return None
+
+
 def _seat_uid_map(players_list: list[dict[str, Any]]) -> dict[int, int]:
     m: dict[int, int] = {}
     for p in players_list:
@@ -103,18 +138,157 @@ def _seat_uid_map(players_list: list[dict[str, Any]]) -> dict[int, int]:
     return m
 
 
-def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[int, dict[str, int]], int]:
+def _hu_points(h: dict[str, Any]) -> int:
+    def n(x: Any) -> int:
+        try:
+            v = float(x)
+            return int(v) if v == v else 0
+        except (TypeError, ValueError):
+            return 0
+    return n(h.get('point_rong')) or n(h.get('point_zimo')) or n(h.get('point_sum')) or n(h.get('dadian'))
+
+
+def _empty_seat_row() -> dict[str, int | float]:
+    return {
+        'riichi': 0,
+        'ron': 0,
+        'tsumo': 0,
+        'deal_in': 0,
+        'furo_actions': 0,
+        'furo_rounds': 0,
+        'minkan_actions': 0,
+        'ankan_actions': 0,
+        'minkan_rounds': 0,
+        'ankan_rounds': 0,
+        'first_riichi_rounds': 0,
+        'chase_riichi_decls': 0,
+        'win_points_sum': 0,
+        'wins': 0,
+        'deal_points_sum': 0,
+        'deal_in_events': 0,
+        'riichi_hands': 0,
+        'riichi_win_hands': 0,
+        'riichi_deal_hands': 0,
+        'riichi_noten_hands': 0,
+        'riichi_pt_sum': 0,
+    }
+
+
+def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[int, dict[str, int | float]], int]:
     """
-    单局牌谱：按座位统计立直次数、荣和、自摸、放铳次数；返回 (seat->counts, 完结局数)。
-    counts: riichi, ron, tsumo, deal_in
+    单局牌谱：按座位累计；完结局数 hands。
+    立直质量：仅统计宣言立直当小局（riichi_hands）；和了/铳/流听等在该小局结算时写入。
     """
-    seat_stat = defaultdict(lambda: {'riichi': 0, 'ron': 0, 'tsumo': 0, 'deal_in': 0})
+    st: dict[int, dict[str, int | float]] = defaultdict(_empty_seat_row)
     hands = 0
+
+    round_liqi = [False, False, False, False]
+    round_furo = [False, False, False, False]
+    round_minkan = [False, False, False, False]
+    round_ankan = [False, False, False, False]
+
+    def _reset_round_flags() -> None:
+        nonlocal round_liqi, round_furo, round_minkan, round_ankan
+        round_liqi = [False, False, False, False]
+        round_furo = [False, False, False, False]
+        round_minkan = [False, False, False, False]
+        round_ankan = [False, False, False, False]
+
+    def _flush_hand_end(data: dict[str, Any], kind: str) -> None:
+        nonlocal hands
+        hands += 1
+        deltas = _read_float_array(data, 4)
+        while len(deltas) < 4:
+            deltas.append(0.0)
+
+        payer_seat = -1
+        if kind == 'hule':
+            if len(deltas) >= 4:
+                min_v = 0.0
+                for i in range(4):
+                    if deltas[i] < min_v:
+                        min_v = deltas[i]
+                        payer_seat = i
+
+        hules = data.get('hules') if isinstance(data.get('hules'), list) else []
+        winners: set[int] = set()
+        any_ron = False
+        for raw in hules:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                si = int(raw.get('seat'))
+            except (TypeError, ValueError):
+                continue
+            if si < 0 or si > 3:
+                continue
+            zimo = bool(raw.get('zimo'))
+            pts = _hu_points(raw)
+            row = st[si]
+            row['win_points_sum'] = int(row['win_points_sum']) + pts
+            row['wins'] = int(row['wins']) + 1
+            winners.add(si)
+            if zimo:
+                row['tsumo'] = int(row['tsumo']) + 1
+            else:
+                row['ron'] = int(row['ron']) + 1
+                any_ron = True
+        if any_ron and payer_seat >= 0:
+            loss = int(abs(deltas[payer_seat])) if payer_seat < len(deltas) else 0
+            pr = st[payer_seat]
+            pr['deal_in'] = int(pr['deal_in']) + 1
+            pr['deal_in_events'] = int(pr['deal_in_events']) + 1
+            pr['deal_points_sum'] = int(pr['deal_points_sum']) + max(loss, 0)
+
+        tenpai: list[bool | None] = [None, None, None, None]
+        if kind == 'notile':
+            arr = data.get('players')
+            if not isinstance(arr, list):
+                arr = data.get('Players')
+            if isinstance(arr, list):
+                for i, p in enumerate(arr):
+                    if not isinstance(p, dict):
+                        continue
+                    seat_raw = p.get('seat')
+                    try:
+                        seat = int(float(seat_raw)) if seat_raw is not None else i
+                    except (TypeError, ValueError):
+                        seat = i
+                    if 0 <= seat <= 3:
+                        tenpai[seat] = _notile_player_is_tenpai(p)
+
+        for s in range(4):
+            r = st[s]
+            if round_liqi[s]:
+                r['riichi_hands'] = int(r['riichi_hands']) + 1
+                dv = int(deltas[s]) if s < len(deltas) else 0
+                r['riichi_pt_sum'] = int(r['riichi_pt_sum']) + dv
+                if s in winners:
+                    r['riichi_win_hands'] = int(r['riichi_win_hands']) + 1
+                if kind == 'hule' and any_ron and payer_seat == s:
+                    r['riichi_deal_hands'] = int(r['riichi_deal_hands']) + 1
+                if kind == 'notile' and tenpai[s] is False:
+                    r['riichi_noten_hands'] = int(r['riichi_noten_hands']) + 1
+
+        for s in range(4):
+            r = st[s]
+            if round_furo[s]:
+                r['furo_rounds'] = int(r['furo_rounds']) + 1
+            if round_minkan[s]:
+                r['minkan_rounds'] = int(r['minkan_rounds']) + 1
+            if round_ankan[s]:
+                r['ankan_rounds'] = int(r['ankan_rounds']) + 1
+
+        _reset_round_flags()
 
     for act in actions:
         name = str(act.get('name') or '')
         data = act.get('data')
         if not isinstance(data, dict):
+            continue
+
+        if name.endswith('RecordNewRound'):
+            _reset_round_flags()
             continue
 
         if name.endswith('RecordDiscardTile'):
@@ -126,46 +300,58 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
             if si < 0 or si > 3:
                 continue
             if data.get('is_liqi') or data.get('is_wliqi'):
-                seat_stat[si]['riichi'] += 1
+                any_before = any(round_liqi)
+                st[si]['riichi'] = int(st[si]['riichi']) + 1
+                if not any_before:
+                    st[si]['first_riichi_rounds'] = int(st[si]['first_riichi_rounds']) + 1
+                else:
+                    st[si]['chase_riichi_decls'] = int(st[si]['chase_riichi_decls']) + 1
+                round_liqi[si] = True
+            continue
 
-        elif name.endswith('RecordHule'):
-            deltas = _read_float_array(data, 4)
-            payer_seat = -1
-            if len(deltas) >= 4:
-                min_v = 0.0
-                for i in range(4):
-                    dv = deltas[i]
-                    if dv < min_v:
-                        min_v = dv
-                        payer_seat = i
+        if name.endswith('RecordChiPengGang'):
+            try:
+                si = int(data.get('seat'))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= si <= 3:
+                st[si]['furo_actions'] = int(st[si]['furo_actions']) + 1
+                round_furo[si] = True
+                t = data.get('type')
+                if t == 2:
+                    st[si]['minkan_actions'] = int(st[si]['minkan_actions']) + 1
+                    round_minkan[si] = True
+            continue
 
-            hules = data.get('hules')
-            any_ron = False
-            if isinstance(hules, list):
-                for raw in hules:
-                    if not isinstance(raw, dict):
-                        continue
-                    seat = raw.get('seat')
-                    try:
-                        si = int(seat)
-                    except (TypeError, ValueError):
-                        continue
-                    if si < 0 or si > 3:
-                        continue
-                    zimo = bool(raw.get('zimo'))
-                    if zimo:
-                        seat_stat[si]['tsumo'] += 1
-                    else:
-                        seat_stat[si]['ron'] += 1
-                        any_ron = True
-            if any_ron and payer_seat >= 0:
-                seat_stat[payer_seat]['deal_in'] += 1
-            hands += 1
+        if name.endswith('RecordAnGangAddGang'):
+            try:
+                si = int(data.get('seat'))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= si <= 3:
+                st[si]['ankan_actions'] = int(st[si]['ankan_actions']) + 1
+                round_ankan[si] = True
+            continue
 
-        elif name.endswith('RecordLiuJu') or name.endswith('RecordNoTile'):
-            hands += 1
+        if name.endswith('RecordHule'):
+            _flush_hand_end(data, 'hule')
+            continue
 
-    return dict(seat_stat), hands
+        if name.endswith('RecordLiuJu') or name.endswith('RecordNoTile'):
+            _flush_hand_end(data, 'notile' if name.endswith('RecordNoTile') else 'liuju')
+            continue
+
+    return dict(st), hands
+
+
+def PAIPU_RANK_BUCKET_KEYS() -> tuple[str, ...]:
+    return (
+        'games', 'rounds', 'riichi', 'deal_in', 'tsumo', 'ron',
+        'furo_actions', 'furo_rounds', 'minkan_actions', 'ankan_actions', 'minkan_rounds', 'ankan_rounds',
+        'first_riichi_rounds', 'chase_riichi_decls',
+        'win_points_sum', 'wins', 'deal_points_sum', 'deal_in_events',
+        'riichi_hands', 'riichi_win_hands', 'riichi_deal_hands', 'riichi_noten_hands', 'riichi_pt_sum',
+    )
 
 
 def fun_ranking_paipu_aggregates(
@@ -176,18 +362,12 @@ def fun_ranking_paipu_aggregates(
     遍历线上对局牌谱（调用方保证仅 online、已去重、含 actions）。
     以雀魂 accountId -> 绑定 Player 为准累计。
     """
+    keys = PAIPU_RANK_BUCKET_KEYS()
     buckets: dict[str, dict[str, float | int]] = {}
 
     def _ensure(pid: str) -> dict[str, float | int]:
         if pid not in buckets:
-            buckets[pid] = {
-                'games': 0,
-                'rounds': 0,
-                'riichi': 0,
-                'deal_in': 0,
-                'tsumo': 0,
-                'ron': 0,
-            }
+            buckets[pid] = {k: 0 for k in keys}
         return buckets[pid]
 
     for game in games_qs:
@@ -197,26 +377,205 @@ def fun_ranking_paipu_aggregates(
             continue
         players_l = _paipu_players_list(pd)
         seat_uid = _seat_uid_map(players_l)
-        seat_stat, hands = aggregate_paipu_per_game_stats(actions)
-        if hands <= 0:
+        seat_stat, nhands = aggregate_paipu_per_game_stats(actions)
+        if nhands <= 0:
             continue
 
         for seat, uid in seat_uid.items():
             pid = uid_to_player_id.get(uid)
             if not pid:
                 continue
-            st = seat_stat.get(seat)
-            if not st:
-                st = {'riichi': 0, 'ron': 0, 'tsumo': 0, 'deal_in': 0}
+            row = seat_stat.get(seat) or _empty_seat_row()
             b = _ensure(pid)
             b['games'] = int(b['games']) + 1
-            b['rounds'] = int(b['rounds']) + hands
-            b['riichi'] = int(b['riichi']) + int(st['riichi'])
-            b['deal_in'] = int(b['deal_in']) + int(st['deal_in'])
-            b['tsumo'] = int(b['tsumo']) + int(st['tsumo'])
-            b['ron'] = int(b['ron']) + int(st['ron'])
+            b['rounds'] = int(b['rounds']) + nhands
+            for k in keys:
+                if k == 'games':
+                    continue
+                if k == 'rounds':
+                    continue
+                b[k] = int(b[k]) + int(row.get(k, 0) or 0)
 
     return buckets
+
+
+PAIPU_STATS_RANK_TYPES = frozenset({
+    'avg_riichi', 'riichi_rate', 'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'avg_win_count',
+    'avg_furo', 'furo_rate', 'avg_win_point', 'avg_deal_point',
+    'first_riichi_rate', 'chase_riichi_rate',
+    'total_minkan', 'avg_minkan', 'minkan_rate', 'total_ankan', 'avg_ankan', 'ankan_rate',
+    'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate', 'avg_riichi_pt', 'riichi_quality',
+    'riichi_composite',
+})
+
+
+def _riichi_composite_score(b: dict[str, float | int]) -> float | None:
+    """
+    立直质量综合分（0～100）：立直小局内五维加权。
+    和了率 24%、（1−铳率）24%、（1−流听率）19%、场均素点归一 19%、净胜指数归一 14%。
+    素点/小局 ∈ [−3000,+3000] 线性映射到 [0,1]；净胜 (−1,+1) 映射到 [0,1]。
+    """
+    rh = int(b['riichi_hands'])
+    if rh <= 0:
+        return None
+    rw = int(b['riichi_win_hands'])
+    rdh = int(b['riichi_deal_hands'])
+    rn = int(b['riichi_noten_hands'])
+    rpt = int(b['riichi_pt_sum'])
+    pt_per = float(rpt) / float(rh)
+    pt_n = max(0.0, min(1.0, (pt_per + 3000.0) / 6000.0))
+    net_n = max(0.0, min(1.0, ((float(rw - rdh) / float(rh)) + 1.0) * 0.5))
+    s = (
+        0.24 * (float(rw) / float(rh))
+        + 0.24 * (1.0 - float(rdh) / float(rh))
+        + 0.19 * (1.0 - float(rn) / float(rh))
+        + 0.19 * pt_n
+        + 0.14 * net_n
+    )
+    return round(100.0 * s, 2)
+
+
+def paipu_stats_build_rank_items(
+    buckets: dict[str, dict[str, float | int]],
+    rank_type: str,
+    min_games: int,
+) -> tuple[list[dict[str, Any]], bool]:
+    """
+    Returns (items with player_id, rate, count, total), reverse_sort
+    """
+    items: list[dict[str, Any]] = []
+    reverse = True
+
+    for pid, b in buckets.items():
+        gcount = int(b['games'])
+        if gcount < min_games:
+            continue
+        rounds = int(b['rounds'])
+        riichi = int(b['riichi'])
+        deal_in = int(b['deal_in'])
+        tsumo = int(b['tsumo'])
+        ron = int(b['ron'])
+        wins = tsumo + ron
+
+        row: dict[str, Any] | None = None
+
+        if rank_type == 'avg_riichi':
+            row = {'player_id': pid, 'rate': round(riichi / gcount, 3), 'count': riichi, 'total': gcount}
+        elif rank_type == 'riichi_rate':
+            row = {'player_id': pid, 'rate': round(riichi / rounds * 100, 2), 'count': riichi, 'total': rounds}
+        elif rank_type == 'avg_deal_in':
+            row = {'player_id': pid, 'rate': round(deal_in / gcount, 3), 'count': deal_in, 'total': gcount}
+        elif rank_type == 'deal_in_rate':
+            row = {'player_id': pid, 'rate': round(deal_in / rounds * 100, 2), 'count': deal_in, 'total': rounds}
+        elif rank_type == 'tsumo_rate':
+            if wins <= 0:
+                continue
+            row = {'player_id': pid, 'rate': round(tsumo / wins * 100, 2), 'count': tsumo, 'total': wins}
+        elif rank_type == 'win_rate':
+            row = {'player_id': pid, 'rate': round(wins / rounds * 100, 2), 'count': wins, 'total': rounds}
+        elif rank_type == 'avg_win_count':
+            wn = int(b['wins'])
+            row = {'player_id': pid, 'rate': round(wn / gcount, 3), 'count': wn, 'total': gcount}
+        elif rank_type == 'avg_furo':
+            fa = int(b['furo_actions'])
+            row = {'player_id': pid, 'rate': round(fa / gcount, 3), 'count': fa, 'total': gcount}
+        elif rank_type == 'furo_rate':
+            fr = int(b['furo_rounds'])
+            row = {'player_id': pid, 'rate': round(fr / rounds * 100, 2), 'count': fr, 'total': rounds}
+        elif rank_type == 'avg_win_point':
+            wsum = int(b['win_points_sum'])
+            wn = int(b['wins'])
+            if wn <= 0:
+                continue
+            row = {'player_id': pid, 'rate': round(wsum / wn, 1), 'count': wsum, 'total': wn}
+        elif rank_type == 'avg_deal_point':
+            dsum = int(b['deal_points_sum'])
+            dev = int(b['deal_in_events'])
+            if dev <= 0:
+                continue
+            row = {'player_id': pid, 'rate': round(dsum / dev, 1), 'count': dsum, 'total': dev}
+        elif rank_type == 'first_riichi_rate':
+            fir = int(b['first_riichi_rounds'])
+            row = {'player_id': pid, 'rate': round(fir / rounds * 100, 2), 'count': fir, 'total': rounds}
+        elif rank_type == 'chase_riichi_rate':
+            ch = int(b['chase_riichi_decls'])
+            if riichi <= 0:
+                continue
+            row = {'player_id': pid, 'rate': round(ch / riichi * 100, 2), 'count': ch, 'total': riichi}
+        elif rank_type == 'total_minkan':
+            ga = int(b['minkan_actions'])
+            row = {'player_id': pid, 'rate': float(ga), 'count': ga, 'total': gcount}
+        elif rank_type == 'avg_minkan':
+            ga = int(b['minkan_actions'])
+            row = {'player_id': pid, 'rate': round(ga / gcount, 3), 'count': ga, 'total': gcount}
+        elif rank_type == 'minkan_rate':
+            kr = int(b['minkan_rounds'])
+            row = {'player_id': pid, 'rate': round(kr / rounds * 100, 2), 'count': kr, 'total': rounds}
+        elif rank_type == 'total_ankan':
+            ga = int(b['ankan_actions'])
+            row = {'player_id': pid, 'rate': float(ga), 'count': ga, 'total': gcount}
+        elif rank_type == 'avg_ankan':
+            ga = int(b['ankan_actions'])
+            row = {'player_id': pid, 'rate': round(ga / gcount, 3), 'count': ga, 'total': gcount}
+        elif rank_type == 'ankan_rate':
+            kr = int(b['ankan_rounds'])
+            row = {'player_id': pid, 'rate': round(kr / rounds * 100, 2), 'count': kr, 'total': rounds}
+        elif rank_type == 'riichi_win_rate':
+            rh = int(b['riichi_hands'])
+            if rh <= 0:
+                continue
+            rw = int(b['riichi_win_hands'])
+            row = {'player_id': pid, 'rate': round(rw / rh * 100, 2), 'count': rw, 'total': rh}
+        elif rank_type == 'riichi_deal_rate':
+            rh = int(b['riichi_hands'])
+            if rh <= 0:
+                continue
+            rdh = int(b['riichi_deal_hands'])
+            row = {'player_id': pid, 'rate': round(rdh / rh * 100, 2), 'count': rdh, 'total': rh}
+        elif rank_type == 'riichi_noten_rate':
+            rh = int(b['riichi_hands'])
+            if rh <= 0:
+                continue
+            rn = int(b['riichi_noten_hands'])
+            row = {'player_id': pid, 'rate': round(rn / rh * 100, 2), 'count': rn, 'total': rh}
+        elif rank_type == 'avg_riichi_pt':
+            rh = int(b['riichi_hands'])
+            if rh <= 0:
+                continue
+            rpt = int(b['riichi_pt_sum'])
+            row = {'player_id': pid, 'rate': round(rpt / rh, 1), 'count': rpt, 'total': rh}
+        elif rank_type == 'riichi_quality':
+            rh = int(b['riichi_hands'])
+            if rh <= 0:
+                continue
+            rw = int(b['riichi_win_hands'])
+            rdh = int(b['riichi_deal_hands'])
+            row = {
+                'player_id': pid,
+                'rate': round((rw - rdh) / rh * 100, 2),
+                'count': rw - rdh,
+                'total': rh,
+            }
+        elif rank_type == 'riichi_composite':
+            sc = _riichi_composite_score(b)
+            if sc is None:
+                continue
+            rh = int(b['riichi_hands'])
+            rw = int(b['riichi_win_hands'])
+            row = {'player_id': pid, 'rate': float(sc), 'count': rw, 'total': rh}
+        else:
+            continue
+
+        if row:
+            items.append(row)
+
+    if rank_type == 'riichi_noten_rate':
+        reverse = False
+    else:
+        reverse = True
+
+    items.sort(key=lambda x: x['rate'], reverse=reverse)
+    return items, reverse
 
 
 class RoomService:

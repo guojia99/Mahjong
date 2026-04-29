@@ -4,7 +4,7 @@ from .views import (
     GamePlayerUpdateView, GameShuffleSeatsView, OnlineGameImportView,
     OnlineGameParseView, OnlineGameParseBatchView, BindMajsoulAccountView, UnboundMajsoulAccountsView,
     HandRecordListView, HandRecordDetailView,
-    PlayerStatsView, PtRankingView, FunRankingView,
+    PlayerStatsView, PtRankingView, FunRankingView, PaipuStatsRankingView,
     YakumanListView, RecentYakumanView, PlayerYakumanListView,
     OnlineGameRetryView,
 )
@@ -19,6 +19,7 @@ urlpatterns = [
     path('online/unbound-accounts/', UnboundMajsoulAccountsView.as_view(), name='game-online-unbound-accounts'),
     path('pt-ranking/', PtRankingView.as_view(), name='game-pt-ranking'),
     path('fun-ranking/', FunRankingView.as_view(), name='game-fun-ranking'),
+    path('paipu-stats/', PaipuStatsRankingView.as_view(), name='game-paipu-stats'),
     path('yakumans/', YakumanListView.as_view(), name='yakuman-list'),
     path('yakumans/recent/', RecentYakumanView.as_view(), name='yakuman-recent'),
     path('<uuid:pk>/', GameDetailView.as_view(), name='game-detail'),

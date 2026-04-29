@@ -239,26 +239,50 @@ export interface FunRankingItem {
 }
 
 export async function getFunRanking(params?: {
-  rank_type?:
-    | '1st'
-    | '2nd'
-    | '3rd'
-    | '4th'
-    | 'avg_rank'
-    | 'avg_score'
-    | 'high_score'
-    | 'low_score'
-    | 'avg_riichi'
-    | 'riichi_rate'
-    | 'avg_deal_in'
-    | 'deal_in_rate'
-    | 'tsumo_rate'
-    | 'win_rate';
+  rank_type?: '1st' | '2nd' | '3rd' | '4th' | 'avg_rank' | 'avg_score' | 'high_score' | 'low_score';
   player_count?: number;
   game_mode?: string;
   game_type?: 'offline' | 'online';
   min_games?: number;
 }): Promise<FunRankingItem[]> {
   const { data } = await api.get('/games/fun-ranking/', { params });
+  return data;
+}
+
+export type PaipuStatRankType =
+  | 'win_rate'
+  | 'avg_win_count'
+  | 'avg_riichi'
+  | 'riichi_rate'
+  | 'avg_deal_in'
+  | 'deal_in_rate'
+  | 'tsumo_rate'
+  | 'avg_furo'
+  | 'furo_rate'
+  | 'avg_win_point'
+  | 'avg_deal_point'
+  | 'first_riichi_rate'
+  | 'chase_riichi_rate'
+  | 'total_minkan'
+  | 'avg_minkan'
+  | 'minkan_rate'
+  | 'total_ankan'
+  | 'avg_ankan'
+  | 'ankan_rate'
+  | 'riichi_win_rate'
+  | 'riichi_deal_rate'
+  | 'riichi_noten_rate'
+  | 'avg_riichi_pt'
+  | 'riichi_quality'
+  | 'riichi_composite';
+
+export async function getPaipuStatsRanking(params?: {
+  rank_type?: PaipuStatRankType;
+  player_count?: number;
+  game_mode?: string;
+  game_type?: 'offline' | 'online';
+  min_games?: number;
+}): Promise<FunRankingItem[]> {
+  const { data } = await api.get('/games/paipu-stats/', { params });
   return data;
 }

@@ -25,22 +25,7 @@ export type FunRankType =
   | 'avg_rank'
   | 'avg_score'
   | 'high_score'
-  | 'low_score'
-  | 'avg_riichi'
-  | 'riichi_rate'
-  | 'avg_deal_in'
-  | 'deal_in_rate'
-  | 'tsumo_rate'
-  | 'win_rate';
-
-const PAIPU_RANK_TYPES = new Set<string>([
-  'avg_riichi',
-  'riichi_rate',
-  'avg_deal_in',
-  'deal_in_rate',
-  'tsumo_rate',
-  'win_rate',
-]);
+  | 'low_score';
 
 type TabConfig = {
   value: FunRankType;
@@ -57,18 +42,6 @@ function subtitleForRank(rankType: FunRankType, item: FunRankingItem, t: (k: str
   if (['1st', '2nd', '3rd', '4th'].includes(rankType)) {
     return `${item.count}/${item.total} ${t('common.unit.round')}`;
   }
-  if (rankType === 'riichi_rate' || rankType === 'deal_in_rate' || rankType === 'win_rate') {
-    return t('funRanking.subtitleHandsRatio', { count: item.count, total: item.total });
-  }
-  if (rankType === 'tsumo_rate') {
-    return t('funRanking.subtitleWinsRatio', { count: item.count, total: item.total });
-  }
-  if (rankType === 'avg_riichi') {
-    return t('funRanking.subtitleAvgRiichi', { count: item.count, total: item.total });
-  }
-  if (rankType === 'avg_deal_in') {
-    return t('funRanking.subtitleAvgDealIn', { count: item.count, total: item.total });
-  }
   return `${item.total} ${t('common.unit.round')}`;
 }
 
@@ -78,7 +51,7 @@ export default function FunRankingPage() {
   const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [gameType, setGameType] = useState<'' | 'offline' | 'online'>('');
-  const [minGames, setMinGames] = useState('1');
+  const [minGames, setMinGames] = useState('5');
   const { showToast, ToastComponent } = useToast();
   const { t } = useTranslation();
 
@@ -96,24 +69,6 @@ export default function FunRankingPage() {
     [t],
   );
 
-  const paipuTabs: TabConfig[] = useMemo(
-    () => [
-      { value: 'avg_riichi', label: t('funRanking.avgRiichi'), color: '#c45cdd', emoji: '\uD83C\uDFAF', unit: '', format: v => v.toFixed(2) },
-      { value: 'riichi_rate', label: t('funRanking.riichiRate'), color: '#9b59b6', emoji: '\uD83D\uDD25', unit: '%', format: v => `${v}%` },
-      { value: 'avg_deal_in', label: t('funRanking.avgDealIn'), color: '#e67e22', emoji: '\uD83D\uDEA8', unit: '', format: v => v.toFixed(2) },
-      { value: 'deal_in_rate', label: t('funRanking.dealInRate'), color: '#d35400', emoji: '\uD83D\uDD04', unit: '%', format: v => `${v}%` },
-      { value: 'tsumo_rate', label: t('funRanking.tsumoRate'), color: '#16a085', emoji: '\u2728', unit: '%', format: v => `${v}%` },
-      { value: 'win_rate', label: t('funRanking.winRate'), color: '#2980b9', emoji: '\uD83C\uDF89', unit: '%', format: v => `${v}%` },
-    ],
-    [t],
-  );
-
-  useEffect(() => {
-    if (PAIPU_RANK_TYPES.has(rankType) && gameType === 'offline') {
-      setGameType('');
-    }
-  }, [rankType, gameType]);
-
   useEffect(() => {
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
@@ -123,10 +78,9 @@ export default function FunRankingPage() {
     getFunRanking(params).then(setRankings).catch(() => showToast(t('funRanking.loadFailed')));
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
-  const allTabs = useMemo(() => [...placementTabs, ...paipuTabs], [placementTabs, paipuTabs]);
-  const currentTab = allTabs.find(tab => tab.value === rankType) || placementTabs[0];
-  const isPercent = ['1st', '2nd', '3rd', '4th', 'riichi_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate'].includes(rankType);
-  const isAsc = ['avg_rank', 'low_score', 'deal_in_rate', 'avg_deal_in'].includes(rankType);
+  const currentTab = placementTabs.find(tab => tab.value === rankType) || placementTabs[0];
+  const isPercent = ['1st', '2nd', '3rd', '4th'].includes(rankType);
+  const isAsc = ['avg_rank', 'low_score'].includes(rankType);
   const maxVal = rankings.length > 0 ? Math.max(...rankings.map(r => r.rate)) : 1;
   const minVal = rankings.length > 0 ? Math.min(...rankings.map(r => r.rate)) : 0;
 
@@ -139,49 +93,37 @@ export default function FunRankingPage() {
     return (rate / maxVal) * 100;
   };
 
-  const renderTabButton = (tab: TabConfig) => (
-    <button
-      key={tab.value}
-      type="button"
-      onClick={() => setRankType(tab.value)}
-      className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
-      style={{
-        background: rankType === tab.value ? tab.color + '22' : 'white',
-        color: rankType === tab.value ? tab.color : 'var(--color-text-light)',
-        border: rankType === tab.value ? `2px solid ${tab.color}` : '2px solid var(--color-border)',
-      }}
-    >
-      {tab.emoji} {tab.label}
-    </button>
-  );
-
   return (
     <div>
       {ToastComponent}
-      <div className="flex items-center gap-2 mb-6">
-        <Medal size={20} style={{ color: currentTab.color }} />
-        <h2 className="text-lg font-bold">{t('funRanking.title')}</h2>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div className="flex items-center gap-2">
+          <Medal size={20} style={{ color: currentTab.color }} />
+          <h2 className="text-lg font-bold">{t('funRanking.title')}</h2>
+        </div>
+        <Link to="/paipu-stats" className="text-xs font-medium" style={{ color: 'var(--color-primary-dark)' }}>
+          {t('funRanking.paipuMovedLink')}
+        </Link>
       </div>
 
-      <div className="mb-4">
-        <div
-          className="text-[11px] font-semibold uppercase tracking-wide mb-2"
-          style={{ color: 'var(--color-text-light)' }}
-        >
-          {t('funRanking.groupPlacement')}
-        </div>
-        <div className="flex flex-wrap gap-2 mb-5">{placementTabs.map(renderTabButton)}</div>
+      <p className="text-xs mb-4" style={{ color: 'var(--color-text-light)' }}>{t('funRanking.paipuMovedHint')}</p>
 
-        <div
-          className="text-[11px] font-semibold uppercase tracking-wide mb-2"
-          style={{ color: 'var(--color-text-light)' }}
-        >
-          {t('funRanking.groupPaipu')}
-        </div>
-        <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--color-text-light)' }}>
-          {t('funRanking.groupPaipuHint')}
-        </p>
-        <div className="flex flex-wrap gap-2 mb-4">{paipuTabs.map(renderTabButton)}</div>
+      <div className="flex flex-wrap gap-2 mb-4">
+        {placementTabs.map(tab => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setRankType(tab.value)}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
+            style={{
+              background: rankType === tab.value ? tab.color + '22' : 'white',
+              color: rankType === tab.value ? tab.color : 'var(--color-text-light)',
+              border: rankType === tab.value ? `2px solid ${tab.color}` : '2px solid var(--color-border)',
+            }}
+          >
+            {tab.emoji} {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6 items-center">
@@ -200,14 +142,11 @@ export default function FunRankingPage() {
               key={v || 'all'}
               type="button"
               onClick={() => setGameType(v)}
-              disabled={PAIPU_RANK_TYPES.has(rankType) && v === 'offline'}
               className="px-3 py-1.5 text-xs font-medium transition-colors"
               style={{
                 background: gameType === v ? 'var(--color-primary-light)' : 'white',
                 color: gameType === v ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
                 borderRight: i < 2 ? '1px solid var(--color-border)' : undefined,
-                opacity: PAIPU_RANK_TYPES.has(rankType) && v === 'offline' ? 0.4 : 1,
-                cursor: PAIPU_RANK_TYPES.has(rankType) && v === 'offline' ? 'not-allowed' : 'pointer',
               }}
             >
               {label}
