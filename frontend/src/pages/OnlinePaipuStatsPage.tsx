@@ -46,7 +46,8 @@ export type PaipuStatRankType =
   | 'riichi_quality'
   | 'riichi_composite'
   | 'avg_riichi_discard_turn'
-  | 'avg_riichi_tsumo_after_turn';
+  | 'avg_riichi_tsumo_after_turn'
+  | 'avg_riichi_hu_after_turn';
 
 type TabConfig = {
   value: PaipuStatRankType;
@@ -59,6 +60,16 @@ type TabConfig = {
 const MEDAL_COLORS = ['#f0b830', '#a8d8ea', '#e8a0bf'];
 
 function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (k: string, o?: Record<string, string | number>) => string): string {
+  const rounds = item.rounds ?? 0;
+  if (rankType === 'avg_riichi_discard_turn') {
+    return t('paipuStats.subtitleAvgRiichiDiscardTurn', { rounds, total: item.total });
+  }
+  if (rankType === 'avg_riichi_tsumo_after_turn') {
+    return t('paipuStats.subtitleAvgRiichiTsumoAfter', { rounds, total: item.total });
+  }
+  if (rankType === 'avg_riichi_hu_after_turn') {
+    return t('paipuStats.subtitleAvgRiichiHuAfter', { rounds, total: item.total });
+  }
   if (['riichi_rate', 'damaten_rate', 'deal_in_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate', 'first_riichi_rate'].includes(rankType)) {
     return t('paipuStats.subtitleHandsRatio', { count: item.count, total: item.total });
   }
@@ -110,12 +121,6 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
   }
   if (rankType === 'avg_deal_point') {
     return t('paipuStats.subtitleAvgDealPt', { count: item.count, total: item.total });
-  }
-  if (rankType === 'avg_riichi_discard_turn') {
-    return t('paipuStats.subtitleAvgRiichiDiscardTurn', { count: item.count, total: item.total });
-  }
-  if (rankType === 'avg_riichi_tsumo_after_turn') {
-    return t('paipuStats.subtitleAvgRiichiTsumoAfter', { count: item.count, total: item.total });
   }
   return `${item.total}`;
 }
@@ -173,6 +178,7 @@ export default function OnlinePaipuStatsPage() {
           { value: 'chase_riichi_rate', label: t('paipuStats.chaseRiichiRate'), color: '#e91e63', emoji: '\uD83D\uDD01', format: v => `${v}%` },
           { value: 'avg_riichi_discard_turn', label: t('paipuStats.avgRiichiDiscardTurn'), color: '#16a085', emoji: '\u23F3', format: v => v.toFixed(2) },
           { value: 'avg_riichi_tsumo_after_turn', label: t('paipuStats.avgRiichiTsumoAfterTurn'), color: '#2ecc71', emoji: '\uD83C\uDF40', format: v => v.toFixed(2) },
+          { value: 'avg_riichi_hu_after_turn', label: t('paipuStats.avgRiichiHuAfterTurn'), color: '#27ae60', emoji: '\u2705', format: v => v.toFixed(2) },
         ],
       },
       {
@@ -206,7 +212,12 @@ export default function OnlinePaipuStatsPage() {
     'riichi_rate', 'damaten_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
     'first_riichi_rate', 'chase_riichi_rate', 'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate',
   ].includes(rankType);
-  const isAsc = ['riichi_noten_rate'].includes(rankType);
+  const isAsc = [
+    'riichi_noten_rate',
+    'avg_riichi_discard_turn',
+    'avg_riichi_tsumo_after_turn',
+    'avg_riichi_hu_after_turn',
+  ].includes(rankType);
   const rates = rankings.map(r => r.rate);
   const maxVal = rankings.length > 0 ? Math.max(...rates, 0) : 1;
   const minVal = rankings.length > 0 ? Math.min(...rates, 0) : 0;
@@ -334,6 +345,7 @@ export default function OnlinePaipuStatsPage() {
         <div className="space-y-2">
           {rankings.map((item, idx) => {
             const barWidth = getBarWidth(item.rate);
+            const rowSubtitle = subtitleForStat(rankType, item, t);
             return (
               <Link
                 key={item.player.id}
@@ -354,9 +366,11 @@ export default function OnlinePaipuStatsPage() {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{item.player.nickname}</div>
-                  <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                    {subtitleForStat(rankType, item, t)}
-                  </div>
+                  {rowSubtitle ? (
+                    <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                      {rowSubtitle}
+                    </div>
+                  ) : null}
                   <div className="mt-1 h-2 rounded-full overflow-hidden" style={{ background: '#f0f0f0', width: '100%' }}>
                     <div style={{
                       width: `${Math.max(barWidth, 4)}%`,
