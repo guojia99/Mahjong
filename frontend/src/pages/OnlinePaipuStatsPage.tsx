@@ -22,12 +22,14 @@ export type PaipuStatRankType =
   | 'avg_win_count'
   | 'avg_riichi'
   | 'riichi_rate'
+  | 'damaten_rate'
   | 'avg_deal_in'
   | 'deal_in_rate'
   | 'tsumo_rate'
   | 'avg_furo'
   | 'furo_rate'
   | 'avg_win_point'
+  | 'avg_minkan_win_point'
   | 'avg_deal_point'
   | 'first_riichi_rate'
   | 'chase_riichi_rate'
@@ -42,7 +44,9 @@ export type PaipuStatRankType =
   | 'riichi_noten_rate'
   | 'avg_riichi_pt'
   | 'riichi_quality'
-  | 'riichi_composite';
+  | 'riichi_composite'
+  | 'avg_riichi_discard_turn'
+  | 'avg_riichi_tsumo_after_turn';
 
 type TabConfig = {
   value: PaipuStatRankType;
@@ -55,7 +59,7 @@ type TabConfig = {
 const MEDAL_COLORS = ['#f0b830', '#a8d8ea', '#e8a0bf'];
 
 function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (k: string, o?: Record<string, string | number>) => string): string {
-  if (['riichi_rate', 'deal_in_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate', 'first_riichi_rate'].includes(rankType)) {
+  if (['riichi_rate', 'damaten_rate', 'deal_in_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate', 'first_riichi_rate'].includes(rankType)) {
     return t('paipuStats.subtitleHandsRatio', { count: item.count, total: item.total });
   }
   if (rankType === 'tsumo_rate') {
@@ -98,11 +102,20 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
   if (rankType === 'avg_win_count') {
     return t('paipuStats.subtitleAvgWinCount', { count: item.count, total: item.total });
   }
+  if (rankType === 'avg_minkan_win_point') {
+    return t('paipuStats.subtitleAvgMinkanWinPt', { count: item.count, total: item.total });
+  }
   if (rankType === 'avg_win_point') {
     return t('paipuStats.subtitleAvgWinPt', { count: item.count, total: item.total });
   }
   if (rankType === 'avg_deal_point') {
     return t('paipuStats.subtitleAvgDealPt', { count: item.count, total: item.total });
+  }
+  if (rankType === 'avg_riichi_discard_turn') {
+    return t('paipuStats.subtitleAvgRiichiDiscardTurn', { count: item.count, total: item.total });
+  }
+  if (rankType === 'avg_riichi_tsumo_after_turn') {
+    return t('paipuStats.subtitleAvgRiichiTsumoAfter', { count: item.count, total: item.total });
   }
   return `${item.total}`;
 }
@@ -126,6 +139,7 @@ export default function OnlinePaipuStatsPage() {
           { value: 'avg_win_count', label: t('paipuStats.avgWinCount'), color: '#1e8449', emoji: '\uD83C\uDFC6', format: v => v.toFixed(2) },
           { value: 'avg_riichi', label: t('paipuStats.avgRiichi'), color: '#c45cdd', emoji: '\uD83C\uDFAF', format: v => v.toFixed(2) },
           { value: 'riichi_rate', label: t('paipuStats.riichiRate'), color: '#9b59b6', emoji: '\uD83D\uDD25', format: v => `${v}%` },
+          { value: 'damaten_rate', label: t('paipuStats.damatenRate'), color: '#5dade2', emoji: '\uD83E\uDD10', format: v => `${v}%` },
           { value: 'tsumo_rate', label: t('paipuStats.tsumoRate'), color: '#16a085', emoji: '\u2728', format: v => `${v}%` },
           { value: 'avg_deal_in', label: t('paipuStats.avgDealIn'), color: '#e67e22', emoji: '\uD83D\uDEA8', format: v => v.toFixed(2) },
           { value: 'deal_in_rate', label: t('paipuStats.dealInRate'), color: '#d35400', emoji: '\uD83D\uDD04', format: v => `${v}%` },
@@ -139,6 +153,7 @@ export default function OnlinePaipuStatsPage() {
           { value: 'total_minkan', label: t('paipuStats.totalMinkan'), color: '#566573', emoji: '\uD83D\uDD28', format: v => String(Math.round(v)) },
           { value: 'avg_minkan', label: t('paipuStats.avgMinkanCount'), color: '#5d6d7e', emoji: '\uD83C\uDFB2', format: v => v.toFixed(2) },
           { value: 'minkan_rate', label: t('paipuStats.minkanRate'), color: '#34495e', emoji: '\u26F0\uFE0F', format: v => `${v}%` },
+          { value: 'avg_minkan_win_point', label: t('paipuStats.avgMinkanWinPoint'), color: '#2471a3', emoji: '\uD83D\uDCA1', format: v => v.toFixed(1) },
           { value: 'total_ankan', label: t('paipuStats.totalAnkan'), color: '#7f8c8d', emoji: '\uD83D\uDD12', format: v => String(Math.round(v)) },
           { value: 'avg_ankan', label: t('paipuStats.avgAnkanCount'), color: '#95a5a6', emoji: '\uD83D\uDD10', format: v => v.toFixed(2) },
           { value: 'ankan_rate', label: t('paipuStats.ankanRate'), color: '#2c3e50', emoji: '\uD83C\uDF00', format: v => `${v}%` },
@@ -156,6 +171,8 @@ export default function OnlinePaipuStatsPage() {
         tabs: [
           { value: 'first_riichi_rate', label: t('paipuStats.firstRiichiRate'), color: '#1abc9c', emoji: '\u26A1', format: v => `${v}%` },
           { value: 'chase_riichi_rate', label: t('paipuStats.chaseRiichiRate'), color: '#e91e63', emoji: '\uD83D\uDD01', format: v => `${v}%` },
+          { value: 'avg_riichi_discard_turn', label: t('paipuStats.avgRiichiDiscardTurn'), color: '#16a085', emoji: '\u23F3', format: v => v.toFixed(2) },
+          { value: 'avg_riichi_tsumo_after_turn', label: t('paipuStats.avgRiichiTsumoAfterTurn'), color: '#2ecc71', emoji: '\uD83C\uDF40', format: v => v.toFixed(2) },
         ],
       },
       {
@@ -186,7 +203,7 @@ export default function OnlinePaipuStatsPage() {
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
   const isPercent = [
-    'riichi_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
+    'riichi_rate', 'damaten_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
     'first_riichi_rate', 'chase_riichi_rate', 'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate',
   ].includes(rankType);
   const isAsc = ['riichi_noten_rate'].includes(rankType);

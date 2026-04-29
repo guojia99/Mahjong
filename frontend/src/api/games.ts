@@ -254,12 +254,14 @@ export type PaipuStatRankType =
   | 'avg_win_count'
   | 'avg_riichi'
   | 'riichi_rate'
+  | 'damaten_rate'
   | 'avg_deal_in'
   | 'deal_in_rate'
   | 'tsumo_rate'
   | 'avg_furo'
   | 'furo_rate'
   | 'avg_win_point'
+  | 'avg_minkan_win_point'
   | 'avg_deal_point'
   | 'first_riichi_rate'
   | 'chase_riichi_rate'
@@ -274,7 +276,9 @@ export type PaipuStatRankType =
   | 'riichi_noten_rate'
   | 'avg_riichi_pt'
   | 'riichi_quality'
-  | 'riichi_composite';
+  | 'riichi_composite'
+  | 'avg_riichi_discard_turn'
+  | 'avg_riichi_tsumo_after_turn';
 
 export async function getPaipuStatsRanking(params?: {
   rank_type?: PaipuStatRankType;
