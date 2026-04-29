@@ -336,6 +336,8 @@ const zhHant: Record<string, string> = {
   'online.noOnlineGames': '沒有線上對局記錄。',
   'online.deselectAll': '取消全選',
   'online.selectAll': '全選',
+  'online.selectAllNoPaipuActions': '全選無譜面 ({{n}})',
+  'online.paipuNoActionsBadge': '無 actions',
   'online.selectedCount': '已選',
   'online.refreshList': '重新整理列表',
   'online.fetching': '取得中',

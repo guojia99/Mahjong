@@ -336,6 +336,8 @@ const ja: Record<string, string> = {
   'online.noOnlineGames': 'オンライン対局記録がありません。',
   'online.deselectAll': '全て解除',
   'online.selectAll': '全て選択',
+  'online.selectAllNoPaipuActions': '牌譜なしを全選択 ({{n}})',
+  'online.paipuNoActionsBadge': 'actions なし',
   'online.selectedCount': '選択済み',
   'online.refreshList': 'リストを更新',
   'online.fetching': '取得中',

@@ -532,6 +532,15 @@ export default function OnlineGamePage() {
     }
   };
 
+  const gamesMissingPaipuActions = useMemo(
+    () => onlineGames.filter((g) => g.paipu_has_actions !== true),
+    [onlineGames],
+  );
+
+  const selectAllMissingPaipuActions = () => {
+    setSelectedRetryIds(new Set(gamesMissingPaipuActions.map((g) => g.id)));
+  };
+
   const handleRetryAll = async () => {
     if (selectedRetryIds.size === 0) {
       showToast(t('online.selectGameFirst'), 'error');
@@ -672,7 +681,7 @@ https://game.maj-soul.com/1/?paipu=..."
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     className="btn btn-sm btn-outline inline-flex items-center gap-1"
@@ -680,6 +689,16 @@ https://game.maj-soul.com/1/?paipu=..."
                   >
                     {selectedRetryIds.size === onlineGames.length ? <CheckSquare size={14} /> : <Square size={14} />}
                     {selectedRetryIds.size === onlineGames.length ? t('online.deselectAll') : t('online.selectAll')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                    onClick={selectAllMissingPaipuActions}
+                    disabled={retrying || gamesMissingPaipuActions.length === 0}
+                    title={t('online.selectAllNoPaipuActions', { n: gamesMissingPaipuActions.length })}
+                  >
+                    <AlertTriangle size={14} />
+                    {t('online.selectAllNoPaipuActions', { n: gamesMissingPaipuActions.length })}
                   </button>
                   <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
                     {t('online.selectedCount')} {selectedRetryIds.size} / {onlineGames.length} 局
@@ -730,6 +749,7 @@ https://game.maj-soul.com/1/?paipu=..."
                 {onlineGames.map((game) => {
                   const isSelected = selectedRetryIds.has(game.id);
                   const retryResult = retryResults.find((r) => r.gameId === game.id);
+                  const lacksActions = game.paipu_has_actions !== true;
                   return (
                     <div
                       key={game.id}
@@ -751,6 +771,14 @@ https://game.maj-soul.com/1/?paipu=..."
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-medium">{game.start_time}</span>
+                          {lacksActions && (
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                              style={{ background: '#fff3e0', color: '#e65100' }}
+                            >
+                              {t('online.paipuNoActionsBadge')}
+                            </span>
+                          )}
                           {game.end_time && (
                             <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>~ {game.end_time}</span>
                           )}
