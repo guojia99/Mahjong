@@ -440,7 +440,7 @@ const zhHans: Record<string, string> = {
 
   // ===== OnlinePaipuStatsPage =====
   'paipuStats.title': '线上牌谱统计',
-  'paipuStats.intro': '仅统计含完整 actions 的线上对局；按绑定雀魂 UID 与谱中座位对应；同牌谱去重。次数类为场均（÷有效牌谱场数），率类分母为小局（÷参与小局数）。默听率：本小局未立直且未鸣牌（暗杠仍计门清）的和了 ÷ 小局数。',
+  'paipuStats.intro': '仅统计含完整 actions 的线上对局；按绑定雀魂 UID 与谱中座位对应；同牌谱去重。次数类为场均（÷有效牌谱场数），率类分母为小局（÷参与小局数）。默听和牌率：门清非立直的和了÷小局数。默听率：门清非立直且局终仍听牌或已和牌÷小局数（和了局非和牌家若无听牌记录则不计听牌）。',
   'paipuStats.loadFailed': '加载失败',
   'paipuStats.noData': '暂无数据',
   'paipuStats.linkFunRanking': '← 趣味排行（顺位·得点）',
@@ -459,7 +459,8 @@ const zhHans: Record<string, string> = {
   'paipuStats.avgWinCount': '场均和了数',
   'paipuStats.avgRiichi': '场均立直',
   'paipuStats.riichiRate': '立直率',
-  'paipuStats.damatenRate': '默听率',
+  'paipuStats.damatenRate': '默听和牌率',
+  'paipuStats.damatenListenRate': '默听率',
   'paipuStats.tsumoRate': '自摸占比',
   'paipuStats.avgDealIn': '场均放铳',
   'paipuStats.dealInRate': '放铳率',

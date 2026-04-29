@@ -440,7 +440,7 @@ const ja: Record<string, string> = {
 
   // ===== OnlinePaipuStatsPage =====
   'paipuStats.title': 'オンライン牌譜統計',
-  'paipuStats.intro': 'actions 付きオンライン対局のみ。雀魂 UID 紐づけ・同一牌譜除外。回数系は有効対局数、率は本場数を分母。ダメテン率＝当本場リーチなし・鳴きなし（暗槓は門前扱い）の和了÷本場数。',
+  'paipuStats.intro': 'actions 付きオンライン対局のみ。雀魂 UID 紐づけ・同一牌譜除外。回数系は有効対局数、率は本場数を分母。ダメテン和了率＝門前・非リーチの和了÷本場数。ダメテン率＝門前・非リーチで終局時に聴牌または和了÷本場数（和了本場で他家聴牌情報が無い場合は聴牌扱いに含めない）。',
   'paipuStats.loadFailed': '読み込み失敗',
   'paipuStats.noData': 'データなし',
   'paipuStats.linkFunRanking': '← 面白ランキング（順位・得点）',
@@ -459,7 +459,8 @@ const ja: Record<string, string> = {
   'paipuStats.avgWinCount': '平均和了/場',
   'paipuStats.avgRiichi': '平均リーチ/場',
   'paipuStats.riichiRate': 'リーチ率',
-  'paipuStats.damatenRate': 'ダメテン率',
+  'paipuStats.damatenRate': 'ダメテン和了率',
+  'paipuStats.damatenListenRate': 'ダメテン率',
   'paipuStats.tsumoRate': 'ツモ割合',
   'paipuStats.avgDealIn': '平均放銃/場',
   'paipuStats.dealInRate': '放銃率',

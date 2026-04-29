@@ -122,6 +122,30 @@ def _notile_player_is_tenpai(p: dict[str, Any]) -> bool | None:
     return None
 
 
+def _players_tenpai_from_record(data: dict[str, Any]) -> list[bool | None] | None:
+    """
+    RecordNoTile / RecordHule / RecordLiuJu 等：若 data 含 players/Players 列表，
+    按各元素 seat 与 tingpai/tings 解析是否听牌；无列表或空则返回 None。
+    """
+    arr = data.get('players')
+    if not isinstance(arr, list):
+        arr = data.get('Players')
+    if not isinstance(arr, list) or len(arr) == 0:
+        return None
+    out: list[bool | None] = [None, None, None, None]
+    for i, p in enumerate(arr):
+        if not isinstance(p, dict):
+            continue
+        seat_raw = p.get('seat')
+        try:
+            seat = int(float(seat_raw)) if seat_raw is not None else i
+        except (TypeError, ValueError):
+            seat = i
+        if 0 <= seat <= 3:
+            out[seat] = _notile_player_is_tenpai(p)
+    return out
+
+
 def _seat_uid_map(players_list: list[dict[str, Any]]) -> dict[int, int]:
     m: dict[int, int] = {}
     for p in players_list:
@@ -172,6 +196,7 @@ def _empty_seat_row() -> dict[str, int | float]:
         'riichi_noten_hands': 0,
         'riichi_pt_sum': 0,
         'damaten_wins': 0,
+        'damaten_listen_ok': 0,
         'minkan_win_points_sum': 0,
         'minkan_win_hands': 0,
         'riichi_self_draw_sum': 0,
@@ -187,6 +212,8 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
     单局牌谱：按座位累计；完结局数 hands。
     立直质量：仅统计宣言立直当小局（riichi_hands）；和了/铳/流听等在该小局结算时写入。
     默听和了：和牌结算时该席本小局未立直且未鸣牌（吃碰明杠；暗杠仍计门清），荣和或自摸均计。
+    默听率（听牌或和了）：小局结束时该席未立直、未副露（暗杠仍计门清），且已和牌或仍听牌；÷ 参与小局数。
+    听牌判定：荒牌流局用 NoTile 信息；和了/流局等若 data.players 带听牌信息则采用，否则和了局非和牌家若无记录则不计入听牌。
     明杠后和了打点：本小局该席曾明杠/加杠（RecordChiPengGang type==2）且该席和了时，累计谱面得分与次数。
     巡（摸牌数）：自 RecordNewRound 起，该席每出现一次 RecordDealTile（seat 为该席）计 1；起手配牌不计入（仅牌谱中的摸牌记录）。
     立直平均巡：每次宣言立直时该席当前摸牌累计值的累加 ÷ 立直次数。
@@ -270,12 +297,6 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
             for si in winners:
                 if 0 <= si <= 3 and not round_liqi[si] and not round_furo[si]:
                     st[si]['damaten_wins'] = int(st[si]['damaten_wins']) + 1
-        if any_ron and payer_seat >= 0:
-            loss = int(abs(deltas[payer_seat])) if payer_seat < len(deltas) else 0
-            pr = st[payer_seat]
-            pr['deal_in'] = int(pr['deal_in']) + 1
-            pr['deal_in_events'] = int(pr['deal_in_events']) + 1
-            pr['deal_points_sum'] = int(pr['deal_points_sum']) + max(loss, 0)
 
         tenpai: list[bool | None] = [None, None, None, None]
         if kind == 'notile':
@@ -293,6 +314,28 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
                         seat = i
                     if 0 <= seat <= 3:
                         tenpai[seat] = _notile_player_is_tenpai(p)
+
+        tp_players = _players_tenpai_from_record(data) if kind in ('hule', 'liuju') else None
+        for s in range(4):
+            if round_liqi[s] or round_furo[s]:
+                continue
+            won = s in winners
+            ten_ok = won or (
+                kind == 'notile' and tenpai[s] is True
+            ) or (
+                kind in ('hule', 'liuju')
+                and tp_players is not None
+                and tp_players[s] is True
+            )
+            if ten_ok:
+                st[s]['damaten_listen_ok'] = int(st[s]['damaten_listen_ok']) + 1
+
+        if any_ron and payer_seat >= 0:
+            loss = int(abs(deltas[payer_seat])) if payer_seat < len(deltas) else 0
+            pr = st[payer_seat]
+            pr['deal_in'] = int(pr['deal_in']) + 1
+            pr['deal_in_events'] = int(pr['deal_in_events']) + 1
+            pr['deal_points_sum'] = int(pr['deal_points_sum']) + max(loss, 0)
 
         for s in range(4):
             r = st[s]
@@ -405,7 +448,7 @@ def PAIPU_RANK_BUCKET_KEYS() -> tuple[str, ...]:
         'first_riichi_rounds', 'chase_riichi_decls',
         'win_points_sum', 'wins', 'deal_points_sum', 'deal_in_events',
         'riichi_hands', 'riichi_win_hands', 'riichi_deal_hands', 'riichi_noten_hands', 'riichi_pt_sum',
-        'damaten_wins',
+        'damaten_wins', 'damaten_listen_ok',
         'minkan_win_points_sum', 'minkan_win_hands',
         'riichi_self_draw_sum',
         'riichi_tsumo_after_self_draw_sum', 'riichi_tsumo_wins',
@@ -459,7 +502,7 @@ def fun_ranking_paipu_aggregates(
 
 
 PAIPU_STATS_RANK_TYPES = frozenset({
-    'avg_riichi', 'riichi_rate', 'damaten_rate', 'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'avg_win_count',
+    'avg_riichi', 'riichi_rate', 'damaten_rate', 'damaten_listen_rate', 'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'avg_win_count',
     'avg_furo', 'furo_rate', 'avg_win_point', 'avg_minkan_win_point', 'avg_deal_point',
     'first_riichi_rate', 'chase_riichi_rate',
     'total_minkan', 'avg_minkan', 'minkan_rate', 'total_ankan', 'avg_ankan', 'ankan_rate',
@@ -536,6 +579,9 @@ def paipu_stats_build_rank_items(
         elif rank_type == 'damaten_rate':
             dw = int(b['damaten_wins'])
             row = {'player_id': pid, 'rate': round(dw / rounds * 100, 2), 'count': dw, 'total': rounds}
+        elif rank_type == 'damaten_listen_rate':
+            dl = int(b['damaten_listen_ok'])
+            row = {'player_id': pid, 'rate': round(dl / rounds * 100, 2), 'count': dl, 'total': rounds}
         elif rank_type == 'avg_win_count':
             wn = int(b['wins'])
             row = {'player_id': pid, 'rate': round(wn / gcount, 3), 'count': wn, 'total': gcount}
