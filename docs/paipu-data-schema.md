@@ -56,7 +56,7 @@
 
 ### `.lq.RecordChiPengGang`
 
-吃/碰/杠：`seat`、`type`、`tiles[]`、`froms[]`（与哪一横出牌相关）、`zhenting`、`operation` 等。
+吃/碰/杠：`seat`、`type`、`tiles[]`（或单张字符串）、`froms[]`、`zhenting`、`operation` 等。`type`：`0` 吃、`1` 碰、`2` 杠——**此处杠含大明杠与加杠（追杠）**（常见四张牌 vs 单张/短序列），均属明面鸣杠；暗杠多在 `.lq.RecordAnGangAddGang`。
 
 ### `.lq.RecordHule`
 
