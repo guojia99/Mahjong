@@ -317,6 +317,8 @@ def aggregate_paipu_per_game_stats(actions: list[dict[str, Any]]) -> tuple[dict[
             if 0 <= si <= 3:
                 st[si]['furo_actions'] = int(st[si]['furo_actions']) + 1
                 round_furo[si] = True
+                # type==2：雀魂侧同时用于大明杠（通常 tiles 四张）与加杠/追杠（常见单张）；
+                # 二者均为鸣牌侧明杠子，与 RecordAnGangAddGang 的暗杠/摸杠区分。统计合并为「明杠」。
                 t = data.get('type')
                 if t == 2:
                     st[si]['minkan_actions'] = int(st[si]['minkan_actions']) + 1
