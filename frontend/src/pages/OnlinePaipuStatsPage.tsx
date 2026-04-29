@@ -23,6 +23,7 @@ export type PaipuStatRankType =
   | 'avg_riichi'
   | 'riichi_rate'
   | 'damaten_rate'
+  | 'damaten_listen_rate'
   | 'avg_deal_in'
   | 'deal_in_rate'
   | 'tsumo_rate'
@@ -70,7 +71,7 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
   if (rankType === 'avg_riichi_hu_after_turn') {
     return t('paipuStats.subtitleAvgRiichiHuAfter', { rounds, total: item.total });
   }
-  if (['riichi_rate', 'damaten_rate', 'deal_in_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate', 'first_riichi_rate'].includes(rankType)) {
+  if (['riichi_rate', 'damaten_rate', 'damaten_listen_rate', 'deal_in_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate', 'first_riichi_rate'].includes(rankType)) {
     return t('paipuStats.subtitleHandsRatio', { count: item.count, total: item.total });
   }
   if (rankType === 'tsumo_rate') {
@@ -145,6 +146,7 @@ export default function OnlinePaipuStatsPage() {
           { value: 'avg_riichi', label: t('paipuStats.avgRiichi'), color: '#c45cdd', emoji: '\uD83C\uDFAF', format: v => v.toFixed(2) },
           { value: 'riichi_rate', label: t('paipuStats.riichiRate'), color: '#9b59b6', emoji: '\uD83D\uDD25', format: v => `${v}%` },
           { value: 'damaten_rate', label: t('paipuStats.damatenRate'), color: '#5dade2', emoji: '\uD83E\uDD10', format: v => `${v}%` },
+          { value: 'damaten_listen_rate', label: t('paipuStats.damatenListenRate'), color: '#5dade2', emoji: '\uD83D\uDD0D', format: v => `${v}%` },
           { value: 'tsumo_rate', label: t('paipuStats.tsumoRate'), color: '#16a085', emoji: '\u2728', format: v => `${v}%` },
           { value: 'avg_deal_in', label: t('paipuStats.avgDealIn'), color: '#e67e22', emoji: '\uD83D\uDEA8', format: v => v.toFixed(2) },
           { value: 'deal_in_rate', label: t('paipuStats.dealInRate'), color: '#d35400', emoji: '\uD83D\uDD04', format: v => `${v}%` },
@@ -209,7 +211,7 @@ export default function OnlinePaipuStatsPage() {
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
   const isPercent = [
-    'riichi_rate', 'damaten_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
+    'riichi_rate', 'damaten_rate', 'damaten_listen_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
     'first_riichi_rate', 'chase_riichi_rate', 'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate',
   ].includes(rankType);
   const isAsc = [

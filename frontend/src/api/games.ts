@@ -257,6 +257,7 @@ export type PaipuStatRankType =
   | 'avg_riichi'
   | 'riichi_rate'
   | 'damaten_rate'
+  | 'damaten_listen_rate'
   | 'avg_deal_in'
   | 'deal_in_rate'
   | 'tsumo_rate'

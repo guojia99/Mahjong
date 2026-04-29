@@ -441,7 +441,7 @@ const en: Record<string, string> = {
   // ===== OnlinePaipuStatsPage =====
   'paipuStats.title': 'Online Paipu Stats',
   'paipuStats.intro':
-    'Online games with full actions only; bound Majsoul UID ↔ seat; duplicate paipu deduped. Counts are per game; rates use hands as denominator. Damaten rate: wins with no riichi and no open meld (concealed kan still counts as closed) ÷ hands.',
+    'Online games with full actions only; bound Majsoul UID ↔ seat; duplicate paipu deduped. Counts are per game; rates use hands as denominator. Damaten win rate: closed-hand non-riichi wins ÷ hands. Damaten rate: at hand end, closed non-riichi and (won or tenpai) ÷ hands; on other players’ wins, tenpai counts only if players[] ting data exists.',
   'paipuStats.loadFailed': 'Failed to load',
   'paipuStats.noData': 'No data',
   'paipuStats.linkFunRanking': '← Fun Stats (placement)',
@@ -461,6 +461,7 @@ const en: Record<string, string> = {
   'paipuStats.avgRiichi': 'Avg. riichi/game',
   'paipuStats.riichiRate': 'Riichi rate',
   'paipuStats.damatenRate': 'Damaten win rate',
+  'paipuStats.damatenListenRate': 'Damaten rate',
   'paipuStats.tsumoRate': 'Tsumo share',
   'paipuStats.avgDealIn': 'Avg. deal-ins/game',
   'paipuStats.dealInRate': 'Deal-in rate',
