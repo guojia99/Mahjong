@@ -25,6 +25,8 @@ from .services import (
     game_detail_with_pt,
     fun_ranking_paipu_aggregates,
     _paipu_dedupe_key,
+    paipu_stats_build_rank_items,
+    PAIPU_STATS_RANK_TYPES,
 )
 from common.exceptions import BusinessException
 from django.utils.translation import gettext_lazy as _
@@ -623,9 +625,62 @@ class PtRankingView(APIView):
         return Response(rankings)
 
 
-PAIPU_FUN_RANK_TYPES = frozenset({
-    'avg_riichi', 'riichi_rate', 'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'win_rate',
-})
+class PaipuStatsRankingView(APIView):
+    """线上牌谱（含 actions）衍生统计排行；同牌谱去重、UID 绑定与趣味页原逻辑一致。"""
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        if request.query_params.get('game_type') == 'offline':
+            return Response([])
+
+        rank_type = request.query_params.get('rank_type', 'win_rate')
+        if rank_type not in PAIPU_STATS_RANK_TYPES:
+            rank_type = 'win_rate'
+
+        min_games = int(request.query_params.get('min_games', '1'))
+        player_count = request.query_params.get('player_count')
+        game_mode = request.query_params.get('game_mode')
+
+        games = Game.objects.filter(game_type='online').order_by('start_time')
+        if player_count:
+            games = games.filter(player_count=int(player_count))
+        if game_mode:
+            games = games.filter(game_mode=game_mode)
+
+        uid_rows = MahjongSoulAccount.objects.filter(player__isnull=False).values_list('uid', 'player_id')
+        uid_to_player_id = {int(uid): str(pid) for uid, pid in uid_rows}
+
+        seen_keys: set[tuple[str, str]] = set()
+        unique_games: list[Game] = []
+        for g in games:
+            _, has_actions = paipu_data_flags(g.paipu_data)
+            if not has_actions:
+                continue
+            dk = _paipu_dedupe_key(g)
+            if dk in seen_keys:
+                continue
+            seen_keys.add(dk)
+            unique_games.append(g)
+
+        buckets = fun_ranking_paipu_aggregates(unique_games, uid_to_player_id)
+        items, _ = paipu_stats_build_rank_items(buckets, rank_type, min_games)
+
+        from apps.players.serializers import PlayerListSerializer
+
+        id_set = {x['player_id'] for x in items}
+        players_map = {str(p.id): p for p in Player.objects.filter(pk__in=id_set)}
+        result = []
+        for item in items:
+            player = players_map.get(item['player_id'])
+            if not player:
+                continue
+            result.append({
+                'player': PlayerListSerializer(player).data,
+                'rate': item['rate'],
+                'count': item['count'],
+                'total': item['total'],
+            })
+        return Response(result)
 
 
 class FunRankingView(APIView):
@@ -636,9 +691,6 @@ class FunRankingView(APIView):
         player_count = request.query_params.get('player_count')
         game_mode = request.query_params.get('game_mode')
         game_type = request.query_params.get('game_type')
-
-        if rank_type in PAIPU_FUN_RANK_TYPES:
-            return Response(self._fun_ranking_from_paipu(request, rank_type))
 
         gps = GamePlayer.objects.filter(score__isnull=False).select_related('game', 'player')
 
@@ -724,101 +776,6 @@ class FunRankingView(APIView):
             })
 
         return Response(result)
-
-    def _fun_ranking_from_paipu(self, request, rank_type: str):
-        """仅统计含 actions 的线上牌谱；雀魂 seat 与绑定账号 uid 对应；同牌谱 uuid/URL 去重。"""
-        if request.query_params.get('game_type') == 'offline':
-            return []
-
-        min_games = int(request.query_params.get('min_games', '1'))
-        player_count = request.query_params.get('player_count')
-        game_mode = request.query_params.get('game_mode')
-
-        games = Game.objects.filter(game_type='online').order_by('start_time')
-        if player_count:
-            games = games.filter(player_count=int(player_count))
-        if game_mode:
-            games = games.filter(game_mode=game_mode)
-
-        uid_rows = MahjongSoulAccount.objects.filter(player__isnull=False).values_list('uid', 'player_id')
-        uid_to_player_id = {int(uid): str(pid) for uid, pid in uid_rows}
-
-        seen_keys: set[tuple[str, str]] = set()
-        unique_games: list[Game] = []
-        for g in games:
-            _, has_actions = paipu_data_flags(g.paipu_data)
-            if not has_actions:
-                continue
-            dk = _paipu_dedupe_key(g)
-            if dk in seen_keys:
-                continue
-            seen_keys.add(dk)
-            unique_games.append(g)
-
-        buckets = fun_ranking_paipu_aggregates(unique_games, uid_to_player_id)
-        items: list[dict] = []
-
-        for pid, b in buckets.items():
-            gcount = int(b['games'])
-            if gcount < min_games:
-                continue
-            rounds = int(b['rounds'])
-            riichi = int(b['riichi'])
-            deal_in = int(b['deal_in'])
-            tsumo = int(b['tsumo'])
-            ron = int(b['ron'])
-            wins = tsumo + ron
-
-            row: dict = {'player_id': pid, 'total': gcount}
-
-            if rank_type == 'avg_riichi':
-                row['rate'] = round(riichi / gcount, 3) if gcount else 0.0
-                row['count'] = riichi
-                row['total'] = gcount
-            elif rank_type == 'riichi_rate':
-                row['rate'] = round(riichi / rounds * 100, 2) if rounds else 0.0
-                row['count'] = riichi
-                row['total'] = rounds
-            elif rank_type == 'avg_deal_in':
-                row['rate'] = round(deal_in / gcount, 3) if gcount else 0.0
-                row['count'] = deal_in
-                row['total'] = gcount
-            elif rank_type == 'deal_in_rate':
-                row['rate'] = round(deal_in / rounds * 100, 2) if rounds else 0.0
-                row['count'] = deal_in
-                row['total'] = rounds
-            elif rank_type == 'tsumo_rate':
-                row['rate'] = round(tsumo / wins * 100, 2) if wins else 0.0
-                row['count'] = tsumo
-                row['total'] = wins
-            elif rank_type == 'win_rate':
-                row['rate'] = round(wins / rounds * 100, 2) if rounds else 0.0
-                row['count'] = wins
-                row['total'] = rounds
-            else:
-                continue
-
-            items.append(row)
-
-        reverse = rank_type not in ('deal_in_rate', 'avg_deal_in')
-        items.sort(key=lambda x: x['rate'], reverse=reverse)
-
-        from apps.players.serializers import PlayerListSerializer
-
-        id_set = {x['player_id'] for x in items}
-        players_map = {str(p.id): p for p in Player.objects.filter(pk__in=id_set)}
-        result = []
-        for item in items:
-            player = players_map.get(item['player_id'])
-            if not player:
-                continue
-            result.append({
-                'player': PlayerListSerializer(player).data,
-                'rate': item['rate'],
-                'count': item['count'],
-                'total': item['total'],
-            })
-        return result
 
 
 class YakumanListView(APIView):

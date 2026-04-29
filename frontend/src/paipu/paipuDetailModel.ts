@@ -385,9 +385,22 @@ function readFourScores(data: Record<string, unknown>): number[] | null {
   return out;
 }
 
+function looseJsonBool(v: unknown): boolean | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on', 'y'].includes(s)) return true;
+    if (['false', '0', 'no', 'off', 'n', ''].includes(s)) return false;
+    return null;
+  }
+  return Boolean(v);
+}
+
 function parseNoTileTenpai(data: Record<string, unknown>): boolean[] {
   const res = [false, false, false, false];
-  const arr = data.players;
+  const arr = data.players ?? (data as { Players?: unknown }).Players;
   if (!Array.isArray(arr)) return res;
   for (let i = 0; i < arr.length && i < 4; i++) {
     const p = asRecord(arr[i]);
@@ -396,7 +409,13 @@ function parseNoTileTenpai(data: Record<string, unknown>): boolean[] {
     const seat =
       seatRaw != null && Number.isFinite(Number(seatRaw)) ? Number(seatRaw) : i;
     if (seat < 0 || seat > 3) continue;
-    res[seat] = Boolean(p.tingpai ?? p.tingPai);
+    const pr = p as Record<string, unknown>;
+    let tb = looseJsonBool(pr.tingpai ?? pr.tingPai ?? pr.ting_pai);
+    if (tb === null) {
+      const tings = pr.tings ?? pr.Tings;
+      tb = Array.isArray(tings) ? tings.length > 0 : false;
+    }
+    res[seat] = tb;
   }
   return res;
 }
