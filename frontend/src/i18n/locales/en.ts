@@ -336,6 +336,8 @@ const en: Record<string, string> = {
   'online.noOnlineGames': 'No online game records.',
   'online.deselectAll': 'Deselect All',
   'online.selectAll': 'Select All',
+  'online.selectAllNoPaipuActions': 'Select missing paipu ({{n}})',
+  'online.paipuNoActionsBadge': 'No actions',
   'online.selectedCount': 'Selected',
   'online.refreshList': 'Refresh List',
   'online.fetching': 'Fetching',

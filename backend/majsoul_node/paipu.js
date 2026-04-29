@@ -18,7 +18,69 @@ const DEVICE_INFO = {
 };
 
 const MAJSOUL_BASE = "https://game.maj-soul.com/1/";
-const MAJSOUL_WSS = "wss://route-2.maj-soul.com/gateway";
+const MAJSOUL_WSS_DEFAULT = "wss://route-2.maj-soul.com/gateway";
+const ROUTE_COUNT = 6;
+const ROUTE_CACHE_MS = 60_000;
+
+function wssUrlForLine(line) {
+  return `wss://route-${line}.maj-soul.com/gateway`;
+}
+
+/** 当前进程内：线路探测结果，一分钟内只重新测一次 */
+let routeCache = null;
+/** 实际用于连接、重连的线路 URL */
+let activeWssUrl = MAJSOUL_WSS_DEFAULT;
+
+function measureRouteLatency(line) {
+  return new Promise((resolve) => {
+    const url = wssUrlForLine(line);
+    const start = Date.now();
+    let settled = false;
+    let socket;
+    const finish = (latency) => {
+      if (settled) return;
+      settled = true;
+      try {
+        if (socket) socket.terminate();
+      } catch (e) {}
+      resolve({ line, url, latency });
+    };
+    socket = new WebSocket(url, { perMessageDeflate: false });
+    socket.on("open", () => finish(Date.now() - start));
+    socket.on("error", () => finish(Infinity));
+    setTimeout(() => finish(Infinity), 5000);
+  });
+}
+
+/**
+ * 在获取牌谱前选择延迟最低的线路（1–6）；同一进程 60 秒内复用结果，不重复测延迟。
+ */
+async function pickBestRouteWss() {
+  const now = Date.now();
+  if (routeCache && routeCache.expiresAt > now) {
+    activeWssUrl = routeCache.url;
+    return routeCache;
+  }
+  const lines = Array.from({ length: ROUTE_COUNT }, (_, i) => i + 1);
+  const results = await Promise.all(lines.map((line) => measureRouteLatency(line)));
+  const valid = results.filter(
+    (r) => r.latency !== Infinity && r.latency < 5000
+  );
+  let best;
+  if (valid.length === 0) {
+    best = { line: 2, url: MAJSOUL_WSS_DEFAULT, latency: null };
+  } else {
+    best = valid.reduce((a, b) => (a.latency <= b.latency ? a : b));
+  }
+  routeCache = {
+    line: best.line,
+    url: best.url,
+    latency: best.latency,
+    expiresAt: now + ROUTE_CACHE_MS,
+  };
+  activeWssUrl = best.url;
+  return routeCache;
+}
 
 let protobufRoot = null;
 let protobufWrapper = null;
@@ -95,9 +157,10 @@ function decodeMessage(buf) {
   return null;
 }
 
-function createConnection() {
+function createConnection(wssUrl) {
+  const url = wssUrl || activeWssUrl;
   return new Promise((resolve, reject) => {
-    ws = new WebSocket(MAJSOUL_WSS, { perMessageDeflate: false });
+    ws = new WebSocket(url, { perMessageDeflate: false });
     ws.on("error", reject);
     ws.on("close", () => {});
     ws.on("open", () => resolve());
@@ -275,6 +338,7 @@ async function main() {
   }
 
   await initProtobuf();
+  await pickBestRouteWss();
   await createConnection();
   try {
     await majsoulLogin(username, password);
