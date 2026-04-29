@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
+from typing import Tuple
 from .models import Room, RoomPlayer, Game, GamePlayer, HandRecord
-from apps.players.serializers import PlayerListSerializer, PlayerBriefSerializer
+from apps.players.serializers import PlayerListSerializer, PlayerBriefSerializer, PlayerGameDetailSerializer
 
 
 class RoomPlayerSerializer(serializers.ModelSerializer):
@@ -76,16 +77,39 @@ class HandRecordBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'player', 'record_type', 'yakuman_names']
 
 
+def paipu_data_flags(paipu_data) -> Tuple[bool, bool]:
+    """
+    从 Game.paipu_data 解析列表接口用轻量标记（与前端 extractPaipuActions 一致）。
+    Returns:
+        (has_paipu_data, paipu_has_actions)
+    """
+    if not isinstance(paipu_data, dict) or not paipu_data:
+        return False, False
+    has_data = True
+    actions = paipu_data.get('actions')
+    if isinstance(actions, list) and len(actions) > 0:
+        return has_data, True
+    nested = paipu_data.get('majsoul_record_detail')
+    if isinstance(nested, dict):
+        actions = nested.get('actions')
+        if isinstance(actions, list) and len(actions) > 0:
+            return has_data, True
+    return has_data, False
+
+
 class GameListSerializer(serializers.ModelSerializer):
     players = serializers.SerializerMethodField()
     is_scored = serializers.BooleanField(read_only=True)
     hand_records = serializers.SerializerMethodField()
+    has_paipu_data = serializers.SerializerMethodField()
+    paipu_has_actions = serializers.SerializerMethodField()
 
     class Meta:
         model = Game
         fields = [
             'id', 'game_type', 'game_mode', 'player_count', 'start_time', 'end_time',
-            'source_url', 'paipu_data', 'players', 'is_scored', 'created_at', 'hand_records',
+            'source_url', 'has_paipu_data', 'paipu_has_actions',
+            'players', 'is_scored', 'created_at', 'hand_records',
         ]
 
     def get_players(self, obj):
@@ -104,12 +128,32 @@ class GameListSerializer(serializers.ModelSerializer):
         records = obj.hand_records.select_related('player').all()
         return HandRecordBriefSerializer(records, many=True).data
 
+    def get_has_paipu_data(self, obj):
+        has_data, _ = paipu_data_flags(getattr(obj, 'paipu_data', None))
+        return has_data
+
+    def get_paipu_has_actions(self, obj):
+        _, has_actions = paipu_data_flags(getattr(obj, 'paipu_data', None))
+        return has_actions
+
 
 class GameDetailSerializer(GameListSerializer):
     room = serializers.SerializerMethodField()
 
     class Meta(GameListSerializer.Meta):
-        fields = GameListSerializer.Meta.fields + ['room', 'created_by']
+        fields = GameListSerializer.Meta.fields + ['paipu_data', 'room', 'created_by']
+
+    def get_players(self, obj):
+        gps = obj.game_players.select_related('player').prefetch_related('player__majsoul_accounts').all()
+        return [
+            {
+                'player': PlayerGameDetailSerializer(gp.player).data,
+                'seat_number': gp.seat_number,
+                'score': gp.score,
+                'is_dealer_start': gp.is_dealer_start,
+            }
+            for gp in gps
+        ]
 
     def get_room(self, obj):
         if obj.room:

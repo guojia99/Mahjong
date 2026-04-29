@@ -10,6 +10,7 @@ import SortablePlayerList, { type SortableItem } from '@/components/SortablePlay
 import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
 import { useTranslation } from 'react-i18next';
 
 function gpToSortable(gp: GamePlayerInfo): SortableItem {
@@ -30,7 +31,7 @@ function ScoreTag({ score }: { score: number | null }) {
 
 
 export default function GameDetailPage() {
-  const { roomId, gameId } = useParams<{ roomId: string; gameId: string }>();
+  const { roomId, gameId } = useParams<{ roomId?: string; gameId: string }>();
   const navigate = useNavigate();
   const [game, setGame] = useState<Game | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
@@ -209,12 +210,12 @@ export default function GameDetailPage() {
   };
 
   const handleDeleteGame = async () => {
-    if (!gameId || !roomId) return;
+    if (!gameId) return;
     if (!confirm(t('gameDetail.deleteGameConfirm'))) return;
     try {
       await deleteGame(gameId);
       showToast(t('gameDetail.gameDeleted'), 'success');
-      navigate(`/rooms/${roomId}`);
+      navigate(roomId ? `/rooms/${roomId}` : '/games');
     } catch {
       showToast(t('gameDetail.handRecordDeleteFailed'));
     }
@@ -261,8 +262,11 @@ export default function GameDetailPage() {
   return (
     <div>
       {ToastComponent}
-      <button className="btn btn-sm btn-outline mb-4" onClick={() => navigate(`/rooms/${roomId}`)}>
-        <ArrowLeft size={14} /> {t('gameDetail.backToRoom')}
+      <button
+        className="btn btn-sm btn-outline mb-4"
+        onClick={() => navigate(roomId ? `/rooms/${roomId}` : '/games')}
+      >
+        <ArrowLeft size={14} /> {roomId ? t('gameDetail.backToRoom') : t('gameDetail.backToGameList')}
       </button>
 
       <div className="card mb-6">
@@ -293,7 +297,7 @@ export default function GameDetailPage() {
                 <button className="btn btn-sm btn-primary" onClick={() => setShowScoreInput(true)}>
                   <Save size={14} /> {game.is_scored ? t('gameDetail.editScores') : t('gameDetail.enterScores')}
                 </button>
-                <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading}>
+                <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading || !roomId}>
                   <Copy size={14} /> {t('gameDetail.nextGame')}
                 </button>
                 {game.is_scored && (
@@ -363,6 +367,19 @@ export default function GameDetailPage() {
                       <span className="badge" style={{ background: '#fff8e1', color: '#f0b830', fontSize: '0.625rem', padding: '0.125rem 0.5rem' }}>Top</span>
                     )}
                   </div>
+                  {(() => {
+                    const fromAccounts = (gp.player.majsoul_accounts ?? []).map((a) => a.uid);
+                    const merged = [...(gp.player.majsoul_uids ?? []), ...fromAccounts]
+                      .map((u) => Number(u))
+                      .filter((n) => Number.isFinite(n));
+                    const uniq = [...new Set(merged)];
+                    if (uniq.length === 0) return null;
+                    return (
+                      <div className="text-xs mt-0.5 font-mono tabular-nums" style={{ color: 'var(--color-text-light)' }}>
+                        {t('gameDetail.majsoulUid')}: {uniq.join(', ')}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <ScoreTag score={gp.score} />
@@ -498,17 +515,29 @@ export default function GameDetailPage() {
         </div>
       )}
 
-      {game.source_url && (
+      {(game.source_url || canShowPaipuDetailPanel(game)) && (
         <div className="card mt-4">
-          <h3 className="font-bold mb-2">{t('gameDetail.paipuLinkTitle')}</h3>
-          <p className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{game.source_url}</p>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline inline-flex items-center gap-1"
-            onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
-          >
-            <ExternalLink size={14} /> {t('gameDetail.openPaipu')}
-          </button>
+          {game.source_url && (
+            <>
+              <h3 className="font-bold mb-2">{t('gameDetail.paipuLinkTitle')}</h3>
+              <p className="text-xs font-mono break-all mb-2" style={{ color: 'var(--color-text-light)' }}>{game.source_url}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                  onClick={() => setPaipuConfirmUrl(game.source_url.trim())}
+                >
+                  <ExternalLink size={14} /> {t('gameDetail.openPaipu')}
+                </button>
+              </div>
+            </>
+          )}
+          {canShowPaipuDetailPanel(game) && (
+            <div className={game.source_url ? 'mt-6 pt-4 border-t' : ''} style={game.source_url ? { borderColor: 'var(--color-border)' } : undefined}>
+              <h3 className="font-bold mb-3">{t('paipuDetail.modalTitle')}</h3>
+              <PaipuDetailPanel game={game} />
+            </div>
+          )}
         </div>
       )}
 

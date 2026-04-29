@@ -14,6 +14,7 @@ from .serializers import (
     GameCreateSerializer, GameUpdateSerializer, ScoreSubmitSerializer,
     HandRecordCreateSerializer, HandRecordListSerializer,
     OnlineGameImportSerializer,
+    paipu_data_flags,
 )
 from .services import (
     RoomService,
@@ -22,6 +23,8 @@ from .services import (
     calculate_pt,
     annotate_serialized_games_with_pt,
     game_detail_with_pt,
+    fun_ranking_paipu_aggregates,
+    _paipu_dedupe_key,
 )
 from common.exceptions import BusinessException
 from django.utils.translation import gettext_lazy as _
@@ -620,6 +623,11 @@ class PtRankingView(APIView):
         return Response(rankings)
 
 
+PAIPU_FUN_RANK_TYPES = frozenset({
+    'avg_riichi', 'riichi_rate', 'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'win_rate',
+})
+
+
 class FunRankingView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -628,6 +636,9 @@ class FunRankingView(APIView):
         player_count = request.query_params.get('player_count')
         game_mode = request.query_params.get('game_mode')
         game_type = request.query_params.get('game_type')
+
+        if rank_type in PAIPU_FUN_RANK_TYPES:
+            return Response(self._fun_ranking_from_paipu(request, rank_type))
 
         gps = GamePlayer.objects.filter(score__isnull=False).select_related('game', 'player')
 
@@ -714,6 +725,101 @@ class FunRankingView(APIView):
 
         return Response(result)
 
+    def _fun_ranking_from_paipu(self, request, rank_type: str):
+        """仅统计含 actions 的线上牌谱；雀魂 seat 与绑定账号 uid 对应；同牌谱 uuid/URL 去重。"""
+        if request.query_params.get('game_type') == 'offline':
+            return []
+
+        min_games = int(request.query_params.get('min_games', '1'))
+        player_count = request.query_params.get('player_count')
+        game_mode = request.query_params.get('game_mode')
+
+        games = Game.objects.filter(game_type='online').order_by('start_time')
+        if player_count:
+            games = games.filter(player_count=int(player_count))
+        if game_mode:
+            games = games.filter(game_mode=game_mode)
+
+        uid_rows = MahjongSoulAccount.objects.filter(player__isnull=False).values_list('uid', 'player_id')
+        uid_to_player_id = {int(uid): str(pid) for uid, pid in uid_rows}
+
+        seen_keys: set[tuple[str, str]] = set()
+        unique_games: list[Game] = []
+        for g in games:
+            _, has_actions = paipu_data_flags(g.paipu_data)
+            if not has_actions:
+                continue
+            dk = _paipu_dedupe_key(g)
+            if dk in seen_keys:
+                continue
+            seen_keys.add(dk)
+            unique_games.append(g)
+
+        buckets = fun_ranking_paipu_aggregates(unique_games, uid_to_player_id)
+        items: list[dict] = []
+
+        for pid, b in buckets.items():
+            gcount = int(b['games'])
+            if gcount < min_games:
+                continue
+            rounds = int(b['rounds'])
+            riichi = int(b['riichi'])
+            deal_in = int(b['deal_in'])
+            tsumo = int(b['tsumo'])
+            ron = int(b['ron'])
+            wins = tsumo + ron
+
+            row: dict = {'player_id': pid, 'total': gcount}
+
+            if rank_type == 'avg_riichi':
+                row['rate'] = round(riichi / gcount, 3) if gcount else 0.0
+                row['count'] = riichi
+                row['total'] = gcount
+            elif rank_type == 'riichi_rate':
+                row['rate'] = round(riichi / rounds * 100, 2) if rounds else 0.0
+                row['count'] = riichi
+                row['total'] = rounds
+            elif rank_type == 'avg_deal_in':
+                row['rate'] = round(deal_in / gcount, 3) if gcount else 0.0
+                row['count'] = deal_in
+                row['total'] = gcount
+            elif rank_type == 'deal_in_rate':
+                row['rate'] = round(deal_in / rounds * 100, 2) if rounds else 0.0
+                row['count'] = deal_in
+                row['total'] = rounds
+            elif rank_type == 'tsumo_rate':
+                row['rate'] = round(tsumo / wins * 100, 2) if wins else 0.0
+                row['count'] = tsumo
+                row['total'] = wins
+            elif rank_type == 'win_rate':
+                row['rate'] = round(wins / rounds * 100, 2) if rounds else 0.0
+                row['count'] = wins
+                row['total'] = rounds
+            else:
+                continue
+
+            items.append(row)
+
+        reverse = rank_type not in ('deal_in_rate', 'avg_deal_in')
+        items.sort(key=lambda x: x['rate'], reverse=reverse)
+
+        from apps.players.serializers import PlayerListSerializer
+
+        id_set = {x['player_id'] for x in items}
+        players_map = {str(p.id): p for p in Player.objects.filter(pk__in=id_set)}
+        result = []
+        for item in items:
+            player = players_map.get(item['player_id'])
+            if not player:
+                continue
+            result.append({
+                'player': PlayerListSerializer(player).data,
+                'rate': item['rate'],
+                'count': item['count'],
+                'total': item['total'],
+            })
+        return result
+
 
 class YakumanListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
@@ -748,7 +854,7 @@ class PlayerYakumanListView(APIView):
 
 
 class OnlineGameRetryView(APIView):
-    """重新获取单个线上对局的牌谱信息（start_time / end_time），并更新数据库。"""
+    """重新获取单个线上对局的牌谱（含 --detail 完整 actions），更新时间与 paipu_data，并返回校验结果。"""
     permission_classes = [IsAdminUserOrReadOnly]
 
     def post(self, request, pk):
@@ -758,14 +864,21 @@ class OnlineGameRetryView(APIView):
         if not game.source_url:
             return Response({'error': str(_('该对局无牌谱链接，无法重新获取'))}, status=400)
 
-        from services.majsoul import fetch_paipu_records, normalize_paipu_input_url, extract_paipu_uuid
+        from services.majsoul import (
+            fetch_paipu_records,
+            normalize_paipu_input_url,
+            extract_paipu_uuid,
+            validate_paipu_detail_record,
+            build_majsoul_record_detail_blob,
+            _timestamp_to_naive_dt,
+        )
 
         url = normalize_paipu_input_url(game.source_url)
         if not url:
             return Response({'error': str(_('牌谱链接无效'))}, status=400)
 
         try:
-            records = fetch_paipu_records([url])
+            records = fetch_paipu_records([url], detail=True)
         except Exception as e:
             logger.error('重新获取牌谱失败 game=%s: %s', pk, e, exc_info=True)
             return Response({'error': str(_('牌谱获取失败: %(e)s') % {'e': e})}, status=500)
@@ -779,10 +892,11 @@ class OnlineGameRetryView(APIView):
         if game_uuid and uuid_val and game_uuid != uuid_val:
             logger.warning('retry uuid mismatch: db=%s api=%s', game_uuid, uuid_val)
 
-        from services.majsoul import _timestamp_to_naive_dt
+        detail_ok, detail_errors = validate_paipu_detail_record(rec, game_uuid)
+        detail_blob = build_majsoul_record_detail_blob(
+            rec, validation_ok=detail_ok, validation_errors=detail_errors,
+        )
 
-        start_time = None
-        end_time = None
         raw_start = rec.get('start_time')
         raw_end = rec.get('end_time')
         start_time = _timestamp_to_naive_dt(raw_start)
@@ -803,10 +917,13 @@ class OnlineGameRetryView(APIView):
             'retry_start_time': raw_start,
             'retry_end_time': raw_end,
             'retry_players': rec.get('players', []),
+            'majsoul_record_detail': detail_blob,
         }
         updated_fields.append('paipu_data')
 
         if updated_fields:
             game.save(update_fields=updated_fields)
 
-        return Response(game_detail_with_pt(game))
+        payload = game_detail_with_pt(game)
+        payload['paipu_detail_validation'] = {'ok': detail_ok, 'errors': detail_errors}
+        return Response(payload)

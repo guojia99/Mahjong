@@ -262,15 +262,24 @@ export default function GameListPage() {
                       </button>
                     )}
                   </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Link
+                    to={game.room ? `/rooms/${game.room.id}/games/${game.id}` : `/games/${game.id}`}
+                    className="btn btn-sm btn-primary"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    {t('gameList.viewDetail')}
+                  </Link>
                   {game.room && (
                     <Link
-                      to={`/rooms/${game.room.id}/games/${game.id}`}
-                      className="btn btn-sm btn-outline"
+                      to={`/rooms/${game.room.id}`}
+                      className="btn btn-sm btn-outline text-xs"
                       style={{ textDecoration: 'none' }}
                     >
                       {game.room.name}
                     </Link>
                   )}
+                </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {ranked.map((gp, idx) => {

@@ -16,6 +16,23 @@ class PlayerBriefSerializer(serializers.ModelSerializer):
         fields = ['id', 'nickname']
 
 
+class PlayerGameDetailSerializer(serializers.ModelSerializer):
+    """对局详情嵌套选手：含雀魂 UID 绑定与头像，供前端牌谱与展示。"""
+    majsoul_uids = serializers.SerializerMethodField()
+    majsoul_accounts = MahjongSoulAccountSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Player
+        fields = [
+            'id', 'nickname', 'real_name', 'avatar',
+            'majsoul_uids', 'majsoul_accounts',
+            'created_at', 'updated_at',
+        ]
+
+    def get_majsoul_uids(self, obj):
+        return list(obj.majsoul_accounts.values_list('uid', flat=True))
+
+
 class PlayerListSerializer(serializers.ModelSerializer):
     majsoul_uids = serializers.SerializerMethodField()
     ranking_tier = serializers.SerializerMethodField()

@@ -56,7 +56,12 @@ export interface Game {
     start_time: string;
     end_time: string | null;
     source_url: string;
+    /** 仅对局详情接口返回；列表接口为减轻体积不返回，请用 has_paipu_data / paipu_has_actions */
     paipu_data?: Record<string, unknown>;
+    /** 列表接口：是否保存了非空 paipu_data（牌谱相关信息） */
+    has_paipu_data?: boolean;
+    /** 列表接口：牌谱 JSON 是否含可解析的 actions（顶层或 majsoul_record_detail 内） */
+    paipu_has_actions?: boolean;
     players: GamePlayerInfo[];
     is_scored: boolean;
     created_at: string;

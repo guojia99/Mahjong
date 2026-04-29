@@ -164,7 +164,7 @@ Mahjong/
 │   │
 │   ├── services/                       # 基础设施服务层
 │   │   ├── __init__.py
-│   │   └── majsoul.py                  # 雀魂牌谱服务 (WebSocket协议获取牌谱详情; 错误信息使用 gettext_lazy)
+│   │   └── majsoul.py                  # 雀魂牌谱（Node paipu.js --detail：完整 actions 入库；validate_paipu_detail_record；见 docs/paipu-data-schema.md）
 │   │
 │   ├── locale/                         # 国际化翻译文件 (v1.5.0 新增)
 │   │   ├── zh_Hans/LC_MESSAGES/        # 简体中文 (默认语言)
