@@ -52,6 +52,7 @@ export default function FunRankingPage() {
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [gameType, setGameType] = useState<'' | 'offline' | 'online'>('');
   const [minGames, setMinGames] = useState('5');
+  const [loading, setLoading] = useState(true);
   const { showToast, ToastComponent } = useToast();
   const { t } = useTranslation();
 
@@ -70,12 +71,19 @@ export default function FunRankingPage() {
   );
 
   useEffect(() => {
+    setLoading(true);
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (gameType) params.game_type = gameType;
     if (minGames) params.min_games = minGames;
-    getFunRanking(params).then(setRankings).catch(() => showToast(t('funRanking.loadFailed')));
+    getFunRanking(params).then((data) => {
+      setRankings(data);
+      setLoading(false);
+    }).catch(() => {
+      showToast(t('funRanking.loadFailed'));
+      setLoading(false);
+    });
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
   const currentTab = placementTabs.find(tab => tab.value === rankType) || placementTabs[0];
@@ -172,7 +180,13 @@ export default function FunRankingPage() {
         </select>
       </div>
 
-      {rankings.length === 0 ? (
+      {loading ? (
+        <div className="card">
+          <div className="flex items-center justify-center py-12">
+            <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</div>
+          </div>
+        </div>
+      ) : rankings.length === 0 ? (
         <div className="empty-state card">
           <p className="text-sm">{t('funRanking.noData')}</p>
         </div>
