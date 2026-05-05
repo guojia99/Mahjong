@@ -23,7 +23,7 @@ export default function RoomDetailPage() {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showNewGame, setShowNewGame] = useState(false);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
-  const [gameMode, setGameMode] = useState('east_wind');
+  const [gameMode, setGameMode] = useState('half_match');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [loading, setLoading] = useState(false);
@@ -367,11 +367,15 @@ export default function RoomDetailPage() {
             <label className="form-label">{t('roomDetail.gameModeLabel')}</label>
             <select
               value={gameMode}
-              onChange={(e) => setGameMode(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'east_wind' && !confirm(t('roomDetail.confirmEastWind'))) return;
+                setGameMode(val);
+              }}
               className="form-input"
             >
-              <option value="east_wind">{t('gameMode.eastWindFull')}</option>
               <option value="half_match">{t('gameMode.halfMatchFull')}</option>
+              <option value="east_wind">{t('gameMode.eastWindFull')}</option>
             </select>
           </div>
           <div className="form-group">

@@ -96,7 +96,20 @@ export default function GameDetailPage() {
   const expectedTotal = playerCount === 4 ? 1000 : playerCount === 3 ? 1050 : 0;
   const hasDealer = scoreItems.some((item) => scoreData[item.id]?.is_dealer_start);
   const allFilled = scoreItems.every((item) => scoreData[item.id]?.score !== '' && scoreData[item.id]?.score !== undefined);
-  const isScoreValid = totalScore === expectedTotal && hasDealer && allFilled;
+  const isOfflineGame = game?.game_type === 'offline';
+  const isScoreValid = totalScore === expectedTotal && (hasDealer || isOfflineGame) && allFilled;
+
+  const openScoreInput = () => {
+    if (isOfflineGame && !hasDealer && scoreItems.length > 0) {
+      const firstId = scoreItems[0].id;
+      const updated: Record<string, { score: string; is_dealer_start: boolean }> = {};
+      Object.keys(scoreData).forEach((key) => {
+        updated[key] = { ...scoreData[key], is_dealer_start: key === firstId };
+      });
+      setScoreData(updated);
+    }
+    setShowScoreInput(true);
+  };
 
   const handleSubmitScores = async () => {
     if (!gameId || !isScoreValid) return;
@@ -294,7 +307,7 @@ export default function GameDetailPage() {
                     </button>
                   </>
                 )}
-                <button className="btn btn-sm btn-primary" onClick={() => setShowScoreInput(true)}>
+                <button className="btn btn-sm btn-primary" onClick={openScoreInput}>
                   <Save size={14} /> {game.is_scored ? t('gameDetail.editScores') : t('gameDetail.enterScores')}
                 </button>
                 <button className="btn btn-sm btn-secondary" onClick={handleNextGame} disabled={loading || !roomId}>
@@ -619,7 +632,7 @@ export default function GameDetailPage() {
           }}
         >
           {t('gameDetail.currentTotal')} {totalScore} / {expectedTotal}
-          {!hasDealer && ' · ' + t('gameDetail.noDealerSet')}
+          {!hasDealer && !isOfflineGame && ' · ' + t('gameDetail.noDealerSet')}
         </div>
         <div className="flex gap-3 justify-end mt-4">
           <button className="btn btn-outline btn-sm" onClick={() => setShowScoreInput(false)}>{t('common.cancel')}</button>
@@ -670,11 +683,10 @@ export default function GameDetailPage() {
       <Modal open={showEditGame} onClose={() => setShowEditGame(false)} title={t('gameDetail.editGameModalTitle')}>
         <div className="form-group">
           <label className="form-label">{t('gameDetail.gameModeLabel')}</label>
-          <select value={editGameMode} onChange={(e) => setEditGameMode(e.target.value)} className="form-input" disabled={game.is_scored}>
-            <option value="east_wind">{t('gameMode.eastWindFull')}</option>
+          <select value={editGameMode} onChange={(e) => setEditGameMode(e.target.value)} className="form-input">
             <option value="half_match">{t('gameMode.halfMatchFull')}</option>
+            <option value="east_wind">{t('gameMode.eastWindFull')}</option>
           </select>
-          {game.is_scored && <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('gameDetail.modeLocked')}</p>}
         </div>
         <div className="form-group">
           <label className="form-label">{t('gameDetail.startTimeLabel')}</label>

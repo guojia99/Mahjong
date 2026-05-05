@@ -199,6 +199,7 @@ const ja: Record<string, string> = {
   'roomDetail.newGameModalTitle': '新しい対局を作成',
   'roomDetail.selectPlayers': '対局者を選択（3〜4人）',
   'roomDetail.gameModeLabel': '対局モード',
+  'roomDetail.confirmEastWind': '東風戦にしますか？',
   'roomDetail.gameTimeLabel': '対局時間',
   'roomDetail.endTimeLabel': '終了時間（任意）',
   'roomDetail.createGame': '対局を作成',

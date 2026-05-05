@@ -199,6 +199,7 @@ const zhHans: Record<string, string> = {
   'roomDetail.newGameModalTitle': '新建对局',
   'roomDetail.selectPlayers': '选择选手 (3-4人)',
   'roomDetail.gameModeLabel': '对局模式',
+  'roomDetail.confirmEastWind': '确定选择东风局吗？',
   'roomDetail.gameTimeLabel': '对局时间',
   'roomDetail.endTimeLabel': '结束时间（可选）',
   'roomDetail.createGame': '创建对局',

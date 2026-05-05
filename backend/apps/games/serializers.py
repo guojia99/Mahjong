@@ -197,7 +197,7 @@ class ScoreSubmitSerializer(serializers.Serializer):
 
         has_dealer = any(s.get('is_dealer_start', False) for s in scores)
         if not has_dealer:
-            raise serializers.ValidationError(_('必须指定一名东起选手'))
+            scores[0]['is_dealer_start'] = True
 
         return attrs
 

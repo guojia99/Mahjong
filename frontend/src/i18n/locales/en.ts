@@ -199,6 +199,7 @@ const en: Record<string, string> = {
   'roomDetail.newGameModalTitle': 'New Game',
   'roomDetail.selectPlayers': 'Select players (3-4)',
   'roomDetail.gameModeLabel': 'Game Mode',
+  'roomDetail.confirmEastWind': 'Are you sure you want to select East Wind?',
   'roomDetail.gameTimeLabel': 'Game Time',
   'roomDetail.endTimeLabel': 'End Time (optional)',
   'roomDetail.createGame': 'Create Game',
