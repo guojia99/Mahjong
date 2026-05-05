@@ -688,11 +688,29 @@ class FunRankingView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
-        rank_type = request.query_params.get('rank_type', '1st')
-        player_count = request.query_params.get('player_count')
-        game_mode = request.query_params.get('game_mode')
-        game_type = request.query_params.get('game_type')
+        from django.core.cache import cache
 
+        rank_type = request.query_params.get('rank_type', '1st')
+        player_count = request.query_params.get('player_count', '')
+        game_mode = request.query_params.get('game_mode', '')
+        game_type = request.query_params.get('game_type', '')
+        min_games = request.query_params.get('min_games', '1')
+
+        cache_key = f'fun_ranking:{rank_type}:{player_count}:{game_mode}:{game_type}:{min_games}'
+
+        latest_gp = GamePlayer.objects.filter(score__isnull=False).order_by('-pk').values_list('pk', flat=True).first()
+        latest_id = latest_gp or 0
+        version_key = f'{cache_key}:vid:{latest_id}'
+        cached = cache.get(version_key)
+        if cached is not None:
+            return Response(cached)
+
+        result = self._compute(rank_type, player_count, game_mode, game_type, int(min_games))
+        cache.set(version_key, result, timeout=300)
+        return Response(result)
+
+    @staticmethod
+    def _compute(rank_type, player_count, game_mode, game_type, min_games):
         gps = GamePlayer.objects.filter(score__isnull=False).select_related('game', 'player')
 
         if player_count:
@@ -702,7 +720,15 @@ class FunRankingView(APIView):
         if game_type in ('offline', 'online'):
             gps = gps.filter(game__game_type=game_type)
 
-        player_stats = {}
+        game_ranks: dict[int, list[tuple[int, int]]] = {}
+        for gp in gps:
+            gid = gp.game_id
+            if gid not in game_ranks:
+                game_gps = list(gps.filter(game_id=gid))
+                ranked = sorted(game_gps, key=lambda x: x.score, reverse=True)
+                game_ranks[gid] = [(g.player_id, i + 1) for i, g in enumerate(ranked)]
+
+        player_stats: dict[str, dict] = {}
         for gp in gps:
             pid = str(gp.player_id)
             if pid not in player_stats:
@@ -720,14 +746,11 @@ class FunRankingView(APIView):
             if s['low_score'] is None or gp.score < s['low_score']:
                 s['low_score'] = gp.score
 
-            all_gps = list(gp.game.game_players.filter(score__isnull=False).order_by('-score'))
-            ranked = sorted(all_gps, key=lambda x: x.score, reverse=True)
-            rank = next((i + 1 for i, g in enumerate(ranked) if g.player_id == gp.player_id), len(ranked))
+            gr = game_ranks.get(gp.game_id, [])
+            rank = next((r for p, r in gr if p == gp.player_id), len(gr))
             if 1 <= rank <= 4:
                 s['ranks'][rank] += 1
                 s['rank_sum'] += rank
-
-        min_games = int(request.query_params.get('min_games', '1'))
 
         rank_key_map = {'1st': 1, '2nd': 2, '3rd': 3, '4th': 4}
         valid_types = list(rank_key_map.keys()) + ['avg_rank', 'avg_score', 'high_score', 'low_score']
@@ -776,7 +799,7 @@ class FunRankingView(APIView):
                 'total': item['total'],
             })
 
-        return Response(result)
+        return result
 
 
 class YakumanListView(APIView):
