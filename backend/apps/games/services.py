@@ -783,9 +783,20 @@ class GameService:
 
     @staticmethod
     def update_game(game, **kwargs):
+        mode_changed = 'game_mode' in kwargs and kwargs['game_mode'] != game.game_mode
         for key, value in kwargs.items():
             setattr(game, key, value)
         game.save()
+
+        if mode_changed and game.is_scored:
+            from apps.ranking.models import GameRankingResult
+            GameRankingResult.objects.filter(game=game).delete()
+            try:
+                from apps.ranking.services import settle_game_ranking
+                settle_game_ranking(game)
+            except Exception:
+                pass
+
         return game
 
     @staticmethod

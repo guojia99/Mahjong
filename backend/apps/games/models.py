@@ -72,7 +72,7 @@ class Game(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     room = models.ForeignKey(Room, on_delete=models.CASCADE, null=True, blank=True, related_name='games', verbose_name='所属房间')
     game_type = models.CharField(max_length=20, choices=GAME_TYPE_CHOICES, default='offline', verbose_name='对局类型')
-    game_mode = models.CharField(max_length=20, choices=GAME_MODE_CHOICES, default='east_wind', verbose_name='对局模式')
+    game_mode = models.CharField(max_length=20, choices=GAME_MODE_CHOICES, default='half_match', verbose_name='对局模式')
     player_count = models.SmallIntegerField(choices=PLAYER_COUNT_CHOICES, default=4, verbose_name='人数(3三麻/4四麻)')
     start_time = models.DateTimeField(verbose_name='对局时间')
     end_time = models.DateTimeField(null=True, blank=True, verbose_name='结束时间')
