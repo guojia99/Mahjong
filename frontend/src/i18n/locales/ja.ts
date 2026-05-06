@@ -857,6 +857,17 @@ const ja: Record<string, string> = {
   'yakuPractice.inputPoints': '点数入力',
   'yakuPractice.showAllAnswers': '全解答を表示',
   'yakuPractice.complete': '完了',
+
+  // ===== RulesPage =====
+  'nav.rules': '麻雀ルール',
+  'rules.tabOverview': 'ルール概要',
+  'rules.tabTerms': '用語集',
+  'rules.tabYakuList': '役一覧',
+  'rules.tabFuList': '符計算',
+  'rules.tabScoringTable': '点数表',
+  'rules.backToTerms': '用語一覧に戻る',
+  'rules.loadFailed': 'コンテンツの読み込みに失敗しました',
+  'rules.scoringIntro': '番数と符数の組み合わせに対応する点数を示します。',
 };
 
 export default ja;

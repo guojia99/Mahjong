@@ -857,6 +857,17 @@ const zhHant: Record<string, string> = {
   'yakuPractice.inputPoints': '輸入點數',
   'yakuPractice.showAllAnswers': '顯示所有答案',
   'yakuPractice.complete': '完成',
+
+  // ===== RulesPage =====
+  'nav.rules': '日麻規則',
+  'rules.tabOverview': '規則總覽',
+  'rules.tabTerms': '名詞釋義',
+  'rules.tabYakuList': '役種表',
+  'rules.tabFuList': '符數表',
+  'rules.tabScoringTable': '點數表',
+  'rules.backToTerms': '返回名詞列表',
+  'rules.loadFailed': '載入內容失敗',
+  'rules.scoringIntro': '本表展示不同番數和符數對應的點數。',
 };
 
 export default zhHant;
