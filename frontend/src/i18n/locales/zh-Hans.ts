@@ -857,6 +857,17 @@ const zhHans: Record<string, string> = {
   'manganRow.8to10han': '8–10番',
   'manganRow.11to12han': '11–12番',
   'manganRow.13plus': '13番以上',
+
+  // ===== RulesPage =====
+  'nav.rules': '日麻规则',
+  'rules.tabOverview': '规则总览',
+  'rules.tabTerms': '名词释义',
+  'rules.tabYakuList': '役种表',
+  'rules.tabFuList': '符数表',
+  'rules.tabScoringTable': '点数表',
+  'rules.backToTerms': '返回名词列表',
+  'rules.loadFailed': '加载内容失败',
+  'rules.scoringIntro': '本表展示不同番数和符数对应的点数。',
 };
 
 export default zhHans;

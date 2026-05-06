@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe, Crown, Settings, Medal, ChevronDown, BarChart2 } from 'lucide-react';
+import { Users, Home, LogOut, Menu, X, Gamepad2, List, Trophy, Sparkles, LogIn, Calculator, GraduationCap, Globe, Crown, Settings, Medal, ChevronDown, BarChart2, BookOpen } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
 
 const LANG_OPTIONS = [
@@ -23,6 +23,7 @@ const publicNavItems = [
   { path: '/yakumans', labelKey: 'nav.yakumans', icon: Sparkles },
   { path: '/calculator', labelKey: 'nav.calculator', icon: Calculator },
   { path: '/practice', labelKey: 'nav.practice', icon: GraduationCap },
+  { path: '/rules', labelKey: 'nav.rules', icon: BookOpen },
 ];
 
 const adminNavItems = [
@@ -47,7 +48,7 @@ export default function MainLayout() {
     document.title = t('app.name');
   }, [t]);
 
-              const exactPaths = ['/', '/player-list', '/games', '/pt-ranking', '/fun-ranking', '/paipu-stats', '/ranking', '/rooms/online', '/ranking-admin', '/yakumans', '/calculator', '/practice'];
+              const exactPaths = ['/', '/player-list', '/games', '/pt-ranking', '/fun-ranking', '/paipu-stats', '/ranking', '/rooms/online', '/ranking-admin', '/yakumans', '/calculator', '/practice', '/rules'];
 
   const renderNavItem = (item: typeof navItems[number]) => {
     const Icon = item.icon;
