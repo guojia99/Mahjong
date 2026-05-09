@@ -50,6 +50,11 @@ const zhHans: Record<string, string> = {
   'nav.playerManagement': '雀士管理',
   'nav.rankingAdmin': '排位配置',
   'nav.onlineImport': '线上对局导入',
+  'nav.gamesGroup': '对局',
+  'nav.rankingsGroup': '排行',
+  'nav.statsGroup': '统计',
+  'nav.toolsGroup': '工具',
+  'nav.adminGroup': '管理',
 
   // ===== LoginPage =====
   'login.title': '管理员登录',
@@ -868,6 +873,11 @@ const zhHans: Record<string, string> = {
   'rules.backToTerms': '返回名词列表',
   'rules.loadFailed': '加载内容失败',
   'rules.scoringIntro': '本表展示不同番数和符数对应的点数。',
+
+  // ===== ChangelogPage =====
+  'nav.changelog': '更新日志',
+  'changelog.loadFailed': '更新日志加载失败，请稍后再试',
+  'changelog.latestBadge': '最新',
 };
 
 export default zhHans;

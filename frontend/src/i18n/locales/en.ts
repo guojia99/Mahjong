@@ -50,6 +50,11 @@ const en: Record<string, string> = {
   'nav.playerManagement': 'Player Management',
   'nav.rankingAdmin': 'Ranking Config',
   'nav.onlineImport': 'Online Import',
+  'nav.gamesGroup': 'Matches',
+  'nav.rankingsGroup': 'Rankings',
+  'nav.statsGroup': 'Stats',
+  'nav.toolsGroup': 'Tools',
+  'nav.adminGroup': 'Admin',
 
   // ===== LoginPage =====
   'login.title': 'Admin Login',
@@ -869,6 +874,11 @@ const en: Record<string, string> = {
   'rules.backToTerms': 'Back to Glossary',
   'rules.loadFailed': 'Failed to load content',
   'rules.scoringIntro': 'This table shows the scoring for different han and fu combinations.',
+
+  // ===== ChangelogPage =====
+  'nav.changelog': 'Changelog',
+  'changelog.loadFailed': 'Failed to load the changelog. Please try again later.',
+  'changelog.latestBadge': 'Latest',
 };
 
 export default en;

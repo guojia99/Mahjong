@@ -1,0 +1,191 @@
+.changelog-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.changelog-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+}
+
+.changelog-header__icon {
+  color: var(--color-primary-dark);
+}
+
+.changelog-header__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.changelog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.changelog-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  padding: 1rem 1.25rem 1.125rem;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(232, 160, 191, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.changelog-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(232, 160, 191, 0.16), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(245, 205, 224, 0.18), transparent 50%);
+  border-radius: inherit;
+}
+
+.changelog-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(232, 160, 191, 0.18);
+}
+
+.changelog-card--latest {
+  border-color: var(--color-primary);
+  box-shadow: 0 6px 22px rgba(232, 160, 191, 0.22);
+}
+
+.changelog-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.625rem;
+  margin-bottom: 0.75rem;
+  position: relative;
+}
+
+.changelog-card__version {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  letter-spacing: 0.01em;
+  background: var(--color-primary-light);
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.changelog-card__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  opacity: 0.6;
+}
+
+.changelog-card__date {
+  font-size: 0.8125rem;
+  color: var(--color-text-light);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.changelog-card__badge {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(232, 160, 191, 0.35);
+}
+
+.changelog-card__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.changelog-card__item {
+  position: relative;
+  padding-left: 1.375rem;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.changelog-card__item::before {
+  content: '';
+  position: absolute;
+  left: 0.25rem;
+  top: 0.55rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--color-primary-light);
+  border: 1.5px solid var(--color-primary);
+}
+
+.changelog-card__item code {
+  background: #fdf3f7;
+  color: var(--color-primary-dark);
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  border: 1px solid rgba(232, 160, 191, 0.25);
+}
+
+.changelog-card__item strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.changelog-card__item a {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.changelog-status {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--color-text-light);
+  font-size: 0.9375rem;
+}
+
+.changelog-status--error {
+  color: var(--color-danger, #ff8b94);
+  border-color: rgba(255, 139, 148, 0.4);
+  background: rgba(255, 139, 148, 0.06);
+}
+
+@media (max-width: 640px) {
+  .changelog-card {
+    padding: 0.875rem 1rem 1rem;
+    border-radius: 1rem;
+  }
+
+  .changelog-card__version {
+    font-size: 1rem;
+  }
+
+  .changelog-card__item {
+    font-size: 0.8125rem;
+  }
+}

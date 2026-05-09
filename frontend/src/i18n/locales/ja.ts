@@ -50,6 +50,11 @@ const ja: Record<string, string> = {
   'nav.playerManagement': '雀士管理',
   'nav.rankingAdmin': 'ランク設定',
   'nav.onlineImport': 'オンライン対局インポート',
+  'nav.gamesGroup': '対局',
+  'nav.rankingsGroup': 'ランキング',
+  'nav.statsGroup': '統計',
+  'nav.toolsGroup': 'ツール',
+  'nav.adminGroup': '管理',
 
   // ===== LoginPage =====
   'login.title': '管理者ログイン',
@@ -868,6 +873,11 @@ const ja: Record<string, string> = {
   'rules.backToTerms': '用語一覧に戻る',
   'rules.loadFailed': 'コンテンツの読み込みに失敗しました',
   'rules.scoringIntro': '番数と符数の組み合わせに対応する点数を示します。',
+
+  // ===== ChangelogPage =====
+  'nav.changelog': '更新履歴',
+  'changelog.loadFailed': '更新履歴の読み込みに失敗しました。後でもう一度お試しください。',
+  'changelog.latestBadge': '最新',
 };
 
 export default ja;
