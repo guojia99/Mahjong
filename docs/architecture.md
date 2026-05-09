@@ -217,6 +217,7 @@ backend/
 | /games | 对局列表 | 全部对局筛选浏览 | 公开 |
 | /pt-ranking | PT排名 | PT排名排行榜 | 公开 |
 | /yakumans | 役满列表 | 全部役满记录 | 公开 |
+| /changelog | 更新日志 | 站点版本演进记录（按语言读取 `/changelog/{lang}.md`） | 公开 |
 
 ### 响应式设计断点
 - Mobile: < 640px

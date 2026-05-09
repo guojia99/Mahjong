@@ -17,6 +17,7 @@ Mahjong/
 │   ├── architecture.md                 # 架构设计文档 (DDD分层、数据模型、API、页面路由)
 │   ├── getting-started.md              # 启动指南
 │   ├── project-structure.md            # 本文件 - 项目目录结构说明
+│   ├── log.md                          # 更新日志主文件 (zh-Hans，前端镜像存放于 frontend/public/changelog/)
 │   ├── django-skills/                  # Django 开发提示词规范
 │   │   ├── LICENSE
 │   │   ├── README.md
@@ -196,7 +197,13 @@ Mahjong/
     │
     ├── public/
     │   ├── favicon.svg
-    │   └── icons.svg
+    │   ├── icons.svg
+    │   ├── marjongs/                    # 麻将牌图片 (.webp)
+    │   └── changelog/                   # 更新日志静态资源 (按语言切换)
+    │       ├── zh-Hans.md
+    │       ├── zh-Hant.md
+    │       ├── en.md
+    │       └── ja.md
     │
     └── src/
         ├── main.tsx                    # 应用入口 (导入 i18n 初始化)
@@ -267,7 +274,8 @@ Mahjong/
         │   ├── YakuPracticePage.tsx    # 役种专项练习 (按役种分类, 牌谱导入)
         │   ├── RankingLeaderboardPage.tsx # 天梯排位排行榜 (段位/排位分)
         │   ├── RankingAdminPage.tsx    # 排位配置管理 (段位表CRUD, 马点配置CRUD, 一键重算)
-        │   └── RankingInfoPage.tsx     # 排位分说明 (计分规则, 段位一览, 马点配置)
+        │   ├── RankingInfoPage.tsx     # 排位分说明 (计分规则, 段位一览, 马点配置)
+        │   └── ChangelogPage.tsx       # 更新日志 (从 /changelog/{lang}.md 读取，复用 RulesMdReader)
         │
         ├── assets/                     # 静态资源
         │   ├── hero.png
