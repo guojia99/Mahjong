@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
 from typing import Tuple
 from .models import Room, RoomPlayer, Game, GamePlayer, HandRecord
+from apps.leagues.models import LeagueMatch
 from apps.players.serializers import PlayerListSerializer, PlayerBriefSerializer, PlayerGameDetailSerializer
 
 
@@ -103,6 +105,11 @@ class GameListSerializer(serializers.ModelSerializer):
     hand_records = serializers.SerializerMethodField()
     has_paipu_data = serializers.SerializerMethodField()
     paipu_has_actions = serializers.SerializerMethodField()
+    is_league_game = serializers.SerializerMethodField()
+    league_series_name = serializers.SerializerMethodField()
+    league_season_name = serializers.SerializerMethodField()
+    league_stage_name = serializers.SerializerMethodField()
+    league_logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Game
@@ -110,7 +117,53 @@ class GameListSerializer(serializers.ModelSerializer):
             'id', 'game_type', 'game_mode', 'player_count', 'start_time', 'end_time',
             'source_url', 'has_paipu_data', 'paipu_has_actions',
             'players', 'is_scored', 'created_at', 'hand_records',
+            'is_league_game', 'league_series_name', 'league_season_name', 'league_stage_name',
+            'league_logo_url',
         ]
+
+    def _get_league_bundle(self, obj):
+        if hasattr(obj, '_league_bundle_cache'):
+            return getattr(obj, '_league_bundle_cache')
+        try:
+            lm = obj.league_match
+        except LeagueMatch.DoesNotExist:
+            setattr(obj, '_league_bundle_cache', None)
+            return None
+        stage = lm.stage
+        season = stage.season
+        series = season.series
+        logo_url = None
+        if series.logo_asset_id:
+            request = self.context.get('request')
+            path = reverse('league-media', kwargs={'pk': str(series.logo_asset_id)})
+            logo_url = request.build_absolute_uri(path) if request else path
+        bundle = {
+            'series_name': series.name,
+            'season_name': season.name,
+            'stage_name': stage.name,
+            'logo_url': logo_url,
+        }
+        setattr(obj, '_league_bundle_cache', bundle)
+        return bundle
+
+    def get_is_league_game(self, obj):
+        return self._get_league_bundle(obj) is not None
+
+    def get_league_series_name(self, obj):
+        b = self._get_league_bundle(obj)
+        return b['series_name'] if b else None
+
+    def get_league_season_name(self, obj):
+        b = self._get_league_bundle(obj)
+        return b['season_name'] if b else None
+
+    def get_league_stage_name(self, obj):
+        b = self._get_league_bundle(obj)
+        return b['stage_name'] if b else None
+
+    def get_league_logo_url(self, obj):
+        b = self._get_league_bundle(obj)
+        return b['logo_url'] if b else None
 
     def get_players(self, obj):
         gps = obj.game_players.select_related('player').all()

@@ -985,7 +985,7 @@ def annotate_serialized_games_with_pt(games, data_list):
             item['pt'] = calculate_pt(game_obj)
 
 
-def game_detail_with_pt(game):
+def game_detail_with_pt(game, request=None):
     from .models import Game
     from .serializers import GameDetailSerializer
 
@@ -994,10 +994,13 @@ def game_detail_with_pt(game):
             'game_players__player__majsoul_accounts',
             'hand_records__player',
         )
-        .select_related('room')
+        .select_related(
+            'room',
+            'league_match__stage__season__series__logo_asset',
+        )
         .get(pk=game.pk)
     )
-    data = GameDetailSerializer(game).data
+    data = GameDetailSerializer(game, context={'request': request}).data
     data['pt'] = calculate_pt(game)
     return data
 

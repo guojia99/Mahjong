@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.0 — 2026-05-10
+
+- Game list: filter by league vs non-league matches, pagination, and page size
+- Fix game list total count not showing the number
+
+## v2.0.0 — 2026-05-09
+
+- League System: complete rewrite with multi-stage competitive tournaments
+- League admin split into dedicated pages: Series / Seasons / Season Detail / Players / Stages / Single Stage
+- One-click standard template: Swiss → 3-round Double Elimination → Revival → Semifinal → Final
+- Strict double-elimination promotion algorithm (winners / losers / revival mechanics)
+- All league content (stage configs, order, players) is freely editable while in registration; auto-locked after start
+- Reworked registration flow with batch-register and seed labels (A, B, C…)
+- Semifinals auto-generate 3 rounds × 2 tables based on seed order
+- Fixed cumulative PT recalculation bugs and promotion sync issues
+- Public stage page now reflects the new model (promotion badges, live game scores)
+- League match entry: admin supports both online and offline match creation
+- Online: paste a Mahjong Soul paipu URL — players are auto-matched by UID against the stage roster, no manual selection needed
+- Offline: pick 4 stage players to create a match; final scores can be entered inline
+
 ## v1.6.2 — 2026-05-09
 
 - Sidebar reorganized into Matches / Rankings / Stats / Tools / Admin groups; groups with sub-items collapse by default

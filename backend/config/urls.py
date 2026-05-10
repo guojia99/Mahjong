@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/v1/rooms/', include('apps.games.urls')),
     path('api/v1/games/', include('apps.games.game_urls')),
     path('api/v1/ranking/', include('apps.ranking.urls')),
+    path('api/v1/leagues/', include('apps.leagues.urls')),
 ]
 
 if settings.DEBUG:

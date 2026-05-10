@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord, deleteGame, updateGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
 import { isAdmin } from '@/api/auth';
@@ -9,7 +9,7 @@ import HandRecordModal from '@/components/HandRecordModal';
 import SortablePlayerList, { type SortableItem } from '@/components/SortablePlayerList';
 import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
-import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil } from 'lucide-react';
+import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil, Trophy } from 'lucide-react';
 import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
 import { useTranslation } from 'react-i18next';
 
@@ -33,6 +33,10 @@ function ScoreTag({ score }: { score: number | null }) {
 export default function GameDetailPage() {
   const { roomId, gameId } = useParams<{ roomId?: string; gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const backToFromState = (location.state as { backTo?: string } | undefined)?.backTo;
+  const navigateBackTarget =
+    backToFromState || (roomId ? `/rooms/${roomId}` : '/games');
   const [game, setGame] = useState<Game | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [showScoreInput, setShowScoreInput] = useState(false);
@@ -46,6 +50,12 @@ export default function GameDetailPage() {
   const { showToast, ToastComponent } = useToast();
   const admin = isAdmin();
   const { t } = useTranslation();
+
+  const navigateBackLabel = backToFromState
+    ? t('common.back')
+    : roomId
+      ? t('gameDetail.backToRoom')
+      : t('gameDetail.backToGameList');
 
   const [scoreItems, setScoreItems] = useState<SortableItem[]>([]);
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
@@ -228,7 +238,7 @@ export default function GameDetailPage() {
     try {
       await deleteGame(gameId);
       showToast(t('gameDetail.gameDeleted'), 'success');
-      navigate(roomId ? `/rooms/${roomId}` : '/games');
+      navigate(navigateBackTarget);
     } catch {
       showToast(t('gameDetail.handRecordDeleteFailed'));
     }
@@ -277,16 +287,41 @@ export default function GameDetailPage() {
       {ToastComponent}
       <button
         className="btn btn-sm btn-outline mb-4"
-        onClick={() => navigate(roomId ? `/rooms/${roomId}` : '/games')}
+        onClick={() => navigate(navigateBackTarget)}
       >
-        <ArrowLeft size={14} /> {roomId ? t('gameDetail.backToRoom') : t('gameDetail.backToGameList')}
+        <ArrowLeft size={14} /> {navigateBackLabel}
       </button>
+
+      <div
+        className={game.is_league_game && game.league_logo_url ? 'space-y-4 p-2 sm:p-3 rounded-2xl' : 'space-y-4'}
+        style={
+          game.is_league_game && game.league_logo_url
+            ? {
+                backgroundImage: `linear-gradient(rgba(255, 255, 255, 0.93), rgba(255, 255, 255, 0.93)), url(${game.league_logo_url})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined
+        }
+      >
 
       <div className="card mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
+              {game.is_league_game && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                    color: '#c2410c',
+                    border: '1px solid rgba(251, 146, 60, 0.35)',
+                  }}
+                >
+                  <Trophy size={12} /> {t('gameList.leagueBadge')}
+                </span>
+              )}
               <span className="font-semibold">{GAME_MODE_LABELS[game.game_mode]}</span>
             </div>
             <div className="text-sm" style={{ color: 'var(--color-text-light)' }}>
@@ -553,6 +588,8 @@ export default function GameDetailPage() {
           )}
         </div>
       )}
+
+      </div>
 
       <Modal open={Boolean(paipuConfirmUrl)} onClose={() => setPaipuConfirmUrl(null)} title={t('gameDetail.openPaipuTitle')}>
         <p className="text-sm mb-2" style={{ color: 'var(--color-text)' }}>
