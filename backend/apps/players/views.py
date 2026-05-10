@@ -114,8 +114,10 @@ class PlayerGamesView(APIView):
         ).values_list('game_id', flat=True)
         games = Game.objects.filter(
             id__in=game_ids
-        ).prefetch_related('game_players__player').order_by('-start_time')
-        serializer = GameListSerializer(games, many=True)
+        ).prefetch_related('game_players__player').select_related(
+            'league_match__stage__season__series__logo_asset',
+        ).order_by('-start_time')
+        serializer = GameListSerializer(games, many=True, context={'request': request})
         data = serializer.data
         annotate_serialized_games_with_pt(games, data)
         return Response(data)

@@ -20,6 +20,15 @@ import RankingLeaderboardPage from '@/pages/RankingLeaderboardPage';
 import RankingAdminPage from '@/pages/RankingAdminPage';
 import RulesPage from '@/pages/RulesPage';
 import ChangelogPage from '@/pages/ChangelogPage';
+import LeaguesPage from '@/pages/LeaguesPage';
+import LeagueSeasonDetailPage from '@/pages/LeagueSeasonDetailPage';
+import LeagueStageDetailPage from '@/pages/LeagueStageDetailPage';
+import LeagueAdminPage from '@/pages/LeagueAdminPage';
+import LeagueSeriesAdminPage from '@/pages/LeagueSeriesAdminPage';
+import LeagueSeasonAdminPage from '@/pages/LeagueSeasonAdminPage';
+import LeagueSeasonPlayersAdminPage from '@/pages/LeagueSeasonPlayersAdminPage';
+import LeagueSeasonStagesAdminPage from '@/pages/LeagueSeasonStagesAdminPage';
+import LeagueStageAdminPage from '@/pages/LeagueStageAdminPage';
 import { isAdmin } from '@/api/auth';
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +64,15 @@ function App() {
           <Route path="practice" element={<PracticePage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="changelog" element={<ChangelogPage />} />
+          <Route path="leagues" element={<LeaguesPage />} />
+          <Route path="leagues/:seasonId" element={<LeagueSeasonDetailPage />} />
+          <Route path="leagues/stage/:stageId" element={<LeagueStageDetailPage />} />
+          <Route path="league-admin" element={<AdminRoute><LeagueAdminPage /></AdminRoute>} />
+          <Route path="league-admin/series/:seriesId" element={<AdminRoute><LeagueSeriesAdminPage /></AdminRoute>} />
+          <Route path="league-admin/seasons/:seasonId" element={<AdminRoute><LeagueSeasonAdminPage /></AdminRoute>} />
+          <Route path="league-admin/seasons/:seasonId/players" element={<AdminRoute><LeagueSeasonPlayersAdminPage /></AdminRoute>} />
+          <Route path="league-admin/seasons/:seasonId/stages" element={<AdminRoute><LeagueSeasonStagesAdminPage /></AdminRoute>} />
+          <Route path="league-admin/stages/:stageId" element={<AdminRoute><LeagueStageAdminPage /></AdminRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

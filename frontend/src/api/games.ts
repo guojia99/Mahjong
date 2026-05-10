@@ -163,13 +163,40 @@ export async function parseOnlineGameBatch(urls: string[]): Promise<{
   return data;
 }
 
-export async function getAllGames(params?: {
-  player_count?: number;
+export interface GamesListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  results: Game[];
+}
+
+export type GamesListParams = {
+  player_count?: number | string;
   game_mode?: string;
   game_type?: string;
-}): Promise<Game[]> {
-  const { data } = await api.get('/games/', { params });
+  /** 空：全部；`1`：仅联赛对局；`0`：非联赛对局 */
+  league?: '' | '0' | '1';
+  page?: number;
+  page_size?: number;
+};
+
+export async function getGamesList(params?: GamesListParams): Promise<GamesListResponse> {
+  const { data } = await api.get('/games/', { params: params || {} });
   return data;
+}
+
+/** 分页拉取直至取完（用于需全量列表的管理页等）。 */
+export async function getAllGames(params?: Omit<GamesListParams, 'page' | 'page_size'>): Promise<Game[]> {
+  const chunk = 100;
+  let page = 1;
+  const out: Game[] = [];
+  while (true) {
+    const res = await getGamesList({ ...params, page, page_size: chunk });
+    out.push(...res.results);
+    if (out.length >= res.count || res.results.length === 0) break;
+    page += 1;
+  }
+  return out;
 }
 
 export async function retryOnlineGame(gameId: string): Promise<Game> {

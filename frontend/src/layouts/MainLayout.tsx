@@ -28,6 +28,7 @@ import {
   Award,
   PieChart,
   ShieldCheck,
+  Swords,
   type LucideIcon,
 } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
@@ -60,6 +61,12 @@ type NavEntry = NavLeaf | NavGroup;
 const NAV_STRUCTURE: NavEntry[] = [
   { type: 'item', path: '/', labelKey: 'nav.home', icon: Home },
   { type: 'item', path: '/player-list', labelKey: 'nav.playerList', icon: List },
+  {
+    type: 'item',
+    path: '/leagues',
+    labelKey: 'nav.leagues',
+    icon: Swords,
+  },
   {
     type: 'group',
     id: 'games',
@@ -112,6 +119,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     children: [
       { type: 'item', path: '/players', labelKey: 'nav.playerManagement', icon: Users },
       { type: 'item', path: '/rooms/online', labelKey: 'nav.onlineImport', icon: Globe },
+      { type: 'item', path: '/league-admin', labelKey: 'nav.leagueAdmin', icon: Swords },
       { type: 'item', path: '/ranking-admin', labelKey: 'nav.rankingAdmin', icon: Settings },
     ],
   },
@@ -128,6 +136,12 @@ function matchActive(pathname: string, target: string): boolean {
   }
   if (target === '/player-list') {
     return pathname === '/player-list' || pathname.startsWith('/player-list/');
+  }
+  if (target === '/leagues') {
+    return pathname === '/leagues' || pathname.startsWith('/leagues/');
+  }
+  if (target === '/league-admin') {
+    return pathname === '/league-admin' || pathname.startsWith('/league-admin/');
   }
   return pathname === target;
 }

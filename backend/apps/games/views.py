@@ -132,10 +132,12 @@ class RoomGameListView(APIView):
 
     def get(self, request, pk):
         room = get_object_or_404(Room, pk=pk)
-        games = room.games.prefetch_related('game_players__player').annotate(
+        games = room.games.prefetch_related('game_players__player').select_related(
+            'league_match__stage__season__series__logo_asset',
+        ).annotate(
             sort_time=Coalesce('end_time', 'start_time', output_field=DateTimeField()),
         ).order_by('-sort_time', '-created_at')
-        serializer = GameListSerializer(games, many=True)
+        serializer = GameListSerializer(games, many=True, context={'request': request})
         data = serializer.data
         annotate_serialized_games_with_pt(games, data)
         return Response(data)
@@ -160,7 +162,7 @@ class RoomGameListView(APIView):
                 room, request.user, serializer.validated_data.pop('player_ids'),
                 **serializer.validated_data
             )
-        return Response(game_detail_with_pt(game), status=status.HTTP_201_CREATED)
+        return Response(game_detail_with_pt(game, request), status=status.HTTP_201_CREATED)
 
 
 class GameListView(APIView):
@@ -171,7 +173,7 @@ class GameListView(APIView):
             game_players__score__isnull=False
         ).distinct().prefetch_related(
             'game_players__player', 'hand_records__player'
-        ).select_related('room')
+        ).select_related('room', 'league_match__stage__season__series__logo_asset')
 
         player_count = request.query_params.get('player_count')
         if player_count:
@@ -185,14 +187,40 @@ class GameListView(APIView):
         if game_type:
             games = games.filter(game_type=game_type)
 
+        league = (request.query_params.get('league') or '').strip().lower()
+        if league in ('1', 'true', 'yes'):
+            games = games.filter(league_match__isnull=False)
+        elif league in ('0', 'false', 'no'):
+            games = games.filter(league_match__isnull=True)
+
         games = games.annotate(
             sort_time=Coalesce('end_time', 'start_time', 'room__session_time', 'created_at', output_field=DateTimeField()),
         ).order_by('-sort_time', '-created_at')
 
-        serializer = GameListSerializer(games, many=True)
+        try:
+            page = int(request.query_params.get('page', '1'))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get('page_size', '20'))
+        except (TypeError, ValueError):
+            page_size = 20
+        page = max(1, page)
+        page_size = min(max(1, page_size), 100)
+
+        total = games.count()
+        start = (page - 1) * page_size
+        page_qs = games[start : start + page_size]
+
+        serializer = GameListSerializer(page_qs, many=True, context={'request': request})
         data = serializer.data
-        annotate_serialized_games_with_pt(games, data)
-        return Response(data)
+        annotate_serialized_games_with_pt(page_qs, data)
+        return Response({
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+            'results': data,
+        })
 
 
 class GameDetailView(APIView):
@@ -200,14 +228,14 @@ class GameDetailView(APIView):
 
     def get(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
-        return Response(game_detail_with_pt(game))
+        return Response(game_detail_with_pt(game, request))
 
     def put(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
         serializer = GameUpdateSerializer(game, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         game = GameService.update_game(game, **serializer.validated_data)
-        return Response(game_detail_with_pt(game))
+        return Response(game_detail_with_pt(game, request))
 
     def delete(self, request, pk):
         game = get_object_or_404(Game, pk=pk)
@@ -223,7 +251,7 @@ class GameScoreView(APIView):
         serializer = ScoreSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         game = GameService.submit_scores(game, serializer.validated_data['scores'])
-        return Response(game_detail_with_pt(game))
+        return Response(game_detail_with_pt(game, request))
 
 
 class GamePlayerUpdateView(APIView):
@@ -233,7 +261,7 @@ class GamePlayerUpdateView(APIView):
         game = get_object_or_404(Game, pk=pk)
         player_ids = request.data.get('player_ids', [])
         game = GameService.update_game_players(game, player_ids)
-        return Response(game_detail_with_pt(game))
+        return Response(game_detail_with_pt(game, request))
 
 
 class GameShuffleSeatsView(APIView):
@@ -252,7 +280,7 @@ class GameShuffleSeatsView(APIView):
         for gp, seat in zip(gps, seats):
             gp.seat_number = seat
             gp.save()
-        return Response(game_detail_with_pt(game))
+        return Response(game_detail_with_pt(game, request))
 
 
 class OnlineGameParseView(APIView):
@@ -411,7 +439,7 @@ class OnlineGameImportView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-        return Response(game_detail_with_pt(game), status=status.HTTP_201_CREATED)
+        return Response(game_detail_with_pt(game, request), status=status.HTTP_201_CREATED)
 
 
 class BindMajsoulAccountView(APIView):
@@ -905,6 +933,6 @@ class OnlineGameRetryView(APIView):
         if updated_fields:
             game.save(update_fields=updated_fields)
 
-        payload = game_detail_with_pt(game)
+        payload = game_detail_with_pt(game, request)
         payload['paipu_detail_validation'] = {'ok': detail_ok, 'errors': detail_errors}
         return Response(payload)

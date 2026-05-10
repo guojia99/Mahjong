@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { getAllGames } from '@/api/games';
+import { getGamesList, type GamesListParams } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import type { Game } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS } from '@/types';
-import { ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
@@ -125,15 +125,24 @@ const SELECT_STYLE: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
 export default function GameListPage() {
   const { t } = useTranslation();
   const [games, setGames] = useState<Game[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
   const [playerCountFilter, setPlayerCountFilter] = useState<'' | '3' | '4'>('4');
   const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [typeFilter, setTypeFilter] = useState<'' | 'offline' | 'online'>('');
+  const [leagueFilter, setLeagueFilter] = useState<'' | '1' | '0'>('');
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(true);
   const { showToast, ToastComponent } = useToast();
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
 
   const playerIds = useMemo(
     () => [...new Set(games.flatMap((g) => g.players.map((p) => p.player.id)))],
@@ -141,12 +150,22 @@ export default function GameListPage() {
   );
 
   useEffect(() => {
-    const params: Record<string, string> = {};
+    const params: GamesListParams = { page, page_size: pageSize };
     if (playerCountFilter) params.player_count = playerCountFilter;
     if (modeFilter) params.game_mode = modeFilter;
     if (typeFilter) params.game_type = typeFilter;
-    getAllGames(params).then(setGames).catch(() => showToast(t('gameList.loadFailed')));
-  }, [playerCountFilter, modeFilter, typeFilter, showToast]);
+    if (leagueFilter) params.league = leagueFilter;
+    setListLoading(true);
+    getGamesList(params)
+      .then((res) => {
+        setGames(res.results);
+        setTotalCount(res.count);
+        const maxPage = Math.max(1, Math.ceil(res.count / pageSize) || 1);
+        if (page > maxPage) setPage(maxPage);
+      })
+      .catch(() => showToast(t('gameList.loadFailed')))
+      .finally(() => setListLoading(false));
+  }, [playerCountFilter, modeFilter, typeFilter, leagueFilter, page, pageSize, showToast]);
 
   useEffect(() => {
     if (playerIds.length === 0) {
@@ -194,7 +213,10 @@ export default function GameListPage() {
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <select
           value={playerCountFilter}
-          onChange={(e) => setPlayerCountFilter(e.target.value as typeof playerCountFilter)}
+          onChange={(e) => {
+            setPlayerCountFilter(e.target.value as typeof playerCountFilter);
+            setPage(1);
+          }}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allPlayerCount')}</option>
@@ -203,7 +225,10 @@ export default function GameListPage() {
         </select>
         <select
           value={modeFilter}
-          onChange={(e) => setModeFilter(e.target.value as typeof modeFilter)}
+          onChange={(e) => {
+            setModeFilter(e.target.value as typeof modeFilter);
+            setPage(1);
+          }}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allMode')}</option>
@@ -212,23 +237,57 @@ export default function GameListPage() {
         </select>
         <select
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+          onChange={(e) => {
+            setTypeFilter(e.target.value as typeof typeFilter);
+            setPage(1);
+          }}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allType')}</option>
           <option value="offline">{t('gameType.offline')}</option>
           <option value="online">{t('gameType.online')}</option>
         </select>
+        <select
+          value={leagueFilter}
+          onChange={(e) => {
+            setLeagueFilter(e.target.value as typeof leagueFilter);
+            setPage(1);
+          }}
+          style={SELECT_STYLE}
+        >
+          <option value="">{t('gameList.leagueAll')}</option>
+          <option value="1">{t('gameList.leagueOnly')}</option>
+          <option value="0">{t('gameList.leagueExclude')}</option>
+        </select>
+        <select
+          value={String(pageSize)}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
+            setPage(1);
+          }}
+          style={SELECT_STYLE}
+        >
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {t('gameList.perPage', { n })}
+            </option>
+          ))}
+        </select>
         <span className="text-sm self-center ml-auto" style={{ color: 'var(--color-text-light)' }}>
-          {t('gameList.totalGames', { count: games.length })}
+          {t('gameList.totalGames', { count: totalCount })}
         </span>
       </div>
 
-      {games.length === 0 ? (
+      {listLoading ? (
+        <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+          {t('gameList.loading')}
+        </p>
+      ) : totalCount === 0 ? (
         <div className="empty-state card">
           <p className="text-sm">{t('gameList.noGames')}</p>
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {games.map((game) => {
             const ranked = [...game.players].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -248,6 +307,18 @@ export default function GameListPage() {
                     </span>
                     <span className="badge badge-mode">{GAME_MODE_LABELS[game.game_mode]}</span>
                     <span className={`badge badge-${game.game_type}`}>{GAME_TYPE_LABELS[game.game_type]}</span>
+                    {game.is_league_game && (
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                          color: '#c2410c',
+                          border: '1px solid rgba(251, 146, 60, 0.35)',
+                        }}
+                      >
+                        {t('gameList.leagueBadge')}
+                      </span>
+                    )}
                     <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{game.start_time}{game.end_time ? ` ~ ${game.end_time}` : ''}</span>
                     {game.game_type === 'online' && Boolean(game.source_url?.trim()) && (
                       <button
@@ -311,6 +382,30 @@ export default function GameListPage() {
             );
           })}
         </div>
+        {totalPages > 1 && (
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline inline-flex items-center gap-1"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <ChevronLeft size={16} /> {t('gameList.pagePrev')}
+            </button>
+            <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+              {t('gameList.pageInfo', { page, totalPages })}
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline inline-flex items-center gap-1"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              {t('gameList.pageNext')} <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
