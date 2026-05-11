@@ -10,6 +10,7 @@ import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueStage, LeagueStagePlayer } from '@/types';
 import { LEAGUE_SEASON_STATUS_LABELS, STAGE_STATUS_LABELS, STAGE_TYPE_I18N_KEY, STAGE_TYPE_LABELS } from '@/types';
+import LeagueMarkdownBody from '@/components/LeagueMarkdownBody';
 
 /** 当前赛段：优先进行中；否则取按顺序最后一个已结束赛段（赛季结束时展示决赛成绩等）。 */
 function pickCurrentStage(stages: LeagueStage[]): LeagueStage | null {
@@ -170,9 +171,9 @@ export default function LeagueSeasonDetailPage() {
                     </div>
                 </div>
 
-                {season.description && (
+                {season.description?.trim() && (
                     <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
-                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: season.description }} />
+                        <LeagueMarkdownBody source={season.description} />
                     </div>
                 )}
 

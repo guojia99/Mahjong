@@ -88,6 +88,13 @@ export async function updateLeagueSeason(id: string, payload: Partial<LeagueSeas
     return data;
 }
 
+export async function uploadLeagueSeasonMarkdownImage(seasonId: string, file: File): Promise<{ url: string; id: string }> {
+    const form = new FormData();
+    form.append('image', file);
+    const { data } = await api.post(`/leagues/seasons/${seasonId}/markdown-image/`, form);
+    return data;
+}
+
 export async function deleteLeagueSeason(id: string): Promise<void> {
     await api.delete(`/leagues/seasons/${id}/`);
 }

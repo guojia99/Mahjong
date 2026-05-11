@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from django.http import Http404, HttpResponse
+from django.urls import reverse
 from django.views import View
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
@@ -41,6 +42,7 @@ from .services import (
     generate_semifinal_matches, apply_stage_promotion,
     create_offline_league_match, import_online_league_match,
     set_series_logo,
+    create_league_inline_image_asset,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,27 @@ class LeagueSeriesLogoUploadView(APIView):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(LeagueSeriesSerializer(series, context={'request': request}).data)
+
+
+class LeagueSeasonMarkdownImageUploadView(APIView):
+    """POST 上传图片供赛季 Markdown 正文引用（插入 ![](url) 等）。"""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        get_object_or_404(LeagueSeason, pk=pk)
+        f = request.FILES.get('image') or request.FILES.get('file')
+        if not f:
+            return Response({'error': str(_('请选择图片文件'))}, status=status.HTTP_400_BAD_REQUEST)
+        raw = f.read()
+        mime = (getattr(f, 'content_type', None) or '').strip() or 'application/octet-stream'
+        try:
+            asset = create_league_inline_image_asset(raw, mime)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        path = reverse('league-media', kwargs={'pk': str(asset.id)})
+        url = request.build_absolute_uri(path)
+        return Response({'url': url, 'id': str(asset.id)})
 
 
 # ---------------------------------------------------------------------------

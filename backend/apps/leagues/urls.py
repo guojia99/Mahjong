@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .views import (
-    LeagueMediaView, LeagueSeriesLogoUploadView,
+    LeagueMediaView, LeagueSeriesLogoUploadView, LeagueSeasonMarkdownImageUploadView,
     LeagueSeriesListView, LeagueSeriesDetailView, LeagueSeriesSeasonsView,
     CurrentSeasonListView, LeagueSeasonListView,
     LeagueSeasonCreateView, LeagueSeasonDetailView,
@@ -34,6 +34,7 @@ urlpatterns = [
     path('seasons/<uuid:pk>/start/', SeasonStartView.as_view(), name='league-season-start'),
     path('seasons/<uuid:pk>/finish/', SeasonFinishView.as_view(), name='league-season-finish'),
     path('seasons/<uuid:pk>/reopen/', SeasonReopenView.as_view(), name='league-season-reopen'),
+    path('seasons/<uuid:pk>/markdown-image/', LeagueSeasonMarkdownImageUploadView.as_view(), name='league-season-markdown-image'),
 
     # Season players
     path('seasons/<uuid:pk>/players/', SeasonPlayersView.as_view(), name='league-season-players'),

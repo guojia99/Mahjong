@@ -17,6 +17,8 @@ import {
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason } from '@/types';
 import { LEAGUE_SEASON_STATUS_LABELS } from '@/types';
+import LeagueMarkdownBody from '@/components/LeagueMarkdownBody';
+import LeagueMarkdownEditor from '@/components/LeagueMarkdownEditor';
 
 export default function LeagueSeasonAdminPage() {
     const { t } = useTranslation();
@@ -377,17 +379,16 @@ export default function LeagueSeasonAdminPage() {
                     </Field>
                     <Field label={t('league.fieldDescription')} full>
                         {editing ? (
-                            <textarea
+                            <LeagueMarkdownEditor
                                 value={description}
-                                onChange={e => setDescription(e.target.value)}
-                                rows={5}
-                                className="w-full px-3 py-2 rounded-xl border text-sm resize-y"
-                                style={{ borderColor: 'var(--color-border)' }}
+                                onChange={setDescription}
+                                seasonId={season.id}
+                                rows={14}
                             />
+                        ) : season.description?.trim() ? (
+                            <LeagueMarkdownBody source={season.description} />
                         ) : (
-                            <pre className="text-sm whitespace-pre-wrap font-sans" style={{ color: 'var(--color-text-light)' }}>
-                                {season.description || '-'}
-                            </pre>
+                            <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>-</span>
                         )}
                     </Field>
                 </div>

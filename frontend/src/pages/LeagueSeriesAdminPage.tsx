@@ -15,6 +15,7 @@ import {
 import Modal from '@/components/Modal';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueSeries } from '@/types';
+import LeagueMarkdownBody from '@/components/LeagueMarkdownBody';
 import { LEAGUE_SEASON_STATUS_LABELS } from '@/types';
 
 export default function LeagueSeriesAdminPage() {
@@ -134,11 +135,9 @@ export default function LeagueSeriesAdminPage() {
                 </h2>
             </div>
 
-            {series.description && (
+            {series.description?.trim() && (
                 <div className="p-4 rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
-                    <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text-light)' }}>
-                        {series.description}
-                    </p>
+                    <LeagueMarkdownBody source={series.description} />
                 </div>
             )}
 

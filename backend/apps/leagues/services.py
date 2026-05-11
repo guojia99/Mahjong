@@ -39,13 +39,23 @@ def get_series_detail(series_id):
     )
 
 
-def set_series_logo(series: LeagueSeries, file_bytes: bytes, mime_type: str) -> LeagueSeries:
-    """将联赛 Logo 写入 SQLite 二进制表；旧资源删除。"""
+def _validate_league_image_bytes(file_bytes: bytes, mime_type: str) -> None:
     if len(file_bytes) > 2 * 1024 * 1024:
         raise ValueError(_('图片不能超过 2MB'))
     allowed = {'image/png', 'image/jpeg', 'image/webp', 'image/gif'}
     if mime_type not in allowed:
         raise ValueError(_('仅支持 PNG / JPEG / WebP / GIF'))
+
+
+def create_league_inline_image_asset(file_bytes: bytes, mime_type: str) -> LeagueImageAsset:
+    """创建联赛正文 Markdown 用内联图片（仅存二进制表，通过 /leagues/media/<uuid>/ 访问）。"""
+    _validate_league_image_bytes(file_bytes, mime_type)
+    return LeagueImageAsset.objects.create(mime_type=mime_type, data=file_bytes)
+
+
+def set_series_logo(series: LeagueSeries, file_bytes: bytes, mime_type: str) -> LeagueSeries:
+    """将联赛 Logo 写入 SQLite 二进制表；旧资源删除。"""
+    _validate_league_image_bytes(file_bytes, mime_type)
     with transaction.atomic():
         old_id = series.logo_asset_id
         asset = LeagueImageAsset.objects.create(mime_type=mime_type, data=file_bytes)

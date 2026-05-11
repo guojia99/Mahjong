@@ -333,11 +333,18 @@ export default function GameListPage() {
                       </button>
                     )}
                   </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 shrink">
                   <Link
                     to={game.room ? `/rooms/${game.room.id}/games/${game.id}` : `/games/${game.id}`}
-                    className="btn btn-sm btn-primary"
-                    style={{ textDecoration: 'none' }}
+                    className="btn btn-sm btn-primary min-w-0 max-w-full text-center"
+                    style={{
+                      textDecoration: 'none',
+                      fontSize: 'clamp(0.65rem, 0.45rem + 0.9vw, 0.8125rem)',
+                      lineHeight: 1.25,
+                      paddingInline: '0.5rem',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                    }}
                   >
                     {t('gameList.viewDetail')}
                   </Link>
