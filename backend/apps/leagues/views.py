@@ -98,9 +98,9 @@ class LeagueSeasonMarkdownImageUploadView(APIView):
             asset = create_league_inline_image_asset(raw, mime)
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        # 相对路径：随浏览器当前站点解析，避免开发环境 build_absolute_uri 写入 127.0.0.1 导致线上失效
         path = reverse('league-media', kwargs={'pk': str(asset.id)})
-        url = request.build_absolute_uri(path)
-        return Response({'url': url, 'id': str(asset.id)})
+        return Response({'url': path, 'id': str(asset.id)})
 
 
 # ---------------------------------------------------------------------------

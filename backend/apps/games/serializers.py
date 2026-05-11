@@ -134,9 +134,8 @@ class GameListSerializer(serializers.ModelSerializer):
         series = season.series
         logo_url = None
         if series.logo_asset_id:
-            request = self.context.get('request')
             path = reverse('league-media', kwargs={'pk': str(series.logo_asset_id)})
-            logo_url = request.build_absolute_uri(path) if request else path
+            logo_url = path
         bundle = {
             'series_name': series.name,
             'season_name': season.name,
