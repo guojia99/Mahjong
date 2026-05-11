@@ -29,11 +29,7 @@ class LeagueSeriesSerializer(serializers.ModelSerializer):
     def get_logo_url(self, obj):
         if not getattr(obj, 'logo_asset_id', None):
             return None
-        request = self.context.get('request')
-        path = reverse('league-media', kwargs={'pk': str(obj.logo_asset_id)})
-        if request:
-            return request.build_absolute_uri(path)
-        return path
+        return reverse('league-media', kwargs={'pk': str(obj.logo_asset_id)})
 
     def get_season_count(self, obj) -> int:
         return obj.seasons.count()
