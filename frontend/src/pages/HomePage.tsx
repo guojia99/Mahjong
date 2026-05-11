@@ -6,7 +6,9 @@ import { getRooms } from '@/api/games';
 import { getRecentYakumans } from '@/api/games';
 import { getPlayers } from '@/api/players';
 import { getRankTiers, getUmaConfigs } from '@/api/ranking';
-import type { Room, HandRecord, RankTier, UmaConfig } from '@/types';
+import { getLeagueSeasons } from '@/api/leagues';
+import type { Room, HandRecord, RankTier, UmaConfig, LeagueSeason } from '@/types';
+import { LEAGUE_SEASON_STATUS_LABELS } from '@/types';
 import YakumanCard from '@/components/YakumanCard';
 import RankTierBadge from '@/components/RankTierBadge';
 
@@ -18,20 +20,23 @@ export default function HomePage() {
   const [recentYakumans, setRecentYakumans] = useState<HandRecord[]>([]);
   const [tiers, setTiers] = useState<RankTier[]>([]);
   const [umaConfigs, setUmaConfigs] = useState<UmaConfig[]>([]);
+  const [ongoingLeagueSeasons, setOngoingLeagueSeasons] = useState<LeagueSeason[]>([]);
   const [showRules, setShowRules] = useState(false);
 
   const loadData = async () => {
     try {
-      const [rooms, players, t, u] = await Promise.all([
+      const [rooms, players, t, u, leagueOngoing] = await Promise.all([
         getRooms({ status: 'open' }),
         getPlayers(),
         getRankTiers(),
         getUmaConfigs(),
+        getLeagueSeasons({ status: 'ongoing' }).catch(() => [] as LeagueSeason[]),
       ]);
       setOpenRooms(rooms);
       setPlayerCount(players.length);
       setTiers(t);
       setUmaConfigs(u);
+      setOngoingLeagueSeasons(leagueOngoing);
       const allRooms = await getRooms();
       const games = allRooms.reduce((sum, r) => sum + r.game_count, 0);
       setTotalGames(games);
@@ -85,6 +90,46 @@ export default function HomePage() {
           );
         })}
       </div>
+
+      {ongoingLeagueSeasons.length > 0 && (
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold flex items-center gap-2">
+              <Trophy size={16} style={{ color: '#ea580c' }} /> {t('home.ongoingLeaguesTitle')}
+            </h3>
+            <Link to="/leagues" className="text-sm font-medium" style={{ color: 'var(--color-primary-dark)' }}>
+              {t('home.viewAll')}
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {ongoingLeagueSeasons.slice(0, 6).map((s) => (
+              <Link
+                key={s.id}
+                to={`/leagues/${s.id}`}
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-amber-50/60 transition-colors gap-3"
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{s.name}</div>
+                  <div className="text-xs truncate" style={{ color: 'var(--color-text-light)' }}>
+                    {s.series_name}
+                  </div>
+                </div>
+                <span
+                  className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                    color: '#c2410c',
+                    border: '1px solid rgba(251, 146, 60, 0.35)',
+                  }}
+                >
+                  {LEAGUE_SEASON_STATUS_LABELS.ongoing}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card mb-6">
         <button

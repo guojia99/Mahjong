@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.1.1 — 2026-05-11
+
+- League season description: Markdown editor with image upload in admin; public and admin use the same Markdown renderer
+- Home page shows ongoing leagues; game list “View details” button uses responsive font size and wrapping
+
 ## v2.1.0 — 2026-05-10
 
 - Game list: filter by league vs non-league matches, pagination, and page size
