@@ -883,6 +883,7 @@ const en: Record<string, string> = {
   'rules.tabYakuList': 'Yaku List',
   'rules.tabFuList': 'Fu Table',
   'rules.tabScoringTable': 'Scoring',
+  'rules.tabMLeague': 'M.League',
   'rules.backToTerms': 'Back to Glossary',
   'rules.loadFailed': 'Failed to load content',
   'rules.scoringIntro': 'This table shows the scoring for different han and fu combinations.',

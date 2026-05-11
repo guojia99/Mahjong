@@ -21,7 +21,7 @@ function getRuleMd(lang: string, filePath: string): string {
   return '';
 }
 
-const RULES_TABS = ['overview', 'terms', 'yaku-list', 'fu-list', 'scoring-table'] as const;
+const RULES_TABS = ['overview', 'terms', 'yaku-list', 'fu-list', 'scoring-table', 'm-league'] as const;
 type RulesTab = (typeof RULES_TABS)[number];
 
 const RULES_FILES: Record<string, string> = {
@@ -30,6 +30,7 @@ const RULES_FILES: Record<string, string> = {
   'yaku-list': 'yaku-list.md',
   'fu-list': 'fu-list.md',
   'scoring-table': 'scoring-table.md',
+  'm-league': 'm-league.md',
 };
 
 const TERMS_IDS: Record<string, string[]> = {
@@ -107,6 +108,7 @@ const TAB_I18N_KEYS: Record<RulesTab, string> = {
   'yaku-list': 'rules.tabYakuList',
   'fu-list': 'rules.tabFuList',
   'scoring-table': 'rules.tabScoringTable',
+  'm-league': 'rules.tabMLeague',
 };
 
 export default function RulesPage() {
