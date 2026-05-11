@@ -7,6 +7,8 @@ Japanese Mahjong (Riichi Mahjong) is a four-player variant characterized by the 
 - **Objective**: The player with the most points at the end of the match wins
 - **Starting Points (Kaikyuu genten)**: Each player starts with 25000 or 30000 points (agreed upon by players), 25000 is most common
 
+> **Pro league**: **Key points** plus the full official text **in Japanese** (converted from the repo’s `MLeague_rule.html`) are on [Rules → M.League](/rules?tab=m-league). Score tables and updates: [M.League official site](https://m-league.jp/about/).
+
 ## Tile Set
 
 Uses 136 tiles (no flower/season tiles), divided into:

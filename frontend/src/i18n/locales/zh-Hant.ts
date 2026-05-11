@@ -882,6 +882,7 @@ const zhHant: Record<string, string> = {
   'rules.tabYakuList': '役種表',
   'rules.tabFuList': '符數表',
   'rules.tabScoringTable': '點數表',
+  'rules.tabMLeague': 'M.League',
   'rules.backToTerms': '返回名詞列表',
   'rules.loadFailed': '載入內容失敗',
   'rules.scoringIntro': '本表展示不同番數和符數對應的點數。',

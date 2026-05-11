@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.3 — 2026-05-11
+
+- M.League rules: full official Japanese text matches repo `MLeague_rule.html`; riichi overview keeps key points + link; zh-Hans / zh-Hant / en tabs add localized summaries above the Japanese body
+
+## v2.1.2 — 2026-05-11
+
+- M.League rules tab aligned with the [official page](https://m-league.jp/about/): key points plus Ch.1–9 outline (placement points, baazoro, penalty names, etc.)
+
 ## v2.1.1 — 2026-05-11
 
 - League season description: Markdown editor with image upload in admin; public and admin use the same Markdown renderer
