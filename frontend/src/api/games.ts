@@ -321,3 +321,87 @@ export async function getPaipuStatsRanking(params?: {
   const { data } = await api.get('/games/paipu-stats/', { params });
   return data;
 }
+
+// ===== v2.2.0 起手牌列表 =====
+
+export interface StartingHandBreakdown {
+  shape_score: number;
+  shape_detail?: Record<string, unknown>;
+  yaku_potential_bonus: number;
+  /** key: 役种 id（如 tanyao / chiitoitsu / ittsuu / sanshoku_doujun / sanshoku_doukou / sanankou / toitoi / chinitsu / honitsu / junchan / chanta / honroutou），value: 该役种加分 */
+  yaku_potential: Record<string, number>;
+  tanyao_bonus: number;
+  honitsu_bonus: number;
+  shanten: number;
+  shanten_bonus: number;
+  shanten_breakdown?: { general: number; pairs7: number; kokushi: number };
+  red_dora: number;
+  red_dora_bonus: number;
+  dora_count: number;
+  dora_tiles: string[];
+  adjacent_dora: number;
+  dora_bonus: number;
+  tanyao: boolean;
+  yakuhai_tiles?: number[];
+}
+
+export interface StartingHandItem {
+  score: number;
+  tiles: string[];
+  chang: number;
+  ju: number;
+  ben: number;
+  dealer_seat: number;
+  seat: number;
+  is_dealer: boolean;
+  dora_indicators: string[];
+  breakdown: StartingHandBreakdown;
+  game_id: string;
+  game_mode: string;
+  player_count: number;
+  start_time: string;
+  player: import('@/types').Player;
+}
+
+export interface StartingHandListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  results: StartingHandItem[];
+  summary?: {
+    player: import('@/types').Player | null;
+    total_hands: number;
+    average_score: number;
+    max_score: number;
+    min_score: number;
+  };
+}
+
+export interface StartingHandPlayerAverage {
+  player: import('@/types').Player;
+  total_hands: number;
+  average_score: number;
+  best_score: number;
+  worst_score: number;
+}
+
+export async function getStartingHands(params?: {
+  tab?: 'overall' | 'personal';
+  player_id?: string;
+  player_count?: number | string;
+  game_mode?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<StartingHandListResponse> {
+  const { data } = await api.get('/games/starting-hands/', { params });
+  return data;
+}
+
+export async function getStartingHandPlayerAverages(params?: {
+  player_count?: number | string;
+  game_mode?: string;
+  min_hands?: number;
+}): Promise<StartingHandPlayerAverage[]> {
+  const { data } = await api.get('/games/starting-hands/player-averages/', { params });
+  return data;
+}
