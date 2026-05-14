@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.2 — 2026-05-14
+
+- Starting hands scoring: edge vs middle sequence melds; ryanmen / kanchan taatsu no longer double-count tiles that belong to a full sequence; dora-equivalent count (red fives merged) with milestone bonuses and +8 when any one dora tile appears ≥3 times; yaku-potential tweaks (tanyao ladder, ittsuu by distinct ranks, sanshoku doukou, chinitsu / honitsu caps) plus iipeikou and daisangen potential; rules modal copy updated
+
 ## v2.2.1 — 2026-05-14
 
 - Starting Hands: fix pagination always showing the first page of results; server caches the full sorted list for ~20 minutes, then paginates

@@ -64,7 +64,8 @@ export default function StartingHandsWeightsModal({ open, onClose }: Props) {
   const colPts = t('startingHands.weightsModal.colPts');
 
   const shapeRows = [
-    { label: t('startingHands.weightsModal.shapeSeq'), pts: '+10' },
+    { label: t('startingHands.weightsModal.shapeSeqEdge'), pts: '+9' },
+    { label: t('startingHands.weightsModal.shapeSeqMid'), pts: '+12' },
     { label: t('startingHands.weightsModal.shapeTriplet'), pts: '+12' },
     { label: t('startingHands.weightsModal.shapePair'), pts: '+4' },
     { label: t('startingHands.weightsModal.shapeTaatsuGood'), pts: '+5' },
@@ -87,9 +88,9 @@ export default function StartingHandsWeightsModal({ open, onClose }: Props) {
 
   const per = t('startingHands.weightsModal.perTile');
   const doraRows = [
-    { label: t('startingHands.weightsModal.doraTile'), pts: `+7 ${per}` },
+    { label: t('startingHands.weightsModal.doraLadder'), pts: t('startingHands.weightsModal.doraLadderPts') },
+    { label: t('startingHands.weightsModal.doraTripletSame'), pts: '+8.0' },
     { label: t('startingHands.weightsModal.doraAdjacent'), pts: `+1.5 ${per}` },
-    { label: t('startingHands.weightsModal.redFive'), pts: `+5 ${per}` },
   ];
 
   return (
@@ -126,6 +127,8 @@ export default function StartingHandsWeightsModal({ open, onClose }: Props) {
         <li>{t('startingHands.weightsModal.yakuChinitsuHonitsu')}</li>
         <li>{t('startingHands.weightsModal.yakuJunchanChanta')}</li>
         <li>{t('startingHands.weightsModal.yakuHonroutou')}</li>
+        <li>{t('startingHands.weightsModal.yakuIipeikou')}</li>
+        <li>{t('startingHands.weightsModal.yakuDaisangen')}</li>
       </ul>
     </Modal>
   );

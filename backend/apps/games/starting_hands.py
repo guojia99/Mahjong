@@ -1,5 +1,5 @@
 """
-起手牌评分（v2.2.0）。
+起手牌评分（v2.2.2）。
 
 从雀魂线上对局的 `paipu_data.actions` 内每个 `.lq.RecordNewRound` 提取每个座位的起手 13 张牌，
 按面子 / 搭子 / 对子 / 役牌 / 赤宝牌 / 本局宝牌 / 起手向听数等综合评分。
@@ -8,12 +8,11 @@
   - 顺子 / 刻子 / 对子（数值牌通过最大化形状评分 DP；字牌按格率独立计）
   - 搭子分良型（45/56）/ 普通（23/34/67/78）/ 边张（12/89）/ 嵌张（13/24/35…）
   - 字牌单张不加分；字牌对子 / 刻子在役牌（场风、自风、三元）时加分更高
-  - 赤宝牌（0m/0p/0s）每张 +5
-  - 本局宝牌：由 `dora_indicators[0]` 推出宝牌张；宝牌每张 +7；宝牌邻牌 +1.5 / 张
+  - 赤宝牌与表宝牌合并为「当量」按枚累计计分；三张同宝牌额外加分；邻张规则不变
   - 起手向听数：综合形 / 七对子 / 国士 三类的最小向听，向听越小 (8-shanten)*4 越高
   - 役种潜质（细分浮点权重，使分数自然精确到 1 位小数）：
-      • 断幺九 / 七对子 / 一气通贯 / 三色同顺 / 三色同刻
-      • 三暗刻 / 对々和 / 清一色 / 混一色
+      • 断幺九（无字牌时按数牌 2–8 张数档）/ 七对子 / 一气通贯 / 三色同顺 / 三色同刻
+      • 三暗刻 / 对々和 / 清一色 / 混一色 / 一杯口 / 大三元
       • 纯全带幺九 / 混全带幺九 / 混老头
 """
 
@@ -83,6 +82,13 @@ def _dora_from_indicator(indicator: str) -> str | None:
     return None
 
 
+def _dora_equiv_ladder_total(n: int) -> float:
+    """宝牌当量 n 枚：第 k 枚贡献 4+3×(k−1)（即 4、7、10、13…），累计。"""
+    if n <= 0:
+        return 0.0
+    return n * (3 * n + 5) / 2.0
+
+
 def _field_wind_tile(chang: int) -> str:
     """场风：0=东(1z) / 1=南(2z) / 2=西(3z)。"""
     if chang < 0 or chang > 2:
@@ -133,12 +139,13 @@ def _suit_shape_dp(counts: tuple[int, ...]) -> int:
             best = s
         cc[i] += 3
 
-    # 顺子 i,i+1,i+2
+    # 顺子 i,i+1,i+2（边张 123/789 低于中张顺子）
     if i <= 6 and counts[i + 1] > 0 and counts[i + 2] > 0:
+        seq_pts = 9 if (i == 0 or i == 6) else 12
         cc[i] -= 1
         cc[i + 1] -= 1
         cc[i + 2] -= 1
-        s = 10 + _suit_shape_dp(tuple(cc))
+        s = seq_pts + _suit_shape_dp(tuple(cc))
         if s > best:
             best = s
         cc[i] += 1
@@ -153,24 +160,27 @@ def _suit_shape_dp(counts: tuple[int, ...]) -> int:
             best = s
         cc[i] += 2
 
-    # 两面 / 边张搭子 i,i+1
+    # 两面 / 边张搭子 i,i+1（若可与邻张组成完整顺子，则不作为「另一顺的搭子」计分）
     if i <= 7 and counts[i + 1] > 0:
-        cc[i] -= 1
-        cc[i + 1] -= 1
-        if i == 0 or i == 7:
-            bonus = 2  # 12 / 89 边张
-        elif i in (3, 4):
-            bonus = 5  # 45 / 56 良型两面
-        else:
-            bonus = 4  # 23 / 34 / 67 / 78 普通两面
-        s = bonus + _suit_shape_dp(tuple(cc))
-        if s > best:
-            best = s
-        cc[i] += 1
-        cc[i + 1] += 1
+        can_left_run = i >= 1 and counts[i - 1] > 0
+        can_right_run = i <= 6 and counts[i + 2] > 0
+        if not can_left_run and not can_right_run:
+            cc[i] -= 1
+            cc[i + 1] -= 1
+            if i == 0 or i == 7:
+                bonus = 2  # 12 / 89 边张
+            elif i in (3, 4):
+                bonus = 5  # 45 / 56 良型两面
+            else:
+                bonus = 4  # 23 / 34 / 67 / 78 普通两面
+            s = bonus + _suit_shape_dp(tuple(cc))
+            if s > best:
+                best = s
+            cc[i] += 1
+            cc[i + 1] += 1
 
-    # 嵌张 i,i+2
-    if i <= 6 and counts[i + 2] > 0:
+    # 嵌张 i,i+2（当中间张可成顺时，不计嵌张搭子分）
+    if i <= 6 and counts[i + 2] > 0 and counts[i + 1] == 0:
         cc[i] -= 1
         cc[i + 2] -= 1
         s = 2 + _suit_shape_dp(tuple(cc))
@@ -345,12 +355,45 @@ def compute_shanten(c34: tuple[int, ...]) -> int:
 # 役种潜质（细分浮点权重，自然形成 1 位小数精度）
 # ------------------------------------------------------------
 
-def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]]:
-    """检测起手牌的役种潜质，返回（总加分, 明细 dict）。
+def _iipeikou_potential_one_suit(counts9: tuple[int, ...]) -> float:
+    """一杯口潜质：同一花色内取最高档（3344 孤立 / 33445 系 / 334455）。"""
+    c = list(counts9)
+    best = 0.0
+    # 334455：连续三档各 ≥2
+    for k in range(7):
+        if c[k] >= 2 and c[k + 1] >= 2 and c[k + 2] >= 2:
+            best = max(best, 8.0)
+    # 33445 或对称 44556：连续三档 (2,2,1) 或 (1,2,2)
+    for k in range(7):
+        a, b, cc = c[k], c[k + 1], c[k + 2]
+        if (a >= 2 and b >= 2 and cc >= 1) or (a >= 1 and b >= 2 and cc >= 2):
+            best = max(best, 4.0)
+    # 3344 且外侧无同花色靠张（无 n-1 与 n+2）
+    for r in range(8):
+        if c[r] >= 2 and c[r + 1] >= 2:
+            left_ok = r == 0 or c[r - 1] == 0
+            right_ok = r + 1 == 8 or c[r + 2] == 0
+            if left_ok and right_ok:
+                best = max(best, 1.5)
+    return best
 
-    覆盖：tanyao / chiitoitsu / ittsuu / sanshoku_doujun / sanshoku_doukou /
-          sanankou / toitoi / chinitsu / honitsu / junchan / chanta / honroutou
-    """
+
+def _daisangen_potential(c34: tuple[int, ...]) -> float:
+    """大三元潜质：三元皆在手；两对子 →8.0，且至少一刻子 →15.0（取高）。"""
+    d = [c34[31], c34[32], c34[33]]
+    if any(x < 1 for x in d):
+        return 0.0
+    pairs = sum(1 for x in d if x >= 2)
+    trips = sum(1 for x in d if x >= 3)
+    if pairs >= 2 and trips >= 1:
+        return 15.0
+    if pairs >= 2:
+        return 8.0
+    return 0.0
+
+
+def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]]:
+    """检测起手牌的役种潜质，返回（总加分, 明细 dict）。"""
     details: dict[str, float] = {}
 
     # 各 suit 与字牌的张数
@@ -367,12 +410,13 @@ def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]
         for r in (0, 1, 2, 6, 7, 8):
             edge_count += c34[sb + r]
     yaochu_count = terminal_count + honor_count  # 1, 9, 字
+    # 断幺：仅数牌 2–8（中张）；与幺九类张数互补（不含字时 中张 + 幺九数牌 = 13）
+    tanyao_numbered_middle = sum(c34[1:8]) + sum(c34[10:17]) + sum(c34[19:26])
 
-    has_terminal_or_honor = terminal_count > 0 or honor_count > 0
-
-    # 1) 断幺九（tanyao）
-    if not has_terminal_or_honor:
-        details['tanyao'] = 6.0
+    # 1) 断幺九潜质：无字牌时，按中张数牌（2–8）合计 10–13 张分档（此前误用幺九张数，与断幺含义相反）
+    if honor_count == 0 and tanyao_numbered_middle >= 10:
+        tanyao_table = {10: 1.5, 11: 3.5, 12: 7.5, 13: 10.0}
+        details['tanyao'] = tanyao_table.get(min(tanyao_numbered_middle, 13), 10.0)
 
     # 2) 七对子（chiitoitsu）：明显的对子越多越好
     pairs = sum(1 for x in c34 if x >= 2)
@@ -380,22 +424,12 @@ def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]
     if pairs >= 3:
         details['chiitoitsu'] = chiitoitsu_table.get(pairs, 10.0)
 
-    # 3) 一气通贯（ittsuu）：同 suit 的 1-3 / 4-6 / 7-9 三段都有牌
+    # 3) 一气通贯：某花色「不同数牌」种数 ≥6 时起算，按 6/7/8/9 种 → 1.0/3.0/5.0/10.0
     ittsuu_best = 0.0
     for sb in (0, 9, 18):
-        zone = [
-            sum(c34[sb + r] for r in (0, 1, 2)),
-            sum(c34[sb + r] for r in (3, 4, 5)),
-            sum(c34[sb + r] for r in (6, 7, 8)),
-        ]
-        if all(z >= 1 for z in zone):
-            total_in_suit = sum(zone)
-            if total_in_suit >= 7:
-                ittsuu_best = max(ittsuu_best, 5.5)
-            elif total_in_suit >= 5:
-                ittsuu_best = max(ittsuu_best, 3.5)
-            else:
-                ittsuu_best = max(ittsuu_best, 1.5)
+        kinds = sum(1 for r in range(9) if c34[sb + r] >= 1)
+        if kinds >= 6:
+            ittsuu_best = max(ittsuu_best, {6: 1.0, 7: 3.0, 8: 5.0, 9: 10.0}.get(kinds, 10.0))
     if ittsuu_best > 0:
         details['ittsuu'] = ittsuu_best
 
@@ -420,15 +454,20 @@ def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]
     if sanshoku_best > 0:
         details['sanshoku_doujun'] = sanshoku_best
 
-    # 5) 三色同刻（sanshoku doukou）：同 rank 的对/刻在三 suit 都有
+    # 5) 三色同刻：分档更明显，最高 10.0
     sanshoku_doukou_best = 0.0
     for rank in range(9):
+        suits_with_3 = sum(1 for sb in (0, 9, 18) if c34[sb + rank] >= 3)
         suits_with_2 = sum(1 for sb in (0, 9, 18) if c34[sb + rank] >= 2)
         suits_with_1 = sum(1 for sb in (0, 9, 18) if c34[sb + rank] >= 1)
-        if suits_with_2 == 3:
-            sanshoku_doukou_best = max(sanshoku_doukou_best, 4.5)
+        if suits_with_3 == 3:
+            sanshoku_doukou_best = max(sanshoku_doukou_best, 10.0)
+        elif suits_with_2 == 3:
+            sanshoku_doukou_best = max(sanshoku_doukou_best, 7.0)
         elif suits_with_2 >= 2 and suits_with_1 == 3:
-            sanshoku_doukou_best = max(sanshoku_doukou_best, 2.0)
+            sanshoku_doukou_best = max(sanshoku_doukou_best, 4.0)
+        elif suits_with_1 == 3:
+            sanshoku_doukou_best = max(sanshoku_doukou_best, 1.5)
     if sanshoku_doukou_best > 0:
         details['sanshoku_doukou'] = sanshoku_doukou_best
 
@@ -447,16 +486,21 @@ def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]
     elif pairs + triplets >= 4 and triplets >= 1:
         details['toitoi'] = 2.5
 
-    # 8) 清一色 / 混一色
+    # 8) 清一色 / 混一色（清一最高 20.0，混一最高 10.0）
     if second_suit == 0 and honor_count == 0 and max_suit >= 11:
-        details['chinitsu'] = 13.5
-    elif second_suit == 0 and max_suit >= 9 and honor_count <= 4:
-        # 同 suit + 字牌（可能往混一色发展）
-        details['honitsu'] = 8.0
+        details['chinitsu'] = 20.0
+    elif second_suit == 0 and honor_count == 0 and max_suit >= 10:
+        details['chinitsu'] = 16.0
+    elif second_suit == 0 and honor_count == 0 and max_suit >= 9:
+        details['chinitsu'] = 12.0
+    elif second_suit == 0 and max_suit >= 9 and 1 <= honor_count <= 4:
+        details['honitsu'] = 10.0
+    elif second_suit == 0 and max_suit >= 8 and 1 <= honor_count <= 5:
+        details['honitsu'] = 7.5
     elif second_suit <= 1 and max_suit + honor_count >= 9:
-        details['honitsu'] = 4.5
+        details['honitsu'] = 5.0
     elif second_suit <= 2 and max_suit + honor_count >= 8:
-        details['honitsu'] = 1.5
+        details['honitsu'] = 2.0
 
     # 9) 纯全带幺九（junchan）/ 混全带幺九（chanta）
     junchan = 0.0
@@ -479,6 +523,20 @@ def _yaku_potential_bonus(c34: tuple[int, ...]) -> tuple[float, dict[str, float]
         details['honroutou'] = 6.5
     elif yaochu_count >= 9:
         details['honroutou'] = 3.0
+
+    # 11) 一杯口潜质（同花色取最高）
+    ip_best = max(
+        _iipeikou_potential_one_suit(c34[0:9]),
+        _iipeikou_potential_one_suit(c34[9:18]),
+        _iipeikou_potential_one_suit(c34[18:27]),
+    )
+    if ip_best > 0:
+        details['iipeikou'] = ip_best
+
+    # 12) 大三元潜质
+    dg = _daisangen_potential(c34)
+    if dg > 0:
+        details['daisangen'] = dg
 
     total = sum(details.values())
     return total, details
@@ -546,6 +604,17 @@ def evaluate_starting_hand(
             dora_tile_indices.append(di)
             dora_tile_names.append(dt)
 
+    dora_index_set = frozenset(dora_tile_indices)
+    # 宝牌当量：赤 5 与指示牌推出的宝牌合计枚数（同枚不重复计）
+    n_dora_equiv = 0
+    for t in tiles_13:
+        if _is_red_five(t):
+            n_dora_equiv += 1
+        else:
+            ti = _tile_index(t)
+            if ti in dora_index_set:
+                n_dora_equiv += 1
+
     dora_count = sum(c34_t[di] for di in dora_tile_indices)
     adjacent_dora = 0
     for di in dora_tile_indices:
@@ -558,8 +627,15 @@ def evaluate_starting_hand(
 
     yaku_bonus_total, yaku_details = _yaku_potential_bonus(c34_t)
 
-    red_bonus = red_dora_count * 5.0
-    dora_bonus = dora_count * 7.0 + adjacent_dora * 1.5
+    # 宝牌：当量按枚累计阶梯（第 1 枚 +4，第 2 枚 +7，第 3 枚 +10…）+ 三张同宝牌 +8；邻张不变
+    dora_equiv_ladder = _dora_equiv_ladder_total(n_dora_equiv)
+    triplet_same_dora = 0.0
+    for di in set(dora_tile_indices):
+        if c34_t[di] >= 3:
+            triplet_same_dora = 8.0
+            break
+    dora_bonus = dora_equiv_ladder + adjacent_dora * 1.5 + triplet_same_dora
+    red_bonus = 0.0
 
     total = (
         shape_score
@@ -589,9 +665,12 @@ def evaluate_starting_hand(
             'shanten_bonus': round(float(shanten_bonus), 1),
             'red_dora': red_dora_count,
             'red_dora_bonus': red_bonus,
+            'dora_equiv_count': n_dora_equiv,
             'dora_count': dora_count,
             'dora_tiles': dora_tile_names,
             'adjacent_dora': adjacent_dora,
+            'dora_equiv_ladder_bonus': round(float(dora_equiv_ladder), 1),
+            'dora_triplet_same_bonus': triplet_same_dora,
             'dora_bonus': round(float(dora_bonus), 1),
             'yakuhai_tiles': sorted({field_wind, seat_wind} | {31, 32, 33}),
         },

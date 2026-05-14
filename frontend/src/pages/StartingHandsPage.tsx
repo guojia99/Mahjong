@@ -221,6 +221,8 @@ const YAKU_COLORS: Record<string, string> = {
   junchan: '#2980b9',
   chanta: '#1abc9c',
   honroutou: '#7f8c8d',
+  iipeikou: '#1e8449',
+  daisangen: '#922b21',
 };
 
 export default function StartingHandsPage() {
