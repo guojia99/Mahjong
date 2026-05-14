@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CircleHelp, Sparkles } from 'lucide-react';
+import { CircleHelp, Loader2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   getStartingHands,
@@ -27,6 +27,20 @@ const SELECT_STYLE: React.CSSProperties = {
 
 const MEDAL_COLORS = ['#f0b830', '#a8d8ea', '#e8a0bf'];
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+function ListLoadingOverlay({ show }: { show: boolean }) {
+  if (!show) return null;
+  return (
+    <div
+      className="absolute inset-0 z-10 flex items-center justify-center rounded-lg"
+      style={{ background: 'rgba(255,255,255,0.72)', minHeight: '6rem' }}
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <Loader2 className="h-9 w-9 shrink-0 animate-spin" style={{ color: '#c45cdd' }} aria-hidden />
+    </div>
+  );
+}
 
 function tileSrc(tile: string): string {
   return `/marjongs/${tile}.webp`;
@@ -243,9 +257,19 @@ export default function StartingHandsPage() {
   const [personal, setPersonal] = useState<StartingHandListResponse | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [weightsModalOpen, setWeightsModalOpen] = useState(false);
+  const [overallListLoading, setOverallListLoading] = useState(true);
+  const [personalListLoading, setPersonalListLoading] = useState(false);
 
   const overallFetchSeq = useRef(0);
   const personalFetchSeq = useRef(0);
+
+  useEffect(() => {
+    if (tab !== 'overall') setOverallListLoading(false);
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'personal') setPersonalListLoading(false);
+  }, [tab]);
 
   useEffect(() => {
     let active = true;
@@ -270,6 +294,7 @@ export default function StartingHandsPage() {
     };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
+    setOverallListLoading(true);
     const seq = ++overallFetchSeq.current;
     let active = true;
     getStartingHands(params)
@@ -280,6 +305,9 @@ export default function StartingHandsPage() {
       .catch(() => {
         if (!active || seq !== overallFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
+      })
+      .finally(() => {
+        if (seq === overallFetchSeq.current) setOverallListLoading(false);
       });
     return () => {
       active = false;
@@ -318,6 +346,7 @@ export default function StartingHandsPage() {
     };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
+    setPersonalListLoading(true);
     const seq = ++personalFetchSeq.current;
     let active = true;
     getStartingHands(params)
@@ -328,6 +357,9 @@ export default function StartingHandsPage() {
       .catch(() => {
         if (!active || seq !== personalFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
+      })
+      .finally(() => {
+        if (seq === personalFetchSeq.current) setPersonalListLoading(false);
       });
     return () => {
       active = false;
@@ -449,23 +481,35 @@ export default function StartingHandsPage() {
       {tab === 'overall' ? (
         <div>
           {!overall ? (
-            <div className="empty-state card"><p className="text-sm">{t('common.loading')}</p></div>
+            <div className="empty-state card flex flex-col items-center justify-center gap-3 py-12">
+              {overallListLoading ? (
+                <>
+                  <Loader2 className="h-9 w-9 shrink-0 animate-spin" style={{ color: '#c45cdd' }} aria-hidden />
+                  <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</p>
+                </>
+              ) : (
+                <p className="text-sm">{t('startingHands.noData')}</p>
+              )}
+            </div>
           ) : overall.results.length === 0 ? (
             <div className="empty-state card"><p className="text-sm">{t('startingHands.noData')}</p></div>
           ) : (
-            <>
-              <div className="space-y-2">
-                {overall.results.map((item, idx) => (
-                  <HandCard
-                    key={`${item.game_id}-${item.chang}-${item.ju}-${item.ben}-${item.seat}`}
-                    item={item}
-                    rank={(page - 1) * pageSize + idx + 1}
-                    showPlayer
-                  />
-                ))}
+            <div className="relative">
+              <div className={overallListLoading ? 'pointer-events-none opacity-[0.55]' : ''}>
+                <div className="space-y-2">
+                  {overall.results.map((item, idx) => (
+                    <HandCard
+                      key={`${item.game_id}-${item.chang}-${item.ju}-${item.ben}-${item.seat}`}
+                      item={item}
+                      rank={(page - 1) * pageSize + idx + 1}
+                      showPlayer
+                    />
+                  ))}
+                </div>
+                {renderPagination(overall.count)}
               </div>
-              {renderPagination(overall.count)}
-            </>
+              <ListLoadingOverlay show={overallListLoading} />
+            </div>
           )}
         </div>
       ) : (
@@ -561,23 +605,37 @@ export default function StartingHandsPage() {
           )}
 
           {!personal ? (
-            <div className="empty-state card"><p className="text-sm">{selectedPlayerId ? t('common.loading') : t('startingHands.selectPlayer')}</p></div>
+            <div className="empty-state card flex flex-col items-center justify-center gap-3 py-12">
+              {!selectedPlayerId ? (
+                <p className="text-sm">{t('startingHands.selectPlayer')}</p>
+              ) : personalListLoading ? (
+                <>
+                  <Loader2 className="h-9 w-9 shrink-0 animate-spin" style={{ color: '#c45cdd' }} aria-hidden />
+                  <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</p>
+                </>
+              ) : (
+                <p className="text-sm">{t('startingHands.noData')}</p>
+              )}
+            </div>
           ) : personal.results.length === 0 ? (
             <div className="empty-state card"><p className="text-sm">{t('startingHands.noData')}</p></div>
           ) : (
-            <>
-              <div className="space-y-2">
-                {personal.results.map((item, idx) => (
-                  <HandCard
-                    key={`${item.game_id}-${item.chang}-${item.ju}-${item.ben}-${item.seat}`}
-                    item={item}
-                    rank={(page - 1) * pageSize + idx + 1}
-                    showPlayer={false}
-                  />
-                ))}
+            <div className="relative">
+              <div className={personalListLoading ? 'pointer-events-none opacity-[0.55]' : ''}>
+                <div className="space-y-2">
+                  {personal.results.map((item, idx) => (
+                    <HandCard
+                      key={`${item.game_id}-${item.chang}-${item.ju}-${item.ben}-${item.seat}`}
+                      item={item}
+                      rank={(page - 1) * pageSize + idx + 1}
+                      showPlayer={false}
+                    />
+                  ))}
+                </div>
+                {renderPagination(personal.count)}
               </div>
-              {renderPagination(personal.count)}
-            </>
+              <ListLoadingOverlay show={personalListLoading} />
+            </div>
           )}
         </div>
       )}
