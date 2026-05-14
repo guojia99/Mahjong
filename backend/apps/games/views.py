@@ -28,6 +28,7 @@ from .services import (
     paipu_stats_build_rank_items,
     PAIPU_STATS_RANK_TYPES,
 )
+from .starting_hands import extract_starting_hands_from_game
 from common.exceptions import BusinessException
 from django.utils.translation import gettext_lazy as _
 from apps.players.models import Player, MahjongSoulAccount
@@ -710,6 +711,231 @@ class PaipuStatsRankingView(APIView):
                 'rounds': item.get('rounds', 0),
             })
         return Response(result)
+
+
+class StartingHandsView(APIView):
+    """线上牌谱起手 13 张评分列表（v2.2.0）。
+
+    Query：
+      tab=overall|personal （默认 overall；personal 时需 player_id）
+      player_id=UUID
+      player_count=3|4
+      game_mode=east_wind|half_match
+      page / page_size
+
+    Overall 返回 { count, page, page_size, results }
+    Personal 在此基础上额外返回 summary（平均分、张数等）。
+    """
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        from django.core.cache import cache
+
+        tab = (request.query_params.get('tab') or 'overall').strip().lower()
+        if tab not in ('overall', 'personal'):
+            tab = 'overall'
+        player_id = (request.query_params.get('player_id') or '').strip()
+        player_count_q = (request.query_params.get('player_count') or '').strip()
+        game_mode_q = (request.query_params.get('game_mode') or '').strip()
+        try:
+            page = max(1, int(request.query_params.get('page', '1')))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = int(request.query_params.get('page_size', '20'))
+        except (TypeError, ValueError):
+            page_size = 20
+        page_size = max(1, min(page_size, 100))
+
+        if tab == 'personal' and not player_id:
+            return Response({'error': str(_('个人榜需要 player_id'))}, status=400)
+        if tab == 'personal':
+            import uuid as _uuid
+            try:
+                _uuid.UUID(player_id)
+            except (TypeError, ValueError, AttributeError):
+                return Response({
+                    'count': 0, 'page': page, 'page_size': page_size, 'results': [],
+                    'summary': {'player': None, 'total_hands': 0, 'average_score': 0, 'max_score': 0, 'min_score': 0},
+                })
+
+        latest_id = (
+            Game.objects.filter(game_type='online').order_by('-pk').values_list('pk', flat=True).first()
+        ) or 0
+        cache_key = f'starting_hands:v1:{latest_id}:{player_count_q}:{game_mode_q}'
+        cached = cache.get(cache_key)
+        if cached is None:
+            cached = self._compute_all_hands(player_count_q, game_mode_q)
+            cache.set(cache_key, cached, timeout=900)
+
+        filtered = cached
+        if tab == 'personal':
+            filtered = [h for h in cached if h['player_id'] == player_id]
+
+        total = len(filtered)
+        start = (page - 1) * page_size
+        page_hands = filtered[start:start + page_size]
+
+        from apps.players.serializers import PlayerListSerializer
+        pid_set = {h['player_id'] for h in page_hands}
+        if tab == 'personal':
+            pid_set.add(player_id)
+        players_map = {str(p.id): p for p in Player.objects.filter(pk__in=pid_set)}
+
+        results = []
+        for h in page_hands:
+            player = players_map.get(h['player_id'])
+            if not player:
+                continue
+            results.append({
+                'score': h['score'],
+                'tiles': h['tiles'],
+                'chang': h['chang'],
+                'ju': h['ju'],
+                'ben': h['ben'],
+                'dealer_seat': h['dealer_seat'],
+                'seat': h['seat'],
+                'is_dealer': h['is_dealer'],
+                'dora_indicators': h['dora_indicators'],
+                'breakdown': h.get('breakdown', {}),
+                'game_id': h['game_id'],
+                'game_mode': h['game_mode'],
+                'player_count': h['player_count'],
+                'start_time': h['start_time'],
+                'player': PlayerListSerializer(player).data,
+            })
+
+        response_data: dict = {
+            'count': total,
+            'page': page,
+            'page_size': page_size,
+            'results': results,
+        }
+
+        if tab == 'personal':
+            scores = [h['score'] for h in filtered]
+            avg = round(sum(scores) / len(scores), 2) if scores else 0
+            target = players_map.get(player_id)
+            response_data['summary'] = {
+                'player': PlayerListSerializer(target).data if target else None,
+                'total_hands': total,
+                'average_score': avg,
+                'max_score': max(scores, default=0),
+                'min_score': min(scores, default=0),
+            }
+
+        return Response(response_data)
+
+    @staticmethod
+    def _compute_all_hands(player_count_q: str, game_mode_q: str) -> list[dict]:
+        games = Game.objects.filter(game_type='online')
+        if player_count_q:
+            try:
+                games = games.filter(player_count=int(player_count_q))
+            except (TypeError, ValueError):
+                pass
+        if game_mode_q in ('east_wind', 'half_match'):
+            games = games.filter(game_mode=game_mode_q)
+        games = games.order_by('-start_time', '-created_at')
+
+        uid_rows = MahjongSoulAccount.objects.filter(player__isnull=False).values_list('uid', 'player_id')
+        uid_to_player_id = {int(uid): str(pid) for uid, pid in uid_rows}
+
+        seen_keys: set[tuple[str, str]] = set()
+        out: list[dict] = []
+        for g in games:
+            _, has_actions = paipu_data_flags(g.paipu_data)
+            if not has_actions:
+                continue
+            dk = _paipu_dedupe_key(g)
+            if dk in seen_keys:
+                continue
+            seen_keys.add(dk)
+
+            hands = extract_starting_hands_from_game(g)
+            start_time_str = g.start_time.strftime('%Y-%m-%d %H:%M') if g.start_time else ''
+            for h in hands:
+                uid = h.get('uid')
+                pid = uid_to_player_id.get(int(uid)) if uid is not None else None
+                if not pid:
+                    continue
+                out.append({
+                    **h,
+                    'player_id': pid,
+                    'game_id': str(g.id),
+                    'game_mode': g.game_mode,
+                    'player_count': g.player_count,
+                    'start_time': start_time_str,
+                })
+
+        out.sort(key=lambda x: x['score'], reverse=True)
+        return out
+
+
+class StartingHandsPlayerAveragesView(APIView):
+    """个人榜起手牌平均分排行（全部选手按平均分排序）。"""
+    permission_classes = [IsAdminUserOrReadOnly]
+
+    def get(self, request):
+        from django.core.cache import cache
+
+        player_count_q = (request.query_params.get('player_count') or '').strip()
+        game_mode_q = (request.query_params.get('game_mode') or '').strip()
+        try:
+            min_hands = max(1, int(request.query_params.get('min_hands', '8')))
+        except (TypeError, ValueError):
+            min_hands = 8
+
+        latest_id = (
+            Game.objects.filter(game_type='online').order_by('-pk').values_list('pk', flat=True).first()
+        ) or 0
+        cache_key = f'starting_hands:v1:{latest_id}:{player_count_q}:{game_mode_q}'
+        cached = cache.get(cache_key)
+        if cached is None:
+            cached = StartingHandsView._compute_all_hands(player_count_q, game_mode_q)
+            cache.set(cache_key, cached, timeout=900)
+
+        agg: dict[str, dict[str, float]] = {}
+        for h in cached:
+            pid = h['player_id']
+            row = agg.setdefault(pid, {'sum': 0.0, 'count': 0, 'best': float('-inf'), 'worst': float('inf')})
+            row['sum'] += h['score']
+            row['count'] += 1
+            if h['score'] > row['best']:
+                row['best'] = h['score']
+            if h['score'] < row['worst']:
+                row['worst'] = h['score']
+
+        from apps.players.serializers import PlayerListSerializer
+        items = []
+        for pid, row in agg.items():
+            if row['count'] < min_hands:
+                continue
+            avg = row['sum'] / row['count']
+            items.append({
+                'player_id': pid,
+                'total_hands': int(row['count']),
+                'average_score': round(avg, 2),
+                'best_score': row['best'],
+                'worst_score': row['worst'],
+            })
+        items.sort(key=lambda x: x['average_score'], reverse=True)
+
+        pid_set = {x['player_id'] for x in items}
+        players_map = {str(p.id): p for p in Player.objects.filter(pk__in=pid_set)}
+        results = []
+        for it in items:
+            player = players_map.get(it['player_id'])
+            if not player:
+                continue
+            results.append({
+                'player': PlayerListSerializer(player).data,
+                'total_hands': it['total_hands'],
+                'average_score': it['average_score'],
+                'best_score': it['best_score'],
+                'worst_score': it['worst_score'],
+            })
+        return Response(results)
 
 
 class FunRankingView(APIView):

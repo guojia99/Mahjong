@@ -95,6 +95,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     children: [
       { type: 'item', path: '/fun-ranking', labelKey: 'nav.funRanking', icon: Medal },
       { type: 'item', path: '/paipu-stats', labelKey: 'nav.paipuStats', icon: BarChart2 },
+      { type: 'item', path: '/starting-hands', labelKey: 'nav.startingHands', icon: Sparkles },
       { type: 'item', path: '/yakumans', labelKey: 'nav.yakumans', icon: Sparkles },
     ],
   },

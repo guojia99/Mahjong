@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.2.0 — 2026-05-14
+
+- New "Starting Hands" page under Stats: each seat's initial 13 tiles per round extracted from online paipu, scored by melds / partials / pairs / yakuhai (round, seat, dragons) / red dora / round dora / shanten
+- Overall tab: all hands across all players sorted by score with pagination
+- Personal tab: per-player hand list (sorted by score), average / max / min score, plus an average-score leaderboard
+
 ## v2.1.3 — 2026-05-11
 
 - M.League rules: full official Japanese text matches repo `MLeague_rule.html`; riichi overview keeps key points + link; zh-Hans / zh-Hant / en tabs add localized summaries above the Japanese body
