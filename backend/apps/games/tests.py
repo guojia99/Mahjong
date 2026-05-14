@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.players.models import Player
 
+from .starting_hands import evaluate_starting_hand
 from .views import StartingHandsView, _parse_query_int
 
 User = get_user_model()
@@ -52,6 +53,41 @@ class StartingHandsPaginationTests(TestCase):
         self.assertEqual(len(r2.data['results']), 20)
         self.assertEqual(r1.data['results'][0]['game_id'], '0')
         self.assertEqual(r2.data['results'][0]['game_id'], '20')
+
+
+class EvaluateStartingHandTests(TestCase):
+    def test_tanyao_potential_when_many_middle_tiles(self):
+        tiles = ['2m', '3m', '4m', '5m', '6m', '7m', '2p', '3p', '4p', '5p', '6p', '2s', '3s']
+        r = evaluate_starting_hand(tiles, chang=0, dealer_seat=0, seat=0, dora_indicators=[])
+        self.assertFalse(r.get('invalid'))
+        self.assertIn('tanyao', r['breakdown']['yaku_potential'])
+        self.assertEqual(r['breakdown']['yaku_potential']['tanyao'], 10.0)
+
+    def test_no_tanyao_potential_when_many_terminals(self):
+        r = evaluate_starting_hand(['1m'] * 13, chang=0, dealer_seat=0, seat=0, dora_indicators=[])
+        self.assertNotIn('tanyao', r['breakdown']['yaku_potential'])
+
+    def test_no_tanyao_potential_with_honors(self):
+        tiles = ['2m', '3m', '4m', '5m', '6m', '7m', '2p', '3p', '4p', '5p', '1z', '1z', '1z', '2s']
+        r = evaluate_starting_hand(tiles, chang=0, dealer_seat=0, seat=0, dora_indicators=[])
+        self.assertNotIn('tanyao', r['breakdown']['yaku_potential'])
+
+    def test_tanyao_potential_tier_10_middle_with_terminals(self):
+        tiles = ['2m', '3m', '4m', '5m', '6m', '7m', '2p', '3p', '4p', '5p', '1m', '1m', '1m']
+        r = evaluate_starting_hand(tiles, chang=0, dealer_seat=0, seat=0, dora_indicators=[])
+        self.assertEqual(r['breakdown']['yaku_potential'].get('tanyao'), 1.5)
+
+    def test_dora_triplet_same_bonus(self):
+        tiles = ['5m', '5m', '5m', '2p', '3p', '4p', '5p', '6p', '7p', '8p', '9p', '1s', '2s']
+        r = evaluate_starting_hand(tiles, chang=0, dealer_seat=0, seat=0, dora_indicators=['4m'])
+        self.assertEqual(r['breakdown']['dora_equiv_ladder_bonus'], 21.0)
+        self.assertEqual(r['breakdown']['dora_triplet_same_bonus'], 8.0)
+        self.assertGreaterEqual(r['breakdown']['dora_bonus'], 29.0)
+
+    def test_daisangen_potential(self):
+        tiles = ['5z', '5z', '6z', '6z', '7z', '7z', '7z', '2m', '3m', '4m', '5m', '6m', '7m']
+        r = evaluate_starting_hand(tiles, chang=0, dealer_seat=0, seat=0, dora_indicators=[])
+        self.assertEqual(r['breakdown']['yaku_potential'].get('daisangen'), 15.0)
 
 
 class ParseQueryIntTests(TestCase):

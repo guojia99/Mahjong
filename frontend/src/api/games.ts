@@ -328,7 +328,7 @@ export interface StartingHandBreakdown {
   shape_score: number;
   shape_detail?: Record<string, unknown>;
   yaku_potential_bonus: number;
-  /** key: 役种 id（如 tanyao / chiitoitsu / ittsuu / sanshoku_doujun / sanshoku_doukou / sanankou / toitoi / chinitsu / honitsu / junchan / chanta / honroutou），value: 该役种加分 */
+  /** key: 役种 id（如 tanyao / chiitoitsu / … / iipeikou / daisangen），value: 该役种加分 */
   yaku_potential: Record<string, number>;
   tanyao_bonus: number;
   honitsu_bonus: number;
@@ -337,9 +337,14 @@ export interface StartingHandBreakdown {
   shanten_breakdown?: { general: number; pairs7: number; kokushi: number };
   red_dora: number;
   red_dora_bonus: number;
+  /** 与指示牌宝牌合并后的「宝牌当量」枚数（赤 5 等已并入，不重复计） */
+  dora_equiv_count?: number;
   dora_count: number;
   dora_tiles: string[];
   adjacent_dora: number;
+  /** 第 1…n 枚宝牌当量按 4+7+10+… 规则累计的加分（不含邻张、三张同宝） */
+  dora_equiv_ladder_bonus?: number;
+  dora_triplet_same_bonus?: number;
   dora_bonus: number;
   tanyao: boolean;
   yakuhai_tiles?: number[];
