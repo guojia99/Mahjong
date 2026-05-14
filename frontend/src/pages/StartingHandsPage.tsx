@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { CircleHelp, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   getStartingHands,
@@ -12,6 +12,7 @@ import {
 import { getPlayers } from '@/api/players';
 import type { Player } from '@/types';
 import { useToast } from '@/hooks/useToast';
+import StartingHandsWeightsModal from '@/components/StartingHandsWeightsModal';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -239,6 +240,10 @@ export default function StartingHandsPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [personal, setPersonal] = useState<StartingHandListResponse | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [weightsModalOpen, setWeightsModalOpen] = useState(false);
+
+  const overallFetchSeq = useRef(0);
+  const personalFetchSeq = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -263,13 +268,16 @@ export default function StartingHandsPage() {
     };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
+    const seq = ++overallFetchSeq.current;
     let active = true;
     getStartingHands(params)
       .then((data) => {
-        if (active) setOverall(data);
+        if (!active || seq !== overallFetchSeq.current) return;
+        setOverall(data);
       })
       .catch(() => {
-        if (active) showToast(t('startingHands.loadFailed'));
+        if (!active || seq !== overallFetchSeq.current) return;
+        showToast(t('startingHands.loadFailed'));
       });
     return () => {
       active = false;
@@ -308,13 +316,16 @@ export default function StartingHandsPage() {
     };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
+    const seq = ++personalFetchSeq.current;
     let active = true;
     getStartingHands(params)
       .then((data) => {
-        if (active) setPersonal(data);
+        if (!active || seq !== personalFetchSeq.current) return;
+        setPersonal(data);
       })
       .catch(() => {
-        if (active) showToast(t('startingHands.loadFailed'));
+        if (!active || seq !== personalFetchSeq.current) return;
+        showToast(t('startingHands.loadFailed'));
       });
     return () => {
       active = false;
@@ -365,10 +376,21 @@ export default function StartingHandsPage() {
   return (
     <div>
       {ToastComponent}
+      <StartingHandsWeightsModal open={weightsModalOpen} onClose={() => setWeightsModalOpen(false)} />
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
         <div className="flex items-center gap-2">
           <Sparkles size={22} style={{ color: '#c45cdd' }} />
           <h2 className="text-lg font-bold">{t('startingHands.title')}</h2>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-full p-1 transition-colors hover:bg-gray-100"
+            style={{ color: '#9b3aae' }}
+            title={t('startingHands.weightsModal.button')}
+            aria-label={t('startingHands.weightsModal.button')}
+            onClick={() => setWeightsModalOpen(true)}
+          >
+            <CircleHelp size={20} strokeWidth={2} />
+          </button>
         </div>
         <Link to="/paipu-stats" className="text-xs font-medium" style={{ color: 'var(--color-primary-dark)' }}>
           {t('startingHands.linkPaipuStats')}
