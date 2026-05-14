@@ -259,6 +259,7 @@ export default function StartingHandsPage() {
   const [weightsModalOpen, setWeightsModalOpen] = useState(false);
   const [overallListLoading, setOverallListLoading] = useState(true);
   const [personalListLoading, setPersonalListLoading] = useState(false);
+  const [pageJumpDraft, setPageJumpDraft] = useState('1');
 
   const overallFetchSeq = useRef(0);
   const personalFetchSeq = useRef(0);
@@ -270,6 +271,10 @@ export default function StartingHandsPage() {
   useEffect(() => {
     if (tab !== 'personal') setPersonalListLoading(false);
   }, [tab]);
+
+  useEffect(() => {
+    setPageJumpDraft(String(page));
+  }, [page]);
 
   useEffect(() => {
     let active = true;
@@ -373,12 +378,17 @@ export default function StartingHandsPage() {
 
   const renderPagination = (count: number) => {
     const totalPages = Math.max(1, Math.ceil(count / pageSize));
+    const commitPageJump = () => {
+      const n = parseInt(pageJumpDraft.trim(), 10);
+      if (!Number.isFinite(n)) return;
+      setPage(Math.min(Math.max(1, n), totalPages));
+    };
     return (
       <div className="flex items-center justify-between flex-wrap gap-2 mt-4">
         <div className="text-xs" style={{ color: 'var(--color-text-light)' }}>
           {t('startingHands.totalHands', { count })} · {t('startingHands.pageOf', { page, total: totalPages })}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
           <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={SELECT_STYLE}>
             {PAGE_SIZE_OPTIONS.map((n) => (
               <option key={n} value={n}>{n}/{t('startingHands.pageUnit')}</option>
@@ -402,6 +412,46 @@ export default function StartingHandsPage() {
           >
             {t('startingHands.next')}
           </button>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1.5 pl-1 border-l" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-xs whitespace-nowrap" style={{ color: 'var(--color-text-light)' }}>
+                {t('startingHands.pageJumpLabel')}
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageJumpDraft}
+                onChange={(e) => setPageJumpDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitPageJump();
+                  }
+                }}
+                className="tabular-nums text-center"
+                style={{
+                  width: '3.25rem',
+                  padding: '0.25rem 0.35rem',
+                  fontSize: '0.75rem',
+                  borderRadius: '0.375rem',
+                  border: '2px solid var(--color-border)',
+                  background: 'white',
+                  color: 'var(--color-text)',
+                  outline: 'none',
+                }}
+                aria-label={t('startingHands.pageJumpAria')}
+              />
+              <button
+                type="button"
+                className="px-2 py-1 text-xs rounded-md border font-medium"
+                style={{ borderColor: 'var(--color-border)', background: '#fdf2ff', color: '#9b3aae' }}
+                onClick={commitPageJump}
+              >
+                {t('startingHands.pageJumpGo')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
