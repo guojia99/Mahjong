@@ -36,6 +36,37 @@ from apps.players.models import Player, MahjongSoulAccount
 logger = logging.getLogger(__name__)
 
 
+def _parse_query_int(
+    qp,
+    key: str,
+    default: int,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+) -> int:
+    """解析查询参数中的整数（strip 空白；非法时回退 default）。"""
+    raw = qp.get(key)
+    if raw is None:
+        v = default
+    else:
+        s = str(raw).strip()
+        if s == '':
+            v = default
+        else:
+            try:
+                v = int(s)
+            except (TypeError, ValueError):
+                try:
+                    v = int(float(s))
+                except (TypeError, ValueError):
+                    v = default
+    if minimum is not None:
+        v = max(minimum, v)
+    if maximum is not None:
+        v = min(maximum, v)
+    return v
+
+
 class RoomListView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
@@ -714,7 +745,7 @@ class PaipuStatsRankingView(APIView):
 
 
 class StartingHandsView(APIView):
-    """线上牌谱起手 13 张评分列表（v2.2.0）。
+    """线上牌谱起手 13 张评分列表（v2.2.0 / v2.2.1）。
 
     Query：
       tab=overall|personal （默认 overall；personal 时需 player_id）
@@ -725,48 +756,59 @@ class StartingHandsView(APIView):
 
     Overall 返回 { count, page, page_size, results }
     Personal 在此基础上额外返回 summary（平均分、张数等）。
+
+    全量数据在服务端排序后写入缓存（v2.2.1：约 20 分钟），再按 page / page_size 分页返回。
     """
     permission_classes = [IsAdminUserOrReadOnly]
 
-    def get(self, request):
+    _STARTING_HANDS_CACHE_VER = 'v2'
+    _STARTING_HANDS_CACHE_TTL = 20 * 60
+
+    @classmethod
+    def get_or_build_cached_hands(cls, player_count_q: str, game_mode_q: str) -> list[dict]:
+        """全量起手牌列表（已按 score 降序）；带缓存。"""
         from django.core.cache import cache
 
+        latest_id = (
+            Game.objects.filter(game_type='online').order_by('-pk').values_list('pk', flat=True).first()
+        ) or 0
+        cache_key = (
+            f'starting_hands:{cls._STARTING_HANDS_CACHE_VER}:{latest_id}:{player_count_q}:{game_mode_q}'
+        )
+        data = cache.get(cache_key)
+        if data is None:
+            data = cls._compute_all_hands(player_count_q, game_mode_q)
+            cache.set(cache_key, data, timeout=cls._STARTING_HANDS_CACHE_TTL)
+        return data
+
+    def get(self, request):
         tab = (request.query_params.get('tab') or 'overall').strip().lower()
         if tab not in ('overall', 'personal'):
             tab = 'overall'
         player_id = (request.query_params.get('player_id') or '').strip()
         player_count_q = (request.query_params.get('player_count') or '').strip()
         game_mode_q = (request.query_params.get('game_mode') or '').strip()
-        try:
-            page = max(1, int(request.query_params.get('page', '1')))
-        except (TypeError, ValueError):
-            page = 1
-        try:
-            page_size = int(request.query_params.get('page_size', '20'))
-        except (TypeError, ValueError):
-            page_size = 20
-        page_size = max(1, min(page_size, 100))
+        qp = request.query_params
+        page = _parse_query_int(qp, 'page', 1, minimum=1)
+        page_size = _parse_query_int(qp, 'page_size', 20, minimum=1, maximum=100)
 
         if tab == 'personal' and not player_id:
-            return Response({'error': str(_('个人榜需要 player_id'))}, status=400)
+            resp = Response({'error': str(_('个人榜需要 player_id'))}, status=400)
+            resp['Cache-Control'] = 'private, no-store'
+            return resp
         if tab == 'personal':
             import uuid as _uuid
             try:
                 _uuid.UUID(player_id)
             except (TypeError, ValueError, AttributeError):
-                return Response({
+                resp = Response({
                     'count': 0, 'page': page, 'page_size': page_size, 'results': [],
                     'summary': {'player': None, 'total_hands': 0, 'average_score': 0, 'max_score': 0, 'min_score': 0},
                 })
+                resp['Cache-Control'] = 'private, no-store'
+                return resp
 
-        latest_id = (
-            Game.objects.filter(game_type='online').order_by('-pk').values_list('pk', flat=True).first()
-        ) or 0
-        cache_key = f'starting_hands:v1:{latest_id}:{player_count_q}:{game_mode_q}'
-        cached = cache.get(cache_key)
-        if cached is None:
-            cached = self._compute_all_hands(player_count_q, game_mode_q)
-            cache.set(cache_key, cached, timeout=900)
+        cached = self.get_or_build_cached_hands(player_count_q, game_mode_q)
 
         filtered = cached
         if tab == 'personal':
@@ -824,7 +866,9 @@ class StartingHandsView(APIView):
                 'min_score': min(scores, default=0),
             }
 
-        return Response(response_data)
+        resp = Response(response_data)
+        resp['Cache-Control'] = 'private, no-store'
+        return resp
 
     @staticmethod
     def _compute_all_hands(player_count_q: str, game_mode_q: str) -> list[dict]:
@@ -877,23 +921,11 @@ class StartingHandsPlayerAveragesView(APIView):
     permission_classes = [IsAdminUserOrReadOnly]
 
     def get(self, request):
-        from django.core.cache import cache
-
         player_count_q = (request.query_params.get('player_count') or '').strip()
         game_mode_q = (request.query_params.get('game_mode') or '').strip()
-        try:
-            min_hands = max(1, int(request.query_params.get('min_hands', '8')))
-        except (TypeError, ValueError):
-            min_hands = 8
+        min_hands = _parse_query_int(request.query_params, 'min_hands', 8, minimum=1)
 
-        latest_id = (
-            Game.objects.filter(game_type='online').order_by('-pk').values_list('pk', flat=True).first()
-        ) or 0
-        cache_key = f'starting_hands:v1:{latest_id}:{player_count_q}:{game_mode_q}'
-        cached = cache.get(cache_key)
-        if cached is None:
-            cached = StartingHandsView._compute_all_hands(player_count_q, game_mode_q)
-            cache.set(cache_key, cached, timeout=900)
+        cached = StartingHandsView.get_or_build_cached_hands(player_count_q, game_mode_q)
 
         agg: dict[str, dict[str, float]] = {}
         for h in cached:
@@ -935,7 +967,9 @@ class StartingHandsPlayerAveragesView(APIView):
                 'best_score': it['best_score'],
                 'worst_score': it['worst_score'],
             })
-        return Response(results)
+        resp = Response(results)
+        resp['Cache-Control'] = 'private, no-store'
+        return resp
 
 
 class FunRankingView(APIView):

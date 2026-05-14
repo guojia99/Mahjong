@@ -343,6 +343,10 @@ input, textarea, select {
   animation: modalIn 0.3s ease;
 }
 
+.modal.modal--wide {
+  max-width: min(52rem, 100%);
+}
+
 @keyframes modalIn {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }

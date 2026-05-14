@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.1 — 2026-05-14
+
+- Starting Hands: fix pagination always showing the first page of results; server caches the full sorted list for ~20 minutes, then paginates
+
 ## v2.2.0 — 2026-05-14
 
 - New "Starting Hands" page under Stats: each seat's initial 13 tiles per round extracted from online paipu, scored by melds / partials / pairs / yakuhai (round, seat, dragons) / red dora / round dora / shanten
