@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -51,16 +52,45 @@ func Load(configPath string) {
 	}
 }
 
+// ResolveDBPath returns the absolute SQLite file path for configPath (loads config).
+func ResolveDBPath(configPath string) (string, error) {
+	Load(configPath)
+	return prepareDBPath()
+}
+
+func prepareDBPath() (string, error) {
+	rel := Cfg.Database.SQLitePath
+	if rel == "" {
+		rel = "db.sqlite3"
+	}
+	dbPath := rel
+	if !filepath.IsAbs(dbPath) {
+		dbPath = filepath.Join(ProjectRoot, rel)
+	}
+	abs, err := filepath.Abs(dbPath)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Dir(abs)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create database directory %s: %w", dir, err)
+	}
+	return abs, nil
+}
+
 func InitDB(configPath string) *gorm.DB {
 	Load(configPath)
 
-	dbPath := filepath.Join(ProjectRoot, Cfg.Database.SQLitePath)
+	dbPath, err := prepareDBPath()
+	if err != nil {
+		panic("failed to prepare database path: " + err.Error())
+	}
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Discard,
 	})
 	if err != nil {
-		panic("failed to connect database: " + err.Error())
+		panic(fmt.Sprintf("failed to connect database %s: %s", dbPath, err.Error()))
 	}
 
 	sqlDB, _ := db.DB()

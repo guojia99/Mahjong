@@ -1,6 +1,6 @@
 {
     "database": {
-        "sqlite_path": "db.sqlite3"
+        "sqlite_path": "marjong.db"
     },
     "majsoul_account": "",
     "majsoul_password": "",
