@@ -17,6 +17,8 @@ marjong.db-journal
 
 # Backend
 backend/mahjong-backend
+backend/mahjong-gateway
+backend/mahjong-prodsupervisor
 backend/marjong.db
 backend/db_config.json
 backend/media/
