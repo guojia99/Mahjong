@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getRoom, addPlayerToRoom, removePlayerFromRoom, getRoomGames, createRoomGame } from '@/api/games';
@@ -11,6 +11,7 @@ import SearchBar from '@/components/SearchBar';
 import type { Room, Player, Game } from '@/types';
 import { GAME_MODE_LABELS, ROOM_STATUS_LABELS, ROOM_TYPE_LABELS } from '@/types';
 import { Plus, MapPin, Clock, Play, Globe } from 'lucide-react';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 export default function RoomDetailPage() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export default function RoomDetailPage() {
   const [room, setRoom] = useState<Room | null>(null);
   const [games, setGames] = useState<Game[]>([]);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [playerQuery, setPlayerQuery] = useState('');
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showNewGame, setShowNewGame] = useState(false);
@@ -50,6 +52,23 @@ export default function RoomDetailPage() {
       getPlayers(playerQuery).then(setAllPlayers);
     }
   }, [showAddPlayer, playerQuery]);
+
+  const avatarPlayerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const rp of room?.room_players ?? []) {
+      if (rp.player?.id) ids.push(rp.player.id);
+    }
+    return [...new Set(ids)];
+  }, [room?.room_players]);
+
+  useEffect(() => {
+    if (avatarPlayerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [avatarPlayerIds]);
 
   const roomPlayerIds = room?.room_players?.map((rp) => rp.player.id) || [];
 
@@ -199,6 +218,7 @@ export default function RoomDetailPage() {
                 size="sm"
                 removable={admin && room.status === 'open'}
                 onRemove={() => handleRemovePlayer(rp.player.id)}
+                avatarUrl={playerAvatars[rp.player.id]}
               />
             ))}
           </div>
@@ -218,8 +238,8 @@ export default function RoomDetailPage() {
                   <span className="text-sm font-bold" style={{ color: idx < 3 ? medalColors[idx] : 'var(--color-text-light)', minWidth: '1.5rem', textAlign: 'center' }}>
                     {idx + 1}
                   </span>
-                  {item.player?.avatar ? (
-                    <img src={item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+                  {(playerAvatars[item.playerId] || item.player?.avatar) ? (
+                    <img src={playerAvatars[item.playerId] || item.player?.avatar} alt={item.player?.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
                   ) : (
                     <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.625rem' }}>
                       {item.player?.nickname?.charAt(0)}

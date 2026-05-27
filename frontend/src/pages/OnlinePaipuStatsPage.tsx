@@ -5,6 +5,7 @@ import type { FunRankingItem } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import { BarChart3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -128,6 +129,7 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
 
 export default function OnlinePaipuStatsPage() {
   const [rankings, setRankings] = useState<FunRankingItem[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [rankType, setRankType] = useState<PaipuStatRankType>('win_rate');
   const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
@@ -209,6 +211,23 @@ export default function OnlinePaipuStatsPage() {
     if (minGames) params.min_games = minGames;
     getPaipuStatsRanking(params).then(setRankings).catch(() => showToast(t('paipuStats.loadFailed')));
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
+
+  const playerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of rankings) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    return [...new Set(ids)];
+  }, [rankings]);
+
+  useEffect(() => {
+    if (playerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(playerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [playerIds]);
 
   const isPercent = [
     'riichi_rate', 'damaten_rate', 'damaten_listen_rate', 'deal_in_rate', 'tsumo_rate', 'win_rate', 'furo_rate', 'minkan_rate', 'ankan_rate',
@@ -361,8 +380,8 @@ export default function OnlinePaipuStatsPage() {
                 }}>
                   {idx + 1}
                 </div>
-                {item.player.avatar ? (
-                  <img src={item.player.avatar} alt={item.player.nickname} className="avatar" />
+                {playerAvatars[item.player.id] ? (
+                  <img src={playerAvatars[item.player.id]} alt={item.player.nickname} className="avatar" />
                 ) : (
                   <div className="avatar-placeholder">{item.player.nickname.charAt(0)}</div>
                 )}

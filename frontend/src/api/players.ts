@@ -7,6 +7,12 @@ export async function getPlayers(query = ''): Promise<Player[]> {
   return data;
 }
 
+/** 获取单个雀士头像 */
+export async function getPlayerAvatar(id: string): Promise<string> {
+  const { data } = await api.get<{ avatar: string }>(`/players/${id}/avatar/`);
+  return data.avatar ?? '';
+}
+
 /** 批量取头像（id -> 头像 URL 或空串，可能为 data: 或 http(s)） */
 export async function getPlayerAvatarsBatch(ids: string[]): Promise<Record<string, string>> {
   if (!ids.length) return {};

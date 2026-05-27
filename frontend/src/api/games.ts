@@ -360,7 +360,7 @@ export interface StartingHandItem {
   seat: number;
   is_dealer: boolean;
   dora_indicators: string[];
-  breakdown: StartingHandBreakdown;
+  breakdown: StartingHandBreakdown | null;
   game_id: string;
   game_mode: string;
   player_count: number;

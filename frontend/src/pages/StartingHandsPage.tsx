@@ -13,6 +13,7 @@ import { getPlayers } from '@/api/players';
 import type { Player } from '@/types';
 import { useToast } from '@/hooks/useToast';
 import StartingHandsWeightsModal from '@/components/StartingHandsWeightsModal';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -113,8 +114,9 @@ function doraTileFromIndicator(ind: string): string | null {
   return null;
 }
 
-function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: number; showPlayer: boolean }) {
+function HandCard({ item, rank, showPlayer, avatarUrl }: { item: StartingHandItem; rank: number; showPlayer: boolean; avatarUrl?: string }) {
   const { t } = useTranslation();
+  const breakdown = item.breakdown;
   const doraSet = useMemo(() => {
     const s = new Set<string>();
     for (const ind of item.dora_indicators) {
@@ -141,8 +143,8 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
             className="flex items-center gap-2 min-w-0"
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            {item.player.avatar ? (
-              <img src={item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+            {(avatarUrl || item.player.avatar) ? (
+              <img src={avatarUrl || item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
             ) : (
               <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}>{item.player.nickname.charAt(0)}</div>
             )}
@@ -165,20 +167,24 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
         </span>
         <span>·</span>
         <span>{item.is_dealer ? t('startingHands.dealer') : `${t('startingHands.seat')} ${item.seat + 1}`}</span>
-        <span>·</span>
-        <span>
-          {t('startingHands.shanten')}: <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{item.breakdown.shanten}</span>
-        </span>
-        {item.breakdown.dora_count > 0 && (
+        {breakdown != null && (
           <>
             <span>·</span>
-            <span>{t('startingHands.dora')}: {item.breakdown.dora_count}</span>
-          </>
-        )}
-        {item.breakdown.red_dora > 0 && (
-          <>
-            <span>·</span>
-            <span style={{ color: '#e74c3c' }}>{t('startingHands.redDora')}: {item.breakdown.red_dora}</span>
+            <span>
+              {t('startingHands.shanten')}: <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{breakdown.shanten}</span>
+            </span>
+            {breakdown.dora_count > 0 && (
+              <>
+                <span>·</span>
+                <span>{t('startingHands.dora')}: {breakdown.dora_count}</span>
+              </>
+            )}
+            {breakdown.red_dora > 0 && (
+              <>
+                <span>·</span>
+                <span style={{ color: '#e74c3c' }}>{t('startingHands.redDora')}: {breakdown.red_dora}</span>
+              </>
+            )}
           </>
         )}
         {item.dora_indicators.length > 0 && (
@@ -199,9 +205,9 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
         </Link>
       </div>
 
-      {item.breakdown.yaku_potential && Object.keys(item.breakdown.yaku_potential).length > 0 && (
+      {breakdown?.yaku_potential && Object.keys(breakdown.yaku_potential).length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {Object.entries(item.breakdown.yaku_potential)
+          {Object.entries(breakdown.yaku_potential)
             .sort((a, b) => b[1] - a[1])
             .map(([key, val]) => {
               const color = YAKU_COLORS[key] || '#7e57c2';
@@ -256,6 +262,7 @@ export default function StartingHandsPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [personal, setPersonal] = useState<StartingHandListResponse | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [weightsModalOpen, setWeightsModalOpen] = useState(false);
   const [overallListLoading, setOverallListLoading] = useState(true);
   const [personalListLoading, setPersonalListLoading] = useState(false);
@@ -289,6 +296,29 @@ export default function StartingHandsPage() {
       active = false;
     };
   }, []);
+
+  const avatarPlayerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of overall?.results ?? []) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    for (const item of personal?.results ?? []) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    for (const row of averages) {
+      if (row.player?.id) ids.push(row.player.id);
+    }
+    return [...new Set(ids)];
+  }, [overall, personal, averages]);
+
+  useEffect(() => {
+    if (avatarPlayerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [avatarPlayerIds]);
 
   useEffect(() => {
     if (tab !== 'overall') return;
@@ -553,6 +583,7 @@ export default function StartingHandsPage() {
                       item={item}
                       rank={(page - 1) * pageSize + idx + 1}
                       showPlayer
+                      avatarUrl={playerAvatars[item.player.id]}
                     />
                   ))}
                 </div>
@@ -591,8 +622,8 @@ export default function StartingHandsPage() {
                       <div className="text-sm font-bold" style={{ color: idx < 3 ? MEDAL_COLORS[idx] : 'var(--color-text-light)', minWidth: '1.5rem', textAlign: 'center' }}>
                         {idx + 1}
                       </div>
-                      {row.player.avatar ? (
-                        <img src={row.player.avatar} alt={row.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+                      {(playerAvatars[row.player.id] || row.player.avatar) ? (
+                        <img src={playerAvatars[row.player.id] || row.player.avatar} alt={row.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
                       ) : (
                         <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}>{row.player.nickname.charAt(0)}</div>
                       )}
@@ -679,6 +710,7 @@ export default function StartingHandsPage() {
                       item={item}
                       rank={(page - 1) * pageSize + idx + 1}
                       showPlayer={false}
+                      avatarUrl={playerAvatars[item.player.id]}
                     />
                   ))}
                 </div>

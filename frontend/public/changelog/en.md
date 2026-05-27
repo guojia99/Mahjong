@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.3.2 — 2026-05-27
+
+- Fix yakuman list nil-pointer crash; restore online paipu statistics; restore starting hands scoring; fix login token generation
+
+## v2.3.1 — 2026-05-25
+
+- Avatar data removed from list/detail API responses; frontend now loads avatars asynchronously via a dedicated endpoint with 2-hour local cache
+
 ## v2.3.0 — 2026-05-25
 
 - Backend rewritten from Python/Django to Go (Gin + GORM); fully API-compatible, no frontend changes required

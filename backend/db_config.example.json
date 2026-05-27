@@ -3,5 +3,8 @@
         "sqlite_path": "db.sqlite3"
     },
     "majsoul_account": "",
-    "majsoul_password": ""
+    "majsoul_password": "",
+    "majsoul_access_token": "",
+    "majsoul_oauth2_type": 1,
+    "majsoul_login_request_b64": ""
 }

@@ -1,8 +1,8 @@
 # Mahjong 项目目录结构
 
-> 排除 `.git/`、`backend/.venv/`、`frontend/node_modules/`、`__pycache__/`、`frontend/dist/`、`.idea/` 等生成目录
+> 排除 `.git/`、`backend/go/mahjong-backend`、`frontend/node_modules/`、`backend/majsoul_node/node_modules/`、`frontend/dist/`、`.idea/` 等生成目录
 
-**产品概览**：日本立直麻将对局记录与 PT 统计助手；雀士详情页提供四麻半庄默认视角、一位～四位率、线上线下筛选、最近 N 局顺位折线与 PT 累计曲线等统计能力（详见根目录 `README.md` 与 `architecture.md`）。
+**产品概览**：日本立直麻将对局记录与 PT 统计助手；雀士详情页提供四麻半庄默认视角、一位～四位率、线上线下筛选、最近 N 局顺位折线与 PT 累计曲线等统计能力；支持天梯排位系统与联赛管理（详见根目录 `README.md` 与 `architecture.md`）。
 
 ```
 Mahjong/
@@ -10,196 +10,83 @@ Mahjong/
 ├── .gitignore
 ├── LICENSE
 ├── README.md
+├── Makefile                             # 一键启动 (make dev: 后端9997 + 前端9998)
+├── package.json                         # 根级依赖 (http-proxy)
+├── proxy.cjs                            # 开发代理配置
 │
-├── AI_Docs/                            # 项目文档与开发规范
-│   ├── init.md                         # 第一期需求文档
-│   ├── v1.2.0.md                       # v1.2.0 版本需求
-│   ├── architecture.md                 # 架构设计文档 (DDD分层、数据模型、API、页面路由)
-│   ├── getting-started.md              # 启动指南
-│   ├── project-structure.md            # 本文件 - 项目目录结构说明
-│   ├── log.md                          # 更新日志主文件 (zh-Hans，前端镜像存放于 frontend/public/changelog/)
-│   ├── django-skills/                  # Django 开发提示词规范
-│   │   ├── LICENSE
-│   │   ├── README.md
-│   │   └── skills/
-│   │       ├── fix-types/
-│   │       │   └── SKILL.md
-│   │       ├── upgrade-js-deps/
-│   │       │   └── SKILL.md
-│   │       └── upgrade-python-deps/
-│   │           └── SKILL.md
-│   └── react-agent-skills/             # React 开发提示词规范
-│       ├── AGENTS.md
-│       ├── CLAUDE.md -> AGENTS.md
-│       ├── README.md
-│       ├── packages/
-│       │   └── react-best-practices-build/
-│       │       ├── package.json
-│       │       ├── pnpm-lock.yaml
-│       │       ├── test-cases.json
-│       │       ├── tsconfig.json
-│       │       └── src/
-│       │           ├── build.ts
-│       │           ├── config.ts
-│       │           ├── extract-tests.ts
-│       │           ├── migrate.ts
-│       │           ├── parser.ts
-│       │           ├── types.ts
-│       │           └── validate.ts
-│       └── skills/
-│           ├── composition-patterns/
-│           │   ├── AGENTS.md
-│           │   ├── metadata.json
-│           │   ├── README.md
-│           │   ├── rules/
-│           │   └── SKILL.md
-│           ├── deploy-to-vercel/
-│           │   ├── Archive.zip
-│           │   ├── resources/
-│           │   └── SKILL.md
-│           ├── react-best-practices/
-│           │   ├── AGENTS.md
-│           │   ├── metadata.json
-│           │   ├── README.md
-│           │   ├── rules/              # (65个 .md 规则文件)
-│           │   └── SKILL.md
-│           ├── react-native-skills/
-│           │   ├── AGENTS.md
-│           │   ├── metadata.json
-│           │   ├── README.md
-│           │   ├── rules/              # (35个 .md 规则文件)
-│           │   └── SKILL.md
-│           ├── react-view-transitions/
-│           │   ├── AGENTS.md
-│           │   ├── metadata.json
-│           │   ├── README.md
-│           │   ├── references/
-│           │   └── SKILL.md
-│           ├── vercel-cli-with-tokens/
-│           │   └── SKILL.md
-│           └── web-design-guidelines/
-│               └── SKILL.md
+├── docs/                                # 项目文档与开发规范
+│   ├── architecture.md                  # 架构设计文档 (技术栈、数据模型、API、页面路由)
+│   ├── getting-started.md               # 启动指南
+│   ├── project-structure.md             # 本文件 - 项目目录结构说明
+│   ├── log.md                           # 更新日志主文件
+│   ├── paipu-data-schema.md             # 牌谱数据结构说明
+│   ├── django-skills/                   # Django 开发提示词规范 (历史存档)
+│   ├── react-agent-skills/              # React 开发提示词规范
+│   ├── v2.0.0.md ~ v2.3.1.md           # 各版本更新日志
+│   └── image/                           # 文档图片资源
 │
-├── backend/                            # ====== Django 后端 (DDD架构) ======
-│   ├── manage.py                       # Django 管理入口
-│   ├── requirements.txt                # Python 依赖 (django, djangorestframework, django-cors-headers, Pillow)
-│   ├── db_config.json                  # 数据库配置文件 (管理SQLite路径)
-│   ├── db.sqlite3                      # SQLite 数据库
-│   │
-│   ├── config/                         # Django 项目配置
-│   │   ├── __init__.py
-│   │   ├── settings.py                 # 主配置 (REST_FRAMEWORK, CORS, AUTH_USER_MODEL, 时区Asia/Shanghai; USE_I18N=True, LocaleMiddleware, LANGUAGES 四语言, LOCALE_PATHS)
-│   │   ├── urls.py                     # 根路由 (注册 auth/players/games/ranking 四组路由 + /api/v1/i18n/languages/ 语言列表接口)
-│   │   ├── exception_handler.py        # 全局异常处理 (BusinessException -> JSON响应; gettext_lazy 自动解析)
-│   │   ├── asgi.py
-│   │   └── wsgi.py
-│   │
-│   ├── apps/                           # DDD 限界上下文 (应用层)
-│   │   ├── __init__.py
-│   │   │
-│   │   ├── users/                      # --- 用户认证上下文 ---
-│   │   │   ├── __init__.py
-│   │   │   ├── apps.py                 # UsersConfig (name='apps.users')
-│   │   │   ├── models.py               # User(AbstractUser) 领域模型
-│   │   │   ├── services.py             # AuthService (login/logout; 错误信息使用 gettext_lazy 国际化)
-│   │   │   ├── serializers.py          # Login/User 序列化器
-│   │   │   ├── views.py                # LoginView, LogoutView, MeView; 响应消息使用 gettext_lazy
-│   │   │   ├── urls.py                 # /auth/login, /auth/logout, /auth/me
-│   │   │   ├── admin.py                # UserAdmin
-│   │   │   ├── tests.py
-│   │   │   └── migrations/
-│   │   │       ├── 0001_initial.py
-│   │   │       └── __init__.py
-│   │   │
-│   │   ├── players/                    # --- 雀士管理上下文 ---
-│   │   │   ├── __init__.py
-│   │   │   ├── apps.py                 # PlayersConfig (name='apps.players')
-│   │   │   ├── models.py               # Player, MahjongSoulAccount 领域模型
-│   │   │   ├── services.py             # PlayerService (CRUD, majsoul绑定/搜索; 错误信息使用 gettext_lazy)
-│   │   │   ├── serializers.py          # Player/MajsoulAccount 序列化器 (列表/详情/创建/更新; 校验信息使用 gettext_lazy)
-│   │   │   ├── views.py                # PlayerListView, PlayerDetailView, PlayerMajsoulAccountListView, MajsoulAccountDetailView; 响应使用 gettext_lazy
-│   │   │   ├── urls.py                 # /players/, /players/<uuid>/, /players/<uuid>/majsoul-accounts/
-│   │   │   ├── admin.py                # PlayerAdmin, MahjongSoulAccountAdmin
-│   │   │   ├── tests.py
-│   │   │   └── migrations/
-│   │   │       ├── 0001_initial.py     # Player + MahjongSoulAccount
-│   │   │       ├── 0002_initial.py     # 添加 created_by, player FK
-│   │   │       └── __init__.py
-│   │   │
-│   │   ├── games/                      # --- 对局管理上下文 (房间+对局) ---
-│   │   │   ├── __init__.py
-│   │   │   ├── apps.py                 # GamesConfig (name='apps.games')
-│   │   │   ├── models.py               # Room, RoomPlayer, Game, GamePlayer, HandRecord 领域模型
-│   │   │   ├── services.py             # RoomService (CRUD/开关房间/增删成员), GameService (创建/换人/录分/导入线上局; 错误信息使用 gettext_lazy)
-│   │   │   ├── serializers.py          # Room/Game/GamePlayer/Score/OnlineImport/HandRecord 序列化器; 校验信息使用 gettext_lazy
-│   │   │   ├── views.py                # Room/Game/OnlineGame 相关视图；含 PlayerStatsView；所有响应消息使用 gettext_lazy
-│   │   │   ├── urls.py                 # /rooms/, /rooms/<uuid>/, /rooms/<uuid>/close/, /rooms/<uuid>/players/, /rooms/<uuid>/games/
-│   │   │   ├── game_urls.py            # /games/<uuid>/, /games/<uuid>/scores/, /games/<uuid>/players/, /games/online/
-│   │   │   ├── admin.py                # RoomAdmin, RoomPlayerAdmin, GameAdmin, GamePlayerAdmin
-│   │   │   ├── tests.py
-│   │   │   └── migrations/
-│   │   │       ├── 0001_initial.py     # Game, GamePlayer, Room, RoomPlayer
-│   │   │       ├── 0002_initial.py     # 添加 FK 关系
-│   │   │       └── __init__.py
-│   │   │
-│   │   └── ranking/                    # --- 天梯排位上下文 ---
-│   │       ├── __init__.py
-│   │       ├── apps.py                 # RankingConfig
-│   │       ├── models.py               # UmaConfig, RankTier, PlayerRankingScore, GameRankingResult 领域模型
-│   │       ├── services.py             # 排位分结算/重算/排行榜服务
-│   │       ├── serializers.py          # 排位配置/排行榜/对局结算 序列化器
-│   │       ├── views.py                # 排位CRUD/排行榜/结算/重算视图; 响应消息使用 gettext_lazy
-│   │       ├── urls.py                 # /ranking/ 路由
-│   │       ├── admin.py
-│   │       ├── tests.py
-│   │       └── migrations/
-│   │           ├── 0001_initial.py
-│   │           ├── 0002_default_tiers_and_uma.py
-│   │           ├── 0003_gamerankingresult.py
-│   │           └── __init__.py
-│   │
-│   ├── common/                         # 公共工具层
-│   │   ├── __init__.py
-│   │   ├── exceptions.py              # BusinessException, ScoreValidationError, PlayerAlreadyInGame, GameAlreadyScored
-│   │   └── permissions.py             # IsAdminUserOrReadOnly (GET公开, 写操作需管理员)
-│   │
-│   ├── services/                       # 基础设施服务层
-│   │   ├── __init__.py
-│   │   └── majsoul.py                  # 雀魂牌谱（Node paipu.js --detail：完整 actions 入库；validate_paipu_detail_record；见 docs/paipu-data-schema.md）
-│   │
-│   ├── locale/                         # 国际化翻译文件 (v1.5.0 新增)
-│   │   ├── zh_Hans/LC_MESSAGES/        # 简体中文 (默认语言)
-│   │   │   ├── django.po
-│   │   │   └── django.mo
-│   │   ├── zh_Hant/LC_MESSAGES/        # 繁體中文
-│   │   │   ├── django.po
-│   │   │   └── django.mo
-│   │   ├── en/LC_MESSAGES/             # English
-│   │   │   ├── django.po
-│   │   │   └── django.mo
-│   │   └── ja/LC_MESSAGES/             # 日本語
-│   │       ├── django.po
-│   │       └── django.mo
-│   │
-│   └── media/                          # 上传文件
-│       └── avatars/                    # 雀士头像存储
+├── scripts/                             # 辅助脚本
+│   ├── emit_mleague_locales.py          # M 联赛国际化生成
+│   └── mleague_html_to_md.py            # M 联赛 HTML 转 Markdown
 │
-└── frontend/                           # ====== React TypeScript 前端 ======
-    ├── package.json                    # 依赖 (react, react-router-dom, axios, lucide-react, tailwindcss, i18next, react-i18next)
-    ├── package-lock.json
-    ├── vite.config.ts                  # Vite配置 (别名@, 代理/api和/media到后端8000端口)
+├── backend/                             # ====== Go 后端 (MVC架构) ======
+│   ├── db_config.json                   # 数据库配置 (SQLite路径、雀魂账号)
+│   ├── db_config.example.json           # 数据库配置示例
+│   ├── marjong.db                       # SQLite 数据库文件
+│   ├── media/                           # 上传文件
+│   │   └── avatars/                     # 雀士头像存储
+│   │
+│   ├── go/                              # Go 后端源码
+│   │   ├── main.go                      # 应用入口 (Gin Engine + 路由注册 + Cobra CLI)
+│   │   ├── go.mod                       # Go 模块定义 (mahjong-backend)
+│   │   ├── go.sum                       # 依赖校验
+│   │   │
+│   │   ├── config/                      # 配置层
+│   │   │   └── config.go               # 数据库配置加载 + GORM 初始化 + 时区 CST(UTC+8)
+│   │   │
+│   │   ├── models/                      # 数据模型层 (GORM)
+│   │   │   └── models.go               # 全部领域模型: User, Player, MahjongSoulAccount, Room,
+│   │   │                               #   RoomPlayer, Game, GamePlayer, HandRecord, UmaConfig,
+│   │   │                               #   RankTier, PlayerRankingScore, GameRankingResult,
+│   │   │                               #   LeagueSeries, LeagueSeason, LeagueStage,
+│   │   │                               #   LeagueSeasonPlayer, LeagueStagePlayer,
+│   │   │                               #   LeagueMatch, LeagueImageAsset,
+│   │   │                               #   JSONField 自定义类型 (Value/Scan)
+│   │   │
+│   │   ├── handlers/                    # 控制器层 (Gin Handler)
+│   │   │   ├── auth.go                 # 认证: Login/Logout/Me
+│   │   │   ├── players.go              # 雀士 CRUD + 雀魂账号管理 + 批量头像
+│   │   │   ├── rooms.go                # 房间 CRUD + 成员管理
+│   │   │   ├── games_main.go           # 对局 CRUD + 录分 + 牌谱 + PT/趣味排名 + 起手牌统计
+│   │   │   ├── ranking.go              # 天梯排位: 段位/马点/结算/排行榜/雀士排位
+│   │   │   ├── leagues.go              # 联赛系统: Series/Season/Stage/Match 全生命周期管理
+│   │   │   ├── i18n.go                 # 国际化语言列表接口
+│   │   │   └── helpers.go              # 公共工具函数
+│   │   │
+│   │   └── middleware/                  # 中间件层
+│   │       └── auth.go                 # JWT Session 认证中间件
+│   │
+│   └── majsoul_node/                    # 雀魂牌谱解析工具 (Node.js)
+│       ├── package.json                # Node 依赖
+│       ├── paipu.js                    # 牌谱解析脚本 (paipu.js --detail)
+│       └── node_modules/
+│
+└── frontend/                            # ====== React TypeScript 前端 ======
+    ├── package.json                     # 依赖 (react 19, react-router-dom 7, axios, lucide-react,
+    │                                   #   tailwindcss 4, i18next, react-i18next, chart.js,
+    │                                   #   react-chartjs-2, react-markdown, dnd-kit)
+    ├── vite.config.ts                   # Vite 配置 (别名@, 代理/api和/media到127.0.0.1:9997)
     ├── tsconfig.json
-    ├── tsconfig.app.json               # 应用TS配置 (路径别名@/*)
+    ├── tsconfig.app.json                # 应用 TS 配置 (路径别名 @/*)
     ├── tsconfig.node.json
     ├── eslint.config.js
-    ├── index.html                      # 入口HTML (favicon使用一姬头像)
-    ├── README.md
+    ├── index.html                       # 入口 HTML (favicon 使用一姬头像)
     │
     ├── public/
-    │   ├── favicon.svg
-    │   ├── icons.svg
-    │   ├── marjongs/                    # 麻将牌图片 (.webp)
-    │   └── changelog/                   # 更新日志静态资源 (按语言切换)
+    │   ├── favicon.svg                 # 网站图标
+    │   ├── icons.svg                   # 图标集
+    │   ├── marjongs/                   # 麻将牌图片 (.webp)
+    │   └── changelog/                  # 更新日志静态资源 (按语言切换)
     │       ├── zh-Hans.md
     │       ├── zh-Hant.md
     │       ├── en.md
@@ -208,82 +95,110 @@ Mahjong/
     └── src/
         ├── main.tsx                    # 应用入口 (导入 i18n 初始化)
         ├── App.tsx                     # 路由配置 (ProtectedRoute + 嵌套布局)
-        ├── index.css                   # 全局样式 (Tailwind + 自定义CSS变量/按钮/卡片/表单/模态框/Toast)
+        ├── index.css                   # 全局样式 (Tailwind + 自定义 CSS 变量)
         │
-        ├── i18n/                       # 国际化配置 (v1.5.0 新增)
-        │   ├── index.ts                # i18next 初始化 (语言检测/持久化/fallback=zh-Hans, 支持四语言)
-        │   └── locales/                # 翻译文件 (~656 key/语言)
-        │       ├── zh-Hans.ts          # 简体中文 (默认)
-        │       ├── zh-Hant.ts          # 繁體中文
-        │       ├── en.ts               # English
-        │       └── ja.ts               # 日本語
+        ├── i18n/                       # 国际化配置
+        │   ├── index.ts               # i18next 初始化 (语言检测/持久化/fallback=zh-Hans, 四语言)
+        │   └── locales/               # 翻译文件
+        │       ├── zh-Hans.ts         # 简体中文 (默认)
+        │       ├── zh-Hant.ts         # 繁體中文
+        │       ├── en.ts              # English
+        │       └── ja.ts              # 日本語
+        │
+        ├── rules/                      # 规则文档 (Markdown 按语言管理)
+        │   ├── terms-index.ts         # 术语索引
+        │   ├── en/                    # English
+        │   ├── ja/                    # 日本語
+        │   ├── zh-Hans/               # 简体中文
+        │   └── zh-Hant/               # 繁體中文
         │
         ├── types/
-        │   └── index.ts                # TypeScript类型定义 (User, Player, Room, Game, GamePlayer, MajsoulAccount, 枚举常量)
+        │   └── index.ts               # TypeScript 类型定义 (User, Player, Room, Game, League 等)
         │
         ├── api/                        # API 请求层
-        │   ├── client.ts               # Axios 实例 (Token拦截器, 401自动跳转登录)
-        │   ├── auth.ts                 # 认证API (login, register, logout, getMe, isLoggedIn, getCurrentUser)
-        │   ├── players.ts              # 雀士API (CRUD, majsoul账号管理)
-        │   ├── games.ts                # 房间/对局API (房间CRUD, 对局CRUD, 录分, 换人, 线上导入)
-        │   └── ranking.ts              # 排位API (段位/马点/排行榜/雀士排位)
+        │   ├── client.ts              # Axios 实例 (Token 拦截器, 401 自动跳转登录)
+        │   ├── auth.ts                # 认证 API
+        │   ├── players.ts             # 雀士 API (CRUD, 雀魂账号管理)
+        │   ├── games.ts               # 房间/对局 API (CRUD, 录分, 换人, 线上导入)
+        │   ├── ranking.ts             # 排位 API (段位/马点/排行榜)
+        │   └── leagues.ts             # 联赛 API (Series/Season/Stage/Match)
         │
         ├── layouts/
-        │   └── MainLayout.tsx          # 主布局 (侧边栏导航 + 顶部栏 + 语言切换下拉 + GitHub图标链接 + 响应式抽屉菜单)
+        │   └── MainLayout.tsx         # 主布局 (侧边栏导航 + 顶部栏 + 语言切换 + 响应式抽屉菜单)
         │
         ├── components/                 # 通用组件
-        │   ├── Modal.tsx               # 模态框 (overlay + 动画)
-        │   ├── PlayerCard.tsx          # 雀士卡片 (头像/昵称/分数/东起标记/可移除)
-        │   ├── SearchBar.tsx           # 搜索框 (带图标)
-        │   ├── YakumanCard.tsx         # 役满卡片 (手牌/副露展示)
-        │   ├── HandRecordModal.tsx     # 役满牌谱录入弹窗 (选雀士/选役种/选牌)
+        │   ├── Modal.tsx              # 模态框 (overlay + 动画)
+        │   ├── PlayerCard.tsx         # 雀士卡片 (头像/昵称/分数/东起标记)
+        │   ├── SearchBar.tsx          # 搜索框 (带图标)
+        │   ├── YakumanCard.tsx        # 役满卡片 (手牌/副露展示)
+        │   ├── HandRecordModal.tsx    # 役满牌谱录入弹窗
         │   ├── PlayerStatsLineChart.tsx # 雀士统计折线图 (顺位趋势/PT累计)
-        │   ├── PointsQuickReference.tsx # 点数速查表 (亲家/子家, 翻符对照)
-        │   ├── SortablePlayerList.tsx  # 可排序雀士列表
-        │   └── RankTierBadge.tsx       # 段位徽章
+        │   ├── PointsQuickReference.tsx # 点数速查表
+        │   ├── SortablePlayerList.tsx # 可排序雀士列表
+        │   ├── RankTierBadge.tsx      # 段位徽章
+        │   ├── PaipuDetailModal.tsx   # 牌谱详情弹窗
+        │   ├── PaipuDetailPanel.tsx   # 牌谱详情面板
+        │   ├── StartingHandsWeightsModal.tsx # 起手牌权重弹窗
+        │   ├── RulesMdReader.tsx      # Markdown 规则文档渲染器
+        │   ├── LeagueMarkdownBody.tsx # 联赛 Markdown 正文渲染
+        │   └── LeagueMarkdownEditor.tsx # 联赛 Markdown 编辑器
         │
         ├── hooks/
-        │   └── useToast.tsx            # Toast提示hook (成功/错误, 3秒自动消失)
+        │   └── useToast.tsx           # Toast 提示 hook
         │
-        ├── mahjong-calc/               # 麻雀点数计算引擎
-        │   ├── types.ts                # 计算类型定义
-        │   ├── calc.ts                 # 点数/符计算核心逻辑
-        │   ├── yaku.ts                 # 役种判定 (getName 国际化)
-        │   ├── definition.ts           # 满贯/跳满等点数定义 (MAN_TYPE_NAMES)
-        │   ├── kifuText.ts             # 牌谱文本解析/序列化
-        │   ├── scoringQuickTable.ts    # 点数速查表数据
+        ├── mahjong-calc/              # 麻雀点数计算引擎
+        │   ├── types.ts               # 计算类型定义
+        │   ├── calc.ts                # 点数/符计算核心逻辑
+        │   ├── yaku.ts                # 役种判定
+        │   ├── definition.ts          # 满贯/跳满等点数定义
+        │   ├── kifuText.ts            # 棋谱文本解析/序列化
+        │   ├── scoringQuickTable.ts   # 点数速查表数据
         │   ├── yakuPracticeGenerator.ts # 役种练习题目生成器
-        │   └── problem.ts              # 练习题数据结构
+        │   └── problem.ts             # 练习题数据结构
         │
-        ├── pages/                      # 页面组件
-        │   ├── LoginPage.tsx           # 登录/注册页 (渐变背景, 一姬头像, 表单切换)
-        │   ├── HomePage.tsx            # 首页仪表盘 (雀士数/房间数/对局数统计卡片, 进行中房间列表, 排位规则说明, 段位表, 马点配置)
-        │   ├── PlayersPage.tsx         # 雀士管理页 (搜索/创建/编辑/删除, 雀魂账号绑定弹窗)
-        │   ├── PlayerListPage.tsx      # 雀士列表 (搜索/浏览/排序)
-        │   ├── PlayerProfilePage.tsx   # 雀士详情 (统计/对局/役满/信息；统计含位率与曲线；排位分与段位)
-        │   ├── RoomsPage.tsx           # 房间列表页 (筛选全部/进行中/已关闭, 创建/关闭房间)
-        │   ├── RoomDetailPage.tsx      # 房间详情页 (成员管理, 新建对局:选选手+选模式+选时间)
-        │   ├── GameDetailPage.tsx      # 对局详情页 (选手列表, 录入分数弹窗:4人=1000/3人=1050, 更换选手弹窗, 役满牌谱管理)
-        │   ├── GameListPage.tsx        # 对局列表页 (筛选人数/模式/类型, 牌谱链接)
-        │   ├── OnlineGamePage.tsx      # 线上对局导入页 (批量粘贴牌谱链接, 自动解析, 雀魂UID关联, 批量导入)
-        │   ├── PtRankingPage.tsx       # PT排名页 (全量/线下/线上筛选, 人数/模式筛选)
-        │   ├── FunRankingPage.tsx      # 趣味排行页 (一位率/平均顺位/最高得点等, 最少局数筛选)
-        │   ├── YakumanListPage.tsx     # 役满列表页 (类型筛选)
-        │   ├── CalculatorPage.tsx      # 点数计算器 (手牌/副露/宝牌输入, 翻符结果, 牌谱复制粘贴)
-        │   ├── PracticePage.tsx        # 点数练习 (随机出题, 答案输入, 正确率统计, 牌谱导入)
-        │   ├── YakuPracticePage.tsx    # 役种专项练习 (按役种分类, 牌谱导入)
-        │   ├── RankingLeaderboardPage.tsx # 天梯排位排行榜 (段位/排位分)
-        │   ├── RankingAdminPage.tsx    # 排位配置管理 (段位表CRUD, 马点配置CRUD, 一键重算)
-        │   ├── RankingInfoPage.tsx     # 排位分说明 (计分规则, 段位一览, 马点配置)
-        │   └── ChangelogPage.tsx       # 更新日志 (从 /changelog/{lang}.md 读取，复用 RulesMdReader)
+        ├── paipu/                     # 牌谱解析模型
+        │   └── paipuDetailModel.ts    # 牌谱详情数据模型
         │
-        ├── assets/                     # 静态资源
+        ├── pages/                     # 页面组件
+        │   ├── LoginPage.tsx          # 登录页
+        │   ├── HomePage.tsx           # 首页仪表盘
+        │   ├── PlayersPage.tsx        # 雀士管理页 (管理员)
+        │   ├── PlayerListPage.tsx     # 雀士列表 (公开)
+        │   ├── PlayerProfilePage.tsx  # 雀士详情 (统计/对局/役满/排位)
+        │   ├── RoomsPage.tsx          # 房间列表页
+        │   ├── RoomDetailPage.tsx     # 房间详情页
+        │   ├── GameDetailPage.tsx     # 对局详情页 (录分/换人/牌谱)
+        │   ├── GameListPage.tsx       # 对局列表页
+        │   ├── OnlineGamePage.tsx     # 线上对局导入页
+        │   ├── PtRankingPage.tsx      # PT排名页
+        │   ├── FunRankingPage.tsx     # 趣味排行页
+        │   ├── YakumanListPage.tsx    # 役满列表页
+        │   ├── OnlinePaipuStatsPage.tsx # 线上牌谱统计页
+        │   ├── StartingHandsPage.tsx  # 起手牌统计页
+        │   ├── CalculatorPage.tsx     # 点数计算器
+        │   ├── PracticePage.tsx       # 点数练习
+        │   ├── YakuPracticePage.tsx   # 役种专项练习
+        │   ├── RankingLeaderboardPage.tsx # 天梯排位排行榜
+        │   ├── RankingAdminPage.tsx   # 排位配置管理
+        │   ├── RankingInfoPage.tsx    # 排位分说明
+        │   ├── RulesPage.tsx          # 规则说明页
+        │   ├── LeaguesPage.tsx        # 联赛列表页
+        │   ├── LeagueSeriesAdminPage.tsx     # 联赛系列管理
+        │   ├── LeagueSeasonAdminPage.tsx     # 赛季管理
+        │   ├── LeagueSeasonDetailPage.tsx    # 赛季详情
+        │   ├── LeagueSeasonPlayersAdminPage.tsx # 赛季选手管理
+        │   ├── LeagueSeasonStagesAdminPage.tsx # 赛季阶段管理
+        │   ├── LeagueStageAdminPage.tsx      # 阶段管理
+        │   ├── LeagueStageDetailPage.tsx     # 阶段详情 (排名/对局)
+        │   └── ChangelogPage.tsx      # 更新日志
+        │
+        ├── services/                  # 前端服务层
+        │   └── playerAvatarCache.ts   # 雀士头像缓存
+        │
+        ├── assets/                    # 静态资源
         │   ├── hero.png
         │   ├── react.svg
         │   └── vite.svg
         │
-        ├── services/                   # 前端服务层
-        │   └── playerAvatarCache.ts    # 雀士头像缓存
-        │
-        └── utils/                      # (预留工具函数目录)
-    ```
+        └── utils/                     # 工具函数 (预留)
+```

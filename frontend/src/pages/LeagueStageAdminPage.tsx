@@ -32,6 +32,7 @@ import {
     GROUP_TYPE_LABELS, STAGE_STATUS_LABELS,
     STAGE_TYPE_I18N_KEY, STAGE_TYPE_LABELS,
 } from '@/types';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 function stageIcon(type: string) {
     if (type === 'final') return <Trophy size={20} className="text-amber-600" />;
@@ -48,6 +49,7 @@ export default function LeagueStageAdminPage() {
 
     const [stage, setStage] = useState<LeagueStage | null>(null);
     const [players, setPlayers] = useState<LeagueStagePlayer[]>([]);
+    const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
     const [matches, setMatches] = useState<LeagueMatch[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'config' | 'players' | 'matches'>('config');
@@ -107,6 +109,23 @@ export default function LeagueStageAdminPage() {
         })();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stageId, t, showToast]);
+
+    const avatarPlayerIds = useMemo(() => {
+        const ids: string[] = [];
+        for (const p of stage?.bypass_players ?? []) {
+            if (p.id) ids.push(p.id);
+        }
+        return [...new Set(ids)];
+    }, [stage?.bypass_players]);
+
+    useEffect(() => {
+        if (avatarPlayerIds.length === 0) return;
+        let cancelled = false;
+        loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
+            if (!cancelled) setPlayerAvatars(map);
+        });
+        return () => { cancelled = true; };
+    }, [avatarPlayerIds]);
 
     async function handleSave() {
         if (!stage) return;
@@ -533,8 +552,8 @@ export default function LeagueStageAdminPage() {
                                             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border text-sm"
                                             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                                         >
-                                            {p.avatar ? (
-                                                <img src={p.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                            {(playerAvatars[p.id] || p.avatar) ? (
+                                                <img src={playerAvatars[p.id] || p.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
                                             ) : (
                                                 <span className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold bg-amber-100 text-amber-800">
                                                     {(p.nickname || '?').charAt(0)}
