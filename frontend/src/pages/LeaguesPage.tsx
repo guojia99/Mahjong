@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Trophy, Calendar, Users, ChevronRight, Sparkles, Clock } from 'lucide-react';
@@ -14,25 +16,29 @@ export default function LeaguesPage() {
     const [loading, setLoading] = useState(true);
     const [showPast, setShowPast] = useState(false);
 
-    useEffect(() => {
+    useAbortableEffect((signal) => {
         (async () => {
             try {
                 const [current, seriesList] = await Promise.all([
-                    getCurrentSeasons(),
-                    getLeagueSeriesList(),
+                    getCurrentSeasons({ signal }),
+                    getLeagueSeriesList({ signal }),
                 ]);
+                if (signal.aborted) return;
                 setCurrentSeasons(current);
 
                 const past: LeagueSeason[] = [];
                 for (const s of seriesList) {
-                    const seasons = await getSeriesSeasons(s.id);
+                    const seasons = await getSeriesSeasons(s.id, { signal });
+                    if (signal.aborted) return;
                     past.push(...seasons.filter(se => !se.is_current && se.status === 'finished'));
                 }
                 setPastSeasons(past);
-            } catch {
-                // ignore
+            } catch (e) {
+                if (!isAbortError(e)) {
+                    // ignore
+                }
             } finally {
-                setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         })();
     }, []);

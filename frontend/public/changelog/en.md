@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.3.3 — 2026-05-27
+
+- Fix league player/stage counts and show registered players on the league page
+- Optimize stats APIs with batch queries; fix batch avatar loading and cache
+- Add 500 server error panel and global error boundary to prevent blank screens
+
 ## v2.3.2 — 2026-05-27
 
 - Fix yakuman list nil-pointer crash; restore online paipu statistics; restore starting hands scoring; fix login token generation

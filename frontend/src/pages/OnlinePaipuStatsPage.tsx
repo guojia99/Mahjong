@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getPaipuStatsRanking } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
@@ -203,13 +205,18 @@ export default function OnlinePaipuStatsPage() {
   const flatTabs = useMemo(() => tabGroups.flatMap(g => g.tabs), [tabGroups]);
   const currentTab = flatTabs.find(tab => tab.value === rankType) || tabGroups[0].tabs[0];
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (gameType) params.game_type = gameType;
     if (minGames) params.min_games = minGames;
-    getPaipuStatsRanking(params).then(setRankings).catch(() => showToast(t('paipuStats.loadFailed')));
+    getPaipuStatsRanking(params, { signal })
+      .then(setRankings)
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('paipuStats.loadFailed'));
+      });
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
   const playerIds = useMemo(() => {
@@ -220,13 +227,13 @@ export default function OnlinePaipuStatsPage() {
     return [...new Set(ids)];
   }, [rankings]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then((map) => {
+      setPlayerAvatars(map);
+    }).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   const isPercent = [

@@ -160,6 +160,128 @@ func LeagueMedia(c *gin.Context) {
 
 // --- Series ---
 
+func leagueSeasonIDs(seasons []models.LeagueSeason) []string {
+	ids := make([]string, 0, len(seasons))
+	for _, s := range seasons {
+		if s.ID != "" {
+			ids = append(ids, s.ID)
+		}
+	}
+	return ids
+}
+
+type leagueCountRow struct {
+	ID  string `gorm:"column:id"`
+	Cnt int64  `gorm:"column:cnt"`
+}
+
+func leagueLoadSeasonPlayerCounts(seasonIDs []string) map[string]int {
+	out := make(map[string]int, len(seasonIDs))
+	if len(seasonIDs) == 0 {
+		return out
+	}
+	var rows []leagueCountRow
+	config.DB.Model(&models.LeagueSeasonPlayer{}).
+		Select("season_id AS id, COUNT(*) AS cnt").
+		Where("season_id IN ?", seasonIDs).
+		Group("season_id").
+		Scan(&rows)
+	for _, r := range rows {
+		out[r.ID] = int(r.Cnt)
+	}
+	return out
+}
+
+func leagueLoadSeasonStageCounts(seasonIDs []string) map[string]int {
+	out := make(map[string]int, len(seasonIDs))
+	if len(seasonIDs) == 0 {
+		return out
+	}
+	var rows []leagueCountRow
+	config.DB.Model(&models.LeagueStage{}).
+		Select("season_id AS id, COUNT(*) AS cnt").
+		Where("season_id IN ?", seasonIDs).
+		Group("season_id").
+		Scan(&rows)
+	for _, r := range rows {
+		out[r.ID] = int(r.Cnt)
+	}
+	return out
+}
+
+func leagueLoadStagePlayerCounts(stageIDs []string) map[string]int {
+	out := make(map[string]int, len(stageIDs))
+	if len(stageIDs) == 0 {
+		return out
+	}
+	var rows []leagueCountRow
+	config.DB.Model(&models.LeagueStagePlayer{}).
+		Select("stage_id AS id, COUNT(*) AS cnt").
+		Where("stage_id IN ?", stageIDs).
+		Group("stage_id").
+		Scan(&rows)
+	for _, r := range rows {
+		out[r.ID] = int(r.Cnt)
+	}
+	return out
+}
+
+func leagueLoadStageGameCounts(stageIDs []string) map[string]int {
+	out := make(map[string]int, len(stageIDs))
+	if len(stageIDs) == 0 {
+		return out
+	}
+	var rows []leagueCountRow
+	config.DB.Model(&models.LeagueMatch{}).
+		Select("stage_id AS id, COUNT(*) AS cnt").
+		Where("stage_id IN ? AND game_id IS NOT NULL", stageIDs).
+		Group("stage_id").
+		Scan(&rows)
+	for _, r := range rows {
+		out[r.ID] = int(r.Cnt)
+	}
+	return out
+}
+
+func leagueSeasonPlayerCount(s *models.LeagueSeason, counted map[string]int) int {
+	if len(s.SeasonPlayers) > 0 {
+		return len(s.SeasonPlayers)
+	}
+	if n, ok := counted[s.ID]; ok {
+		return n
+	}
+	return 0
+}
+
+func leagueSeasonStageCount(s *models.LeagueSeason, counted map[string]int) int {
+	if len(s.Stages) > 0 {
+		return len(s.Stages)
+	}
+	if n, ok := counted[s.ID]; ok {
+		return n
+	}
+	return 0
+}
+
+func leagueSeasonSeriesName(s *models.LeagueSeason) string {
+	if s.Series != nil {
+		return s.Series.Name
+	}
+	return ""
+}
+
+func serializeLeagueSeasonsList(seasons []models.LeagueSeason) []gin.H {
+	ids := leagueSeasonIDs(seasons)
+	playerCounts := leagueLoadSeasonPlayerCounts(ids)
+	stageCounts := leagueLoadSeasonStageCounts(ids)
+	result := make([]gin.H, 0, len(seasons))
+	for i := range seasons {
+		s := &seasons[i]
+		result = append(result, serializeLeagueSeason(s, playerCounts, stageCounts))
+	}
+	return result
+}
+
 func LeagueSeriesList(c *gin.Context) {
 	var series []models.LeagueSeries
 	config.DB.Preload("LogoAsset").Order("created_at DESC").Find(&series)
@@ -252,9 +374,14 @@ func serializeLeagueSeries(s *models.LeagueSeries) gin.H {
 
 func serializeLeagueSeriesDetail(s *models.LeagueSeries) gin.H {
 	data := serializeLeagueSeries(s)
+	ids := leagueSeasonIDs(s.Seasons)
+	playerCounts := leagueLoadSeasonPlayerCounts(ids)
+	stageCounts := leagueLoadSeasonStageCounts(ids)
 	seasons := make([]gin.H, 0, len(s.Seasons))
-	for _, season := range s.Seasons {
-		seasons = append(seasons, serializeLeagueSeason(&season))
+	for i := range s.Seasons {
+		season := s.Seasons[i]
+		season.Series = s
+		seasons = append(seasons, serializeLeagueSeason(&season, playerCounts, stageCounts))
 	}
 	data["seasons"] = seasons
 	return data
@@ -265,12 +392,9 @@ func serializeLeagueSeriesDetail(s *models.LeagueSeries) gin.H {
 func LeagueSeasonList(c *gin.Context) {
 	seriesPK := c.Param("pk")
 	var seasons []models.LeagueSeason
-	config.DB.Where("series_id = ?", seriesPK).Order("season_number DESC").Find(&seasons)
-	result := make([]gin.H, 0, len(seasons))
-	for _, s := range seasons {
-		result = append(result, serializeLeagueSeason(&s))
-	}
-	respondOK(c, result)
+	config.DB.Preload("Series").Preload("Stages").
+		Where("series_id = ?", seriesPK).Order("season_number DESC").Find(&seasons)
+	respondOK(c, serializeLeagueSeasonsList(seasons))
 }
 
 func LeagueSeasonCreate(c *gin.Context) {
@@ -313,7 +437,7 @@ func LeagueSeasonCreate(c *gin.Context) {
 		CreatedByID:  &user.ID,
 	}
 	config.DB.Create(&season)
-	respondCreated(c, serializeLeagueSeason(&season))
+	respondCreated(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 func LeagueSeasonDetail(c *gin.Context) {
@@ -405,7 +529,7 @@ func LeagueSeasonStart(c *gin.Context) {
 		leagueSyncStagePlayersFromSeason(firstStage.ID)
 	}
 
-	respondOK(c, serializeLeagueSeason(&season))
+	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 func LeagueSeasonFinish(c *gin.Context) {
@@ -417,7 +541,7 @@ func LeagueSeasonFinish(c *gin.Context) {
 		return
 	}
 	config.DB.Model(&season).Update("status", "finished")
-	respondOK(c, serializeLeagueSeason(&season))
+	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 func LeagueSeasonReopen(c *gin.Context) {
@@ -425,8 +549,8 @@ func LeagueSeasonReopen(c *gin.Context) {
 	config.DB.Model(&models.LeagueSeason{}).Where("id = ?", pk).Update("status", "registration")
 	config.DB.Model(&models.LeagueStage{}).Where("season_id = ?", pk).Update("status", "pending")
 	var season models.LeagueSeason
-	config.DB.Where("id = ?", pk).First(&season)
-	respondOK(c, serializeLeagueSeason(&season))
+	config.DB.Preload("Series").Preload("Stages").Where("id = ?", pk).First(&season)
+	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 // --- Season Players ---
@@ -587,9 +711,15 @@ func LeagueStageList(c *gin.Context) {
 	pk := c.Param("pk")
 	var stages []models.LeagueStage
 	config.DB.Where("season_id = ?", pk).Order("`order`").Find(&stages)
-	result := make([]gin.H, 0, len(stages))
+	stageIDs := make([]string, 0, len(stages))
 	for _, s := range stages {
-		result = append(result, serializeLeagueStage(&s))
+		stageIDs = append(stageIDs, s.ID)
+	}
+	playerCounts := leagueLoadStagePlayerCounts(stageIDs)
+	gameCounts := leagueLoadStageGameCounts(stageIDs)
+	result := make([]gin.H, 0, len(stages))
+	for i := range stages {
+		result = append(result, serializeLeagueStage(&stages[i], playerCounts, gameCounts))
 	}
 	respondOK(c, result)
 }
@@ -672,7 +802,7 @@ func LeagueStageUpdate(c *gin.Context) {
 		config.DB.Model(&stage).Updates(req)
 	}
 	config.DB.Preload("Season.Series").First(&stage, "id = ?", pk)
-	respondOK(c, serializeLeagueStage(&stage))
+	respondOK(c, serializeLeagueStage(&stage, nil, nil))
 }
 
 func LeagueStageDelete(c *gin.Context) {
@@ -711,7 +841,7 @@ func LeagueStageStart(c *gin.Context) {
 	if !leagueStageHasPlayers(stage.ID) && stage.Order == 1 {
 		leagueSyncStagePlayersFromSeason(stage.ID)
 	}
-	respondOK(c, serializeLeagueStage(&stage))
+	respondOK(c, serializeLeagueStage(&stage, nil, nil))
 }
 
 func LeagueStageFinish(c *gin.Context) {
@@ -724,7 +854,7 @@ func LeagueStageFinish(c *gin.Context) {
 	}
 	leagueRecalculateStagePT(stage.ID)
 	config.DB.Model(&stage).Update("status", "finished")
-	respondOK(c, serializeLeagueStage(&stage))
+	respondOK(c, serializeLeagueStage(&stage, nil, nil))
 }
 
 // --- Stage Players ---
@@ -990,22 +1120,15 @@ func LeagueSeriesUploadLogo(c *gin.Context) {
 
 func LeagueCurrentSeasons(c *gin.Context) {
 	var seasons []models.LeagueSeason
-	config.DB.Preload("Series.LogoAsset").Where("is_current = ?", true).Find(&seasons)
-	result := make([]gin.H, 0, len(seasons))
-	for _, s := range seasons {
-		result = append(result, serializeLeagueSeason(&s))
-	}
-	respondOK(c, result)
+	config.DB.Preload("Series").Preload("Stages").
+		Preload("Series.LogoAsset").Where("is_current = ?", true).Find(&seasons)
+	respondOK(c, serializeLeagueSeasonsList(seasons))
 }
 
 func LeagueAllSeasons(c *gin.Context) {
 	var seasons []models.LeagueSeason
-	config.DB.Order("season_number DESC").Find(&seasons)
-	result := make([]gin.H, 0, len(seasons))
-	for _, s := range seasons {
-		result = append(result, serializeLeagueSeason(&s))
-	}
-	respondOK(c, result)
+	config.DB.Preload("Series").Preload("Stages").Order("season_number DESC").Find(&seasons)
+	respondOK(c, serializeLeagueSeasonsList(seasons))
 }
 
 func LeagueUploadMarkdownImage(c *gin.Context) {
@@ -1282,26 +1405,42 @@ func leagueSeedLabelFor(idx int) string {
 
 // --- Serializers ---
 
-func serializeLeagueSeason(s *models.LeagueSeason) gin.H {
-	stages := make([]gin.H, 0, len(s.Stages))
+func serializeLeagueSeason(s *models.LeagueSeason, playerCounts, stageCounts map[string]int) gin.H {
+	pc := leagueSeasonPlayerCount(s, playerCounts)
+	sc := leagueSeasonStageCount(s, stageCounts)
+	stageIDs := make([]string, 0, len(s.Stages))
 	for _, st := range s.Stages {
-		stages = append(stages, serializeLeagueStage(&st))
+		stageIDs = append(stageIDs, st.ID)
 	}
+	var stagePlayerCounts, stageGameCounts map[string]int
+	if len(stageIDs) > 0 {
+		stagePlayerCounts = leagueLoadStagePlayerCounts(stageIDs)
+		stageGameCounts = leagueLoadStageGameCounts(stageIDs)
+	}
+	stages := make([]gin.H, 0, len(s.Stages))
+	for i := range s.Stages {
+		st := s.Stages[i]
+		stages = append(stages, serializeLeagueStage(&st, stagePlayerCounts, stageGameCounts))
+	}
+	seriesName := leagueSeasonSeriesName(s)
 	return gin.H{
-		"id": s.ID, "series_id": s.SeriesID, "season_number": s.SeasonNumber,
+		"id": s.ID, "series_id": s.SeriesID, "series": s.SeriesID, "series_name": seriesName,
+		"season_number": s.SeasonNumber,
 		"name": s.Name, "cover": s.Cover, "description": s.Description,
 		"start_time": formatTimePointer(s.StartTime), "end_time": formatTimePointer(s.EndTime),
-		"status": s.Status, "is_current": s.IsCurrent,
+		"status": s.Status, "is_current": s.IsCurrent, "is_locked": s.Status != "registration",
 		"allow_online": s.AllowOnline, "allow_offline": s.AllowOffline,
+		"player_count": pc, "stage_count": sc,
 		"created_at": formatTime(s.CreatedAt), "updated_at": formatTime(s.UpdatedAt),
 		"stages": stages,
 	}
 }
 
 func serializeLeagueSeasonDetailFull(s *models.LeagueSeason) gin.H {
-	data := serializeLeagueSeason(s)
+	data := serializeLeagueSeason(s, nil, nil)
 	if s.Series != nil {
 		data["series"] = serializeLeagueSeries(s.Series)
+		data["series_name"] = s.Series.Name
 	}
 	sps := make([]gin.H, 0, len(s.SeasonPlayers))
 	for _, sp := range s.SeasonPlayers {
@@ -1310,7 +1449,8 @@ func serializeLeagueSeasonDetailFull(s *models.LeagueSeason) gin.H {
 			pData = getPlayerListData(sp.Player)
 		}
 		sps = append(sps, gin.H{
-			"id": sp.ID, "player": pData, "seed_label": sp.SeedLabel,
+			"id": sp.ID, "season": sp.SeasonID, "season_id": sp.SeasonID,
+			"player": pData, "seed_label": sp.SeedLabel,
 			"joined_at": formatTime(sp.JoinedAt),
 		})
 	}
@@ -1318,9 +1458,25 @@ func serializeLeagueSeasonDetailFull(s *models.LeagueSeason) gin.H {
 	return data
 }
 
-func serializeLeagueStage(s *models.LeagueStage) gin.H {
+func serializeLeagueStage(s *models.LeagueStage, playerCounts, gameCounts map[string]int) gin.H {
+	pc := 0
+	if len(s.StagePlayers) > 0 {
+		pc = len(s.StagePlayers)
+	} else if playerCounts != nil {
+		pc = playerCounts[s.ID]
+	}
+	gc := 0
+	if len(s.Matches) > 0 {
+		for _, m := range s.Matches {
+			if m.GameID != nil && *m.GameID != "" {
+				gc++
+			}
+		}
+	} else if gameCounts != nil {
+		gc = gameCounts[s.ID]
+	}
 	return gin.H{
-		"id": s.ID, "season_id": s.SeasonID, "name": s.Name,
+		"id": s.ID, "season_id": s.SeasonID, "season": s.SeasonID, "name": s.Name,
 		"stage_type": s.StageType, "status": s.Status, "order": s.Order,
 		"games_per_player": s.GamesPerPlayer,
 		"uma_1st": s.Uma1st, "uma_2nd": s.Uma2nd, "uma_3rd": s.Uma3rd, "uma_4th": s.Uma4th,
@@ -1328,12 +1484,16 @@ func serializeLeagueStage(s *models.LeagueStage) gin.H {
 		"allow_companion": s.AllowCompanion, "allow_free_table": s.AllowFreeTable,
 		"record_ranking": s.RecordRanking, "notes": s.Notes,
 		"promotion_rules": s.PromotionRules,
+		"has_groups": s.HasGroups(),
+		"player_count": pc, "game_count": gc,
 		"created_at": formatTime(s.CreatedAt), "updated_at": formatTime(s.UpdatedAt),
 	}
 }
 
 func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
-	data := serializeLeagueStage(s)
+	stagePlayerCounts := leagueLoadStagePlayerCounts([]string{s.ID})
+	stageGameCounts := leagueLoadStageGameCounts([]string{s.ID})
+	data := serializeLeagueStage(s, stagePlayerCounts, stageGameCounts)
 	sps := make([]gin.H, 0, len(s.StagePlayers))
 	for _, sp := range s.StagePlayers {
 		pData := gin.H{}

@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord, deleteGame, updateGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
@@ -15,7 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 function gpToSortable(gp: GamePlayerInfo, avatarUrl?: string): SortableItem {
-  return { id: gp.player.id, nickname: gp.player.nickname, avatar: avatarUrl || gp.player.avatar };
+  return { id: gp.player.id, nickname: gp.player.nickname, avatar: avatarUrl ?? gp.player.avatar ?? null };
 }
 
 function toDatetimeLocal(iso: string | null | undefined): string {
@@ -64,12 +66,12 @@ export default function GameDetailPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
 
-  const loadGame = useCallback(async () => {
+  const loadGame = useCallback(async (signal?: AbortSignal) => {
     if (!gameId) return;
     try {
-      const data = await getGame(gameId);
+      const data = await getGame(gameId, signal ? { signal } : undefined);
       setGame(data);
-      setScoreItems(data.players.map(gpToSortable));
+      setScoreItems(data.players.map((gp) => gpToSortable(gp)));
       const sd: Record<string, { score: string; is_dealer_start: boolean }> = {};
       data.players.forEach((gp) => {
         sd[gp.player.id] = {
@@ -79,14 +81,17 @@ export default function GameDetailPage() {
       });
       setScoreData(sd);
       setSelectedPlayerIds(data.players.map((gp) => gp.player.id));
-    } catch {
+    } catch (e) {
+      if (isAbortError(e)) return;
       showToast(t('gameDetail.loadFailed'));
     }
-  }, [gameId, showToast]);
+  }, [gameId, showToast, t]);
 
-  useEffect(() => {
-    void Promise.resolve().then(() => loadGame());
-    void getPlayers().then(setAllPlayers);
+  useAbortableEffect((signal) => {
+    void loadGame(signal);
+    getPlayers('', { signal }).then(setAllPlayers).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
   }, [loadGame]);
 
   const gamePlayerIds = useMemo(() => {
@@ -97,13 +102,11 @@ export default function GameDetailPage() {
     return [...new Set(ids)];
   }, [game?.players]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (gamePlayerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(gamePlayerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(gamePlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [gamePlayerIds]);
 
   const handleScoreChange = (playerId: string, value: string) => {
@@ -184,7 +187,7 @@ export default function GameDetailPage() {
     try {
       const updated = await shuffleGameSeats(gameId);
       setGame(updated);
-      setScoreItems(updated.players.map(gpToSortable));
+      setScoreItems(updated.players.map((gp) => gpToSortable(gp)));
       showToast(t('gameDetail.seatsShuffled'), 'success');
     } catch {
       showToast(t('gameDetail.shuffleFailed'));
@@ -651,7 +654,7 @@ export default function GameDetailPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {(playerAvatars[item.id] || item.avatar) ? (
-                    <img src={playerAvatars[item.id] || item.avatar} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={playerAvatars[item.id] || item.avatar || undefined} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem' }}>
                       {item.nickname.charAt(0)}

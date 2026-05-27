@@ -58,12 +58,12 @@ export async function loadPlayerAvatar(id: string): Promise<string> {
   return url;
 }
 
-export async function loadPlayerAvatarsForList(ids: string[]): Promise<Record<string, string>> {
+export async function loadPlayerAvatarsForList(ids: string[], signal?: AbortSignal): Promise<Record<string, string>> {
   hydrate();
   const unique = [...new Set(ids.filter(Boolean))];
   const need = unique.filter((id) => !memory.has(id));
   if (need.length > 0) {
-    const batch = await getPlayerAvatarsBatch(need);
+    const batch = await getPlayerAvatarsBatch(need, { signal });
     for (const [id, url] of Object.entries(batch)) {
       memory.set(id, typeof url === 'string' ? url : '');
     }

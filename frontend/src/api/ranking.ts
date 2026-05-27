@@ -1,8 +1,10 @@
 import api from './client';
+import type { ApiRequestOptions } from './types';
+import { mergeApiOptions } from './types';
 import type { RankTier, UmaConfig, PlayerRankingScore } from '@/types';
 
-export async function getUmaConfigs(): Promise<UmaConfig[]> {
-  const { data } = await api.get('/ranking/uma-configs/');
+export async function getUmaConfigs(opts?: ApiRequestOptions): Promise<UmaConfig[]> {
+  const { data } = await api.get('/ranking/uma-configs/', mergeApiOptions(opts));
   return data;
 }
 
@@ -11,8 +13,8 @@ export async function updateUmaConfig(id: string, payload: Partial<UmaConfig>): 
   return data;
 }
 
-export async function getRankTiers(): Promise<RankTier[]> {
-  const { data } = await api.get('/ranking/tiers/');
+export async function getRankTiers(opts?: ApiRequestOptions): Promise<RankTier[]> {
+  const { data } = await api.get('/ranking/tiers/', mergeApiOptions(opts));
   return data;
 }
 
@@ -21,8 +23,8 @@ export async function updateRankTier(id: string, payload: Partial<RankTier>): Pr
   return data;
 }
 
-export async function getRankingLeaderboard(): Promise<PlayerRankingScore[]> {
-  const { data } = await api.get('/ranking/leaderboard/');
+export async function getRankingLeaderboard(opts?: ApiRequestOptions): Promise<PlayerRankingScore[]> {
+  const { data } = await api.get('/ranking/leaderboard/', mergeApiOptions(opts));
   return data;
 }
 

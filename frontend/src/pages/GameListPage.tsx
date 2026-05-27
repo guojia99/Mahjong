@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getGamesList, type GamesListParams } from '@/api/games';
@@ -149,37 +151,37 @@ export default function GameListPage() {
     [games]
   );
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     const params: GamesListParams = { page, page_size: pageSize };
     if (playerCountFilter) params.player_count = playerCountFilter;
     if (modeFilter) params.game_mode = modeFilter;
     if (typeFilter) params.game_type = typeFilter;
     if (leagueFilter) params.league = leagueFilter;
     setListLoading(true);
-    getGamesList(params)
+    getGamesList(params, { signal })
       .then((res) => {
         setGames(res.results);
         setTotalCount(res.count);
         const maxPage = Math.max(1, Math.ceil(res.count / pageSize) || 1);
         if (page > maxPage) setPage(maxPage);
       })
-      .catch(() => showToast(t('gameList.loadFailed')))
-      .finally(() => setListLoading(false));
-  }, [playerCountFilter, modeFilter, typeFilter, leagueFilter, page, pageSize, showToast]);
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('gameList.loadFailed'));
+      })
+      .finally(() => {
+        if (!signal.aborted) setListLoading(false);
+      });
+  }, [playerCountFilter, modeFilter, typeFilter, leagueFilter, page, pageSize, showToast, t]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) {
       setPlayerAvatars({});
       return;
     }
-    let cancelled = false;
-    (async () => {
-      const map = await loadPlayerAvatarsForList(playerIds);
-      if (!cancelled) setPlayerAvatars(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
   }, [playerIds]);
 
   return (

@@ -1202,6 +1202,18 @@ const zhHans: Record<string, string> = {
   'league.generateSemifinalConfirm': '将根据赛季种子顺序生成半决赛（3 轮 × 2 桌）。继续？',
   'league.stageUpdated': '赛段已更新',
   'league.seasonDescPlaceholder': '赛季描述（选填）',
+
+  // ===== Errors =====
+  'errors.serverErrorTitle': '服务器错误',
+  'errors.serverErrorDesc': '请求处理时服务器发生内部错误，请稍后重试或联系管理员。',
+  'errors.errorMessage': '错误信息',
+  'errors.requestInfo': '请求详情',
+  'errors.responseBody': '响应内容',
+  'errors.appErrorTitle': '页面发生错误',
+  'errors.appErrorDesc': '应用遇到未预期的错误，详情如下。您可以重试或返回首页。',
+  'errors.stackTrace': '堆栈跟踪',
+  'errors.componentStack': '组件堆栈',
+  'errors.backHome': '返回首页',
 };
 
 export default zhHans;

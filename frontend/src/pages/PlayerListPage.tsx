@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getPlayers } from '@/api/players';
@@ -24,8 +26,12 @@ export default function PlayerListPage() {
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('default');
 
-  useEffect(() => {
-    getPlayers(query).then((data) => setPlayers(data as PlayerListItem[]));
+  useAbortableEffect((signal) => {
+    getPlayers(query, { signal })
+      .then((data) => setPlayers(data as PlayerListItem[]))
+      .catch((e) => {
+        if (!isAbortError(e)) throw e;
+      });
   }, [query]);
 
   const sorted = useMemo(() => {
@@ -48,13 +54,11 @@ export default function PlayerListPage() {
     return [...new Set(sorted.map((p) => p.id))];
   }, [sorted]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   const sortOptions: { key: SortKey; label: string }[] = [

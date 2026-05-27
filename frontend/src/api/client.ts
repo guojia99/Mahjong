@@ -1,4 +1,13 @@
 import axios from 'axios';
+import { parseApiError, type ParsedApiError } from '@/utils/apiError';
+import { isAbortError } from '@/utils/http';
+
+let serverErrorHandler: ((error: ParsedApiError) => void) | null = null;
+
+/** 由 ServerErrorProvider 注册，用于展示 500 错误面板 */
+export function registerServerErrorHandler(handler: ((error: ParsedApiError) => void) | null) {
+  serverErrorHandler = handler;
+}
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -28,10 +37,17 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (isAbortError(error)) {
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
+      return Promise.reject(error);
+    }
+    if (error.response?.status === 500 && serverErrorHandler) {
+      serverErrorHandler(parseApiError(error));
     }
     return Promise.reject(error);
   }

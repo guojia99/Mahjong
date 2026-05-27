@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getPtRanking } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
@@ -29,13 +31,18 @@ export default function PtRankingPage() {
   const { showToast, ToastComponent } = useToast();
   const { t } = useTranslation();
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     const params: Record<string, string> = {};
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (ptScope) params.game_type = ptScope;
-    getPtRanking(params).then(setRankings).catch(() => showToast(t('ptRanking.loadFailed')));
-  }, [playerCount, gameMode, ptScope, showToast]);
+    getPtRanking(params, { signal })
+      .then(setRankings)
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('ptRanking.loadFailed'));
+      });
+  }, [playerCount, gameMode, ptScope, showToast, t]);
 
   const playerIds = useMemo(() => {
     const ids: string[] = [];
@@ -45,13 +52,11 @@ export default function PtRankingPage() {
     return [...new Set(ids)];
   }, [rankings]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   const maxPt = rankings.length > 0 ? Math.max(...rankings.map(r => r.total_pt)) : 1;

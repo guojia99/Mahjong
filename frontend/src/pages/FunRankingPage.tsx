@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getFunRanking } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
@@ -72,20 +74,23 @@ export default function FunRankingPage() {
     [t],
   );
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     setLoading(true);
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (gameType) params.game_type = gameType;
     if (minGames) params.min_games = minGames;
-    getFunRanking(params).then((data) => {
-      setRankings(data);
-      setLoading(false);
-    }).catch(() => {
-      showToast(t('funRanking.loadFailed'));
-      setLoading(false);
-    });
+    getFunRanking(params, { signal })
+      .then((data) => {
+        setRankings(data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('funRanking.loadFailed'));
+        setLoading(false);
+      });
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
 
   const playerIds = useMemo(() => {
@@ -96,13 +101,11 @@ export default function FunRankingPage() {
     return [...new Set(ids)];
   }, [rankings]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   const currentTab = placementTabs.find(tab => tab.value === rankType) || placementTabs[0];
