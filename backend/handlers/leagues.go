@@ -72,6 +72,10 @@ func leagueJSONFieldContains(jf models.JSONField, val string) bool {
 	return false
 }
 
+func leagueEmptyJSONField() models.JSONField {
+	return models.JSONField("{}")
+}
+
 func leagueApplySeasonTimeFields(req map[string]interface{}) {
 	for _, key := range []string{"start_time", "end_time"} {
 		raw, ok := req[key]
@@ -556,17 +560,23 @@ func LeagueCreateStandardStages(c *gin.Context) {
 			SeasonID:       pk,
 			Name:           tpl.Name,
 			StageType:      tpl.StageType,
+			Status:         "pending",
 			Order:          idx + 1,
 			GamesPerPlayer: tpl.GamesPerPlayer,
 			Uma1st:         tpl.Uma1st,
 			Uma2nd:         tpl.Uma2nd,
 			Uma3rd:         tpl.Uma3rd,
 			Uma4th:         tpl.Uma4th,
+			BaseScore:      25000,
 			AllowCompanion: tpl.AllowCompanion,
 			AllowFreeTable: tpl.AllowFreeTable,
 			RecordRanking:  tpl.RecordRanking,
+			PromotionRules: leagueEmptyJSONField(),
 		}
-		config.DB.Create(&stage)
+		if err := config.DB.Create(&stage).Error; err != nil {
+			respondError(c, http.StatusInternalServerError, "Failed to create stage: "+err.Error())
+			return
+		}
 	}
 	respondOK(c, gin.H{"message": "Standard stages created"})
 }
@@ -609,7 +619,13 @@ func LeagueCreateStage(c *gin.Context) {
 	if req["status"] == nil {
 		req["status"] = "pending"
 	}
-	config.DB.Model(&models.LeagueStage{}).Create(req)
+	if req["promotion_rules"] == nil {
+		req["promotion_rules"] = "{}"
+	}
+	if err := config.DB.Model(&models.LeagueStage{}).Create(req).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to create stage: "+err.Error())
+		return
+	}
 	respondOK(c, gin.H{"message": "Stage created"})
 }
 

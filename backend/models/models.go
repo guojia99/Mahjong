@@ -3,6 +3,8 @@ package models
 import (
 	"encoding/json"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type User struct {
@@ -96,6 +98,11 @@ type Game struct {
 }
 
 func (Game) TableName() string { return "games" }
+
+func (g *Game) BeforeCreate(tx *gorm.DB) error {
+	defaultJSONField(&g.PaipuData)
+	return nil
+}
 
 func (g *Game) IsScored() bool {
 	for _, gp := range g.GamePlayers {
@@ -287,6 +294,11 @@ type LeagueStage struct {
 
 func (LeagueStage) TableName() string { return "league_stages" }
 
+func (s *LeagueStage) BeforeCreate(tx *gorm.DB) error {
+	defaultJSONField(&s.PromotionRules)
+	return nil
+}
+
 func (s *LeagueStage) GetUmaList() []float64 {
 	return []float64{s.Uma1st, s.Uma2nd, s.Uma3rd, s.Uma4th}
 }
@@ -411,6 +423,12 @@ func (j JSONField) Len() int {
 	}
 	m := j.AsMap()
 	return len(m)
+}
+
+func defaultJSONField(j *JSONField) {
+	if j == nil || len(*j) == 0 {
+		*j = JSONField("{}")
+	}
 }
 
 // NewJSONField marshals v into JSON bytes stored as JSONField.
