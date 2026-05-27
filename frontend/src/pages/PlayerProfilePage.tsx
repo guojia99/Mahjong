@@ -12,6 +12,7 @@ import { ArrowLeft, Sparkles } from 'lucide-react';
 import YakumanCard from '@/components/YakumanCard';
 import PlayerStatsLineChart from '@/components/PlayerStatsLineChart';
 import RankTierBadge from '@/components/RankTierBadge';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 function ScoreTag({ score }: { score: number | null }) {
   if (score === null || score === undefined) return null;
@@ -40,6 +41,7 @@ export default function PlayerProfilePage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
   const [player, setPlayer] = useState<Player | null>(null);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [games, setGames] = useState<Game[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [yakumans, setYakumans] = useState<HandRecord[]>([]);
@@ -75,6 +77,15 @@ export default function PlayerProfilePage() {
     getPlayerRanking(id).then(setRanking).catch(() => setRanking(null));
     getPlayerGameRankingResults(id).then(setGameRankingResults).catch(() => setGameRankingResults({}));
   }, [id, showToast, t]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList([id]).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [id]);
 
   useEffect(() => {
     loadStats(filterPlayerCount || undefined, filterGameMode || undefined, filterGameType, recentLimit);
@@ -168,8 +179,8 @@ export default function PlayerProfilePage() {
 
       <div className="card mb-6">
         <div className="flex items-center gap-4">
-          {player.avatar ? (
-            <img src={player.avatar} alt={player.nickname} style={{ width: '4rem', height: '4rem', borderRadius: '50%', objectFit: 'cover' }} />
+          {(playerAvatars[player.id] || player.avatar) ? (
+            <img src={playerAvatars[player.id] || player.avatar} alt={player.nickname} style={{ width: '4rem', height: '4rem', borderRadius: '50%', objectFit: 'cover' }} />
           ) : (
             <div className="avatar-placeholder" style={{ width: '4rem', height: '4rem', fontSize: '1.5rem' }}>
               {player.nickname.charAt(0)}

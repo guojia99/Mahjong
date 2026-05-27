@@ -2,7 +2,10 @@
 .DS_Store
 
 # IDE
+.idea
 .idea/
+.sisyphus/
+.sisyphus
 
 # Environment
 .env
@@ -13,7 +16,8 @@ marjong.db
 marjong.db-journal
 
 # Backend
-backend/go/mahjong-backend
+backend/mahjong-backend
+backend/marjong.db
 backend/db_config.json
 backend/media/
 

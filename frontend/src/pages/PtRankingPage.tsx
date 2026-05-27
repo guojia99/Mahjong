@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getPtRanking } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import type { PtRankingItem } from '@/types';
 import { Trophy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -21,6 +22,7 @@ type PtScope = '' | 'offline' | 'online';
 
 export default function PtRankingPage() {
   const [rankings, setRankings] = useState<PtRankingItem[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
   const [ptScope, setPtScope] = useState<PtScope>('');
@@ -34,6 +36,23 @@ export default function PtRankingPage() {
     if (ptScope) params.game_type = ptScope;
     getPtRanking(params).then(setRankings).catch(() => showToast(t('ptRanking.loadFailed')));
   }, [playerCount, gameMode, ptScope, showToast]);
+
+  const playerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of rankings) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    return [...new Set(ids)];
+  }, [rankings]);
+
+  useEffect(() => {
+    if (playerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(playerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [playerIds]);
 
   const maxPt = rankings.length > 0 ? Math.max(...rankings.map(r => r.total_pt)) : 1;
   const minPt = rankings.length > 0 ? Math.min(...rankings.map(r => r.total_pt)) : 0;
@@ -109,8 +128,8 @@ export default function PtRankingPage() {
                 }}>
                   {idx + 1}
                 </div>
-                {item.player.avatar ? (
-                  <img src={item.player.avatar} alt={item.player.nickname} className="avatar" />
+                {playerAvatars[item.player.id] ? (
+                  <img src={playerAvatars[item.player.id]} alt={item.player.nickname} className="avatar" />
                 ) : (
                   <div className="avatar-placeholder">{item.player.nickname.charAt(0)}</div>
                 )}

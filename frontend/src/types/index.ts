@@ -9,7 +9,7 @@ export interface Player {
     id: string;
     nickname: string;
     real_name: string;
-    avatar: string;
+    avatar?: string;
     extra_info: Record<string, unknown>;
     majsoul_uids?: number[];
     majsoul_accounts?: MajsoulAccount[];

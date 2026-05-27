@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord, deleteGame, updateGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
@@ -12,9 +12,10 @@ import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil, Trophy } from 'lucide-react';
 import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
 import { useTranslation } from 'react-i18next';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
-function gpToSortable(gp: GamePlayerInfo): SortableItem {
-  return { id: gp.player.id, nickname: gp.player.nickname, avatar: gp.player.avatar };
+function gpToSortable(gp: GamePlayerInfo, avatarUrl?: string): SortableItem {
+  return { id: gp.player.id, nickname: gp.player.nickname, avatar: avatarUrl || gp.player.avatar };
 }
 
 function toDatetimeLocal(iso: string | null | undefined): string {
@@ -38,6 +39,7 @@ export default function GameDetailPage() {
   const navigateBackTarget =
     backToFromState || (roomId ? `/rooms/${roomId}` : '/games');
   const [game, setGame] = useState<Game | null>(null);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [showScoreInput, setShowScoreInput] = useState(false);
   const [showChangePlayers, setShowChangePlayers] = useState(false);
@@ -86,6 +88,23 @@ export default function GameDetailPage() {
     void Promise.resolve().then(() => loadGame());
     void getPlayers().then(setAllPlayers);
   }, [loadGame]);
+
+  const gamePlayerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const gp of game?.players ?? []) {
+      if (gp.player?.id) ids.push(gp.player.id);
+    }
+    return [...new Set(ids)];
+  }, [game?.players]);
+
+  useEffect(() => {
+    if (gamePlayerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(gamePlayerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [gamePlayerIds]);
 
   const handleScoreChange = (playerId: string, value: string) => {
     setScoreData((prev) => ({ ...prev, [playerId]: { ...prev[playerId], score: value } }));
@@ -398,8 +417,8 @@ export default function GameDetailPage() {
                     {SEAT_WIND_LABELS[gp.seat_number] || gp.seat_number + 1}
                   </span>
                 </div>
-                {gp.player.avatar ? (
-                  <img src={gp.player.avatar} alt={gp.player.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
+                {(playerAvatars[gp.player.id] || gp.player.avatar) ? (
+                  <img src={playerAvatars[gp.player.id] || gp.player.avatar} alt={gp.player.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
                 ) : (
                   <div className="avatar-placeholder" style={{ width: '2rem', height: '2rem', fontSize: '0.75rem' }}>
                     {gp.player.nickname.charAt(0)}
@@ -631,8 +650,8 @@ export default function GameDetailPage() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  {item.avatar ? (
-                    <img src={item.avatar} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
+                  {(playerAvatars[item.id] || item.avatar) ? (
+                    <img src={playerAvatars[item.id] || item.avatar} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem' }}>
                       {item.nickname.charAt(0)}
