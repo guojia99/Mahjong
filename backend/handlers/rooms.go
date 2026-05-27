@@ -295,6 +295,7 @@ func RoomCreateGame(c *gin.Context) {
 		GameType:    "offline",
 		GameMode:    req.GameMode,
 		PlayerCount: len(req.PlayerIDs),
+		PaipuData:   models.JSONField("{}"),
 		CreatedByID: &user.ID,
 	}
 	if game.GameMode == "" {
