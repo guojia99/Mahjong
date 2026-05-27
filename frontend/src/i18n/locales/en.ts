@@ -1202,6 +1202,18 @@ const en: Record<string, string> = {
   'league.generateSemifinalConfirm': 'Generate semifinal matches based on season seed (3 rounds × 2 tables). Continue?',
   'league.stageUpdated': 'Stage updated',
   'league.seasonDescPlaceholder': 'Season description (optional)',
+
+  // ===== Errors =====
+  'errors.serverErrorTitle': 'Server error',
+  'errors.serverErrorDesc': 'The server encountered an internal error. Please try again later or contact an administrator.',
+  'errors.errorMessage': 'Message',
+  'errors.requestInfo': 'Request',
+  'errors.responseBody': 'Response body',
+  'errors.appErrorTitle': 'Something went wrong',
+  'errors.appErrorDesc': 'The app hit an unexpected error. Details are shown below. You can retry or go home.',
+  'errors.stackTrace': 'Stack trace',
+  'errors.componentStack': 'Component stack',
+  'errors.backHome': 'Back to home',
 };
 
 export default en;

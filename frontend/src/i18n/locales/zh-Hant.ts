@@ -1201,6 +1201,18 @@ const zhHant: Record<string, string> = {
   'league.generateSemifinalConfirm': '將依賽季種子順序生成半決賽（3 輪 × 2 桌）。繼續？',
   'league.stageUpdated': '賽段已更新',
   'league.seasonDescPlaceholder': '賽季描述（選填）',
+
+  // ===== Errors =====
+  'errors.serverErrorTitle': '伺服器錯誤',
+  'errors.serverErrorDesc': '請求處理時伺服器發生內部錯誤，請稍後重試或聯絡管理員。',
+  'errors.errorMessage': '錯誤資訊',
+  'errors.requestInfo': '請求詳情',
+  'errors.responseBody': '回應內容',
+  'errors.appErrorTitle': '頁面發生錯誤',
+  'errors.appErrorDesc': '應用程式遇到未預期的錯誤，詳情如下。您可以重試或返回首頁。',
+  'errors.stackTrace': '堆疊追蹤',
+  'errors.componentStack': '元件堆疊',
+  'errors.backHome': '返回首頁',
 };
 
 export default zhHant;

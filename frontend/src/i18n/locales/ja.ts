@@ -1201,6 +1201,18 @@ const ja: Record<string, string> = {
   'league.generateSemifinalConfirm': 'シーズンシードに基づいて準決勝（3R×2卓）を生成します。続行しますか？',
   'league.stageUpdated': 'ステージを更新しました',
   'league.seasonDescPlaceholder': 'シーズン説明（任意）',
+
+  // ===== Errors =====
+  'errors.serverErrorTitle': 'サーバーエラー',
+  'errors.serverErrorDesc': 'サーバーで内部エラーが発生しました。しばらくしてから再試行するか、管理者に連絡してください。',
+  'errors.errorMessage': 'エラーメッセージ',
+  'errors.requestInfo': 'リクエスト',
+  'errors.responseBody': 'レスポンス本文',
+  'errors.appErrorTitle': 'エラーが発生しました',
+  'errors.appErrorDesc': '予期しないエラーが発生しました。詳細は以下のとおりです。再試行するかホームに戻ってください。',
+  'errors.stackTrace': 'スタックトレース',
+  'errors.componentStack': 'コンポーネントスタック',
+  'errors.backHome': 'ホームに戻る',
 };
 
 export default ja;

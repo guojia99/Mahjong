@@ -22,13 +22,27 @@ func PlayerAvatar(c *gin.Context) {
 }
 
 func PlayerAvatarBatch(c *gin.Context) {
-	raw := c.Query("ids")
-	ids := strings.Split(raw, ",")
 	filtered := make([]string, 0, 200)
-	for _, id := range ids {
-		id = strings.TrimSpace(id)
-		if id != "" {
-			filtered = append(filtered, id)
+	if c.Request.Method == http.MethodPost {
+		var req struct {
+			IDs []string `json:"ids"`
+		}
+		if err := c.ShouldBindJSON(&req); err == nil {
+			for _, id := range req.IDs {
+				id = strings.TrimSpace(id)
+				if id != "" {
+					filtered = append(filtered, id)
+				}
+			}
+		}
+	}
+	if len(filtered) == 0 {
+		raw := c.Query("ids")
+		for _, id := range strings.Split(raw, ",") {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				filtered = append(filtered, id)
+			}
 		}
 	}
 	if len(filtered) > 200 {
@@ -58,13 +72,11 @@ func PlayerList(c *gin.Context) {
 	if query != "" {
 		qs = qs.Where("nickname LIKE ? OR real_name LIKE ?", "%"+query+"%", "%"+query+"%")
 	}
-	qs.Find(&players)
+	qs.Preload("MajsoulAccounts").Find(&players)
 
 	result := make([]gin.H, 0, len(players))
 	for i := range players {
-		p := &players[i]
-		config.DB.Preload("MajsoulAccounts").First(p, "id = ?", p.ID)
-		result = append(result, getPlayerListData(p))
+		result = append(result, getPlayerListData(&players[i]))
 	}
 	respondOK(c, result)
 }

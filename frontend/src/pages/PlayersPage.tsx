@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { getPlayers, createPlayer, deletePlayer, updatePlayer, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
@@ -28,30 +30,29 @@ export default function PlayersPage() {
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
 
-  const loadPlayers = useCallback(async () => {
+  const loadPlayers = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await getPlayers(query);
+      const data = await getPlayers(query, signal ? { signal } : undefined);
       setPlayers(data);
-    } catch {
+    } catch (e) {
+      if (isAbortError(e)) return;
       showToast(t('players.loadFailed'));
     }
-  }, [query, showToast]);
+  }, [query, showToast, t]);
 
-  useEffect(() => {
-    void Promise.resolve().then(() => loadPlayers());
+  useAbortableEffect((signal) => {
+    void loadPlayers(signal);
   }, [loadPlayers]);
 
   const playerIds = useMemo(() => {
     return [...new Set(players.map((p) => p.id))];
   }, [players]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {

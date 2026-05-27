@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { CircleHelp, Loader2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -283,18 +285,14 @@ export default function StartingHandsPage() {
     setPageJumpDraft(String(page));
   }, [page]);
 
-  useEffect(() => {
-    let active = true;
-    getPlayers()
-      .then((arr) => {
-        if (active) setAllPlayers(arr);
-      })
-      .catch(() => {
-        // non-fatal
+  useAbortableEffect((signal) => {
+    getPlayers('', { signal })
+      .then(setAllPlayers)
+      .catch((e) => {
+        if (!isAbortError(e)) {
+          // non-fatal
+        }
       });
-    return () => {
-      active = false;
-    };
   }, []);
 
   const avatarPlayerIds = useMemo(() => {
@@ -311,16 +309,14 @@ export default function StartingHandsPage() {
     return [...new Set(ids)];
   }, [overall, personal, averages]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (avatarPlayerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(avatarPlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [avatarPlayerIds]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (tab !== 'overall') return;
     const params: Parameters<typeof getStartingHands>[0] = {
       tab: 'overall',
@@ -331,47 +327,40 @@ export default function StartingHandsPage() {
     if (gameMode) params.game_mode = gameMode;
     setOverallListLoading(true);
     const seq = ++overallFetchSeq.current;
-    let active = true;
-    getStartingHands(params)
+    getStartingHands(params, { signal })
       .then((data) => {
-        if (!active || seq !== overallFetchSeq.current) return;
+        if (signal.aborted || seq !== overallFetchSeq.current) return;
         setOverall(data);
       })
-      .catch(() => {
-        if (!active || seq !== overallFetchSeq.current) return;
+      .catch((e) => {
+        if (isAbortError(e) || seq !== overallFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
       })
       .finally(() => {
-        if (seq === overallFetchSeq.current) setOverallListLoading(false);
+        if (seq === overallFetchSeq.current && !signal.aborted) setOverallListLoading(false);
       });
-    return () => {
-      active = false;
-    };
   }, [tab, page, pageSize, playerCount, gameMode, showToast, t]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (tab !== 'personal') return;
     const params: Parameters<typeof getStartingHandPlayerAverages>[0] = { min_hands: minHands };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
-    let active = true;
-    getStartingHandPlayerAverages(params)
+    getStartingHandPlayerAverages(params, { signal })
       .then((rows) => {
-        if (!active) return;
+        if (signal.aborted) return;
         setAverages(rows);
         if (rows.length > 0 && !rows.some((r) => r.player.id === selectedPlayerId)) {
           setSelectedPlayerId(rows[0].player.id);
         }
       })
-      .catch(() => {
-        if (active) showToast(t('startingHands.loadFailed'));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('startingHands.loadFailed'));
       });
-    return () => {
-      active = false;
-    };
   }, [tab, playerCount, gameMode, minHands, selectedPlayerId, showToast, t]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (tab !== 'personal' || !selectedPlayerId) return;
     const params: Parameters<typeof getStartingHands>[0] = {
       tab: 'personal',
@@ -383,22 +372,18 @@ export default function StartingHandsPage() {
     if (gameMode) params.game_mode = gameMode;
     setPersonalListLoading(true);
     const seq = ++personalFetchSeq.current;
-    let active = true;
-    getStartingHands(params)
+    getStartingHands(params, { signal })
       .then((data) => {
-        if (!active || seq !== personalFetchSeq.current) return;
+        if (signal.aborted || seq !== personalFetchSeq.current) return;
         setPersonal(data);
       })
-      .catch(() => {
-        if (!active || seq !== personalFetchSeq.current) return;
+      .catch((e) => {
+        if (isAbortError(e) || seq !== personalFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
       })
       .finally(() => {
-        if (seq === personalFetchSeq.current) setPersonalListLoading(false);
+        if (seq === personalFetchSeq.current && !signal.aborted) setPersonalListLoading(false);
       });
-    return () => {
-      active = false;
-    };
   }, [tab, selectedPlayerId, page, pageSize, playerCount, gameMode, showToast, t]);
 
   const setTabReset = (next: 'overall' | 'personal') => {

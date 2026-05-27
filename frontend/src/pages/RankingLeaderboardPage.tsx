@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getRankingLeaderboard } from '@/api/ranking';
 import { useToast } from '@/hooks/useToast';
@@ -12,10 +14,13 @@ export default function RankingLeaderboardPage() {
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const { showToast, ToastComponent } = useToast();
 
-  useEffect(() => {
-    getRankingLeaderboard()
+  useAbortableEffect((signal) => {
+    getRankingLeaderboard({ signal })
       .then(setLeaderboard)
-      .catch(() => showToast('加载排位排行失败'));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast('加载排位排行失败');
+      });
   }, [showToast]);
 
   const playerIds = useMemo(() => {
@@ -26,13 +31,11 @@ export default function RankingLeaderboardPage() {
     return [...new Set(ids)];
   }, [leaderboard]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    let cancelled = false;
-    loadPlayerAvatarsForList(playerIds).then((map) => {
-      if (!cancelled) setPlayerAvatars(map);
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
     });
-    return () => { cancelled = true; };
   }, [playerIds]);
 
   return (

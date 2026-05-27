@@ -11,6 +11,7 @@ import (
 	"mahjong-backend/models"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func serializeGameList(game *models.Game) gin.H {
@@ -157,12 +158,21 @@ func serializePlayerGameDetail(p *models.Player) gin.H {
 	}
 }
 
-func calculatePT(game *models.Game) map[string]float64 {
-	var gps []models.GamePlayer
-	config.DB.Where("game_id = ? AND score IS NOT NULL", game.ID).Order("score DESC").Find(&gps)
+func calculatePTFromGPS(game *models.Game, gps []models.GamePlayer) map[string]float64 {
 	if len(gps) == 0 {
 		return map[string]float64{}
 	}
+	sorted := make([]models.GamePlayer, len(gps))
+	copy(sorted, gps)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Score == nil {
+			return false
+		}
+		if sorted[j].Score == nil {
+			return true
+		}
+		return *sorted[i].Score > *sorted[j].Score
+	})
 
 	baseScore := 250.0
 	umaMap := []float64{30, 10, -10, -30}
@@ -172,13 +182,82 @@ func calculatePT(game *models.Game) map[string]float64 {
 	}
 
 	result := make(map[string]float64)
-	for i, gp := range gps {
+	for i, gp := range sorted {
 		if i < len(umaMap) && gp.Score != nil {
 			scorePT := float64(*gp.Score-int(baseScore)) / 10.0
 			result[gp.PlayerID] = math.Round((scorePT+umaMap[i])*100) / 100
 		}
 	}
 	return result
+}
+
+func scoredGamePlayers(game *models.Game) []models.GamePlayer {
+	if len(game.GamePlayers) == 0 {
+		return nil
+	}
+	scored := make([]models.GamePlayer, 0, len(game.GamePlayers))
+	for _, gp := range game.GamePlayers {
+		if gp.Score != nil {
+			scored = append(scored, gp)
+		}
+	}
+	return scored
+}
+
+func calculatePT(game *models.Game) map[string]float64 {
+	if scored := scoredGamePlayers(game); scored != nil {
+		return calculatePTFromGPS(game, scored)
+	}
+	var gps []models.GamePlayer
+	config.DB.Where("game_id = ? AND score IS NOT NULL", game.ID).Find(&gps)
+	return calculatePTFromGPS(game, gps)
+}
+
+func gamePlayersByGameID(gameIDs []string) map[string][]models.GamePlayer {
+	out := make(map[string][]models.GamePlayer)
+	if len(gameIDs) == 0 {
+		return out
+	}
+	var all []models.GamePlayer
+	config.DB.Where("game_id IN ? AND score IS NOT NULL", gameIDs).Find(&all)
+	for _, gp := range all {
+		out[gp.GameID] = append(out[gp.GameID], gp)
+	}
+	return out
+}
+
+func rankInGameGPS(all []models.GamePlayer, playerID string) int {
+	sorted := make([]models.GamePlayer, len(all))
+	copy(sorted, all)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Score == nil {
+			return false
+		}
+		if sorted[j].Score == nil {
+			return true
+		}
+		return *sorted[i].Score > *sorted[j].Score
+	})
+	for i, g := range sorted {
+		if g.PlayerID == playerID {
+			return i + 1
+		}
+	}
+	return len(sorted)
+}
+
+func filterGamesQuery(playerCount, gameMode, gameType string) *gorm.DB {
+	qs := config.DB.Model(&models.Game{})
+	if playerCount != "" {
+		qs = qs.Where("player_count = ?", playerCount)
+	}
+	if gameMode != "" {
+		qs = qs.Where("game_mode = ?", gameMode)
+	}
+	if gameType == "offline" || gameType == "online" {
+		qs = qs.Where("game_type = ?", gameType)
+	}
+	return qs
 }
 
 func annotateGamesWithPT(games []models.Game, data []gin.H) {
@@ -189,9 +268,14 @@ func annotateGamesWithPT(games []models.Game, data []gin.H) {
 	for _, item := range data {
 		gid, _ := item["id"].(string)
 		g := gameMap[gid]
-		if g != nil {
-			item["pt"] = calculatePT(g)
+		if g == nil {
+			continue
 		}
+		if scored := scoredGamePlayers(g); scored != nil {
+			item["pt"] = calculatePTFromGPS(g, scored)
+			continue
+		}
+		item["pt"] = calculatePT(g)
 	}
 }
 
@@ -523,34 +607,27 @@ func PtRanking(c *gin.Context) {
 	}
 	ptMap := make(map[string]*ptRow)
 
-	var gps []models.GamePlayer
-	qs := config.DB.Where("score IS NOT NULL")
-	if playerCount != "" {
-		qs = qs.Joins("JOIN games ON games.id = game_players.game_id AND games.player_count = ?", playerCount)
-	}
-	if gameMode != "" {
-		qs = qs.Joins("JOIN games g ON g.id = game_players.game_id AND g.game_mode = ?", gameMode)
-	}
-	if gameType == "offline" || gameType == "online" {
-		qs = qs.Joins("JOIN games g2 ON g2.id = game_players.game_id AND g2.game_type = ?", gameType)
-	}
-	qs.Find(&gps)
-
-	gameIDs := make(map[string]bool)
-	for _, gp := range gps {
-		gameIDs[gp.GameID] = true
-	}
-
-	idSlice := make([]string, 0, len(gameIDs))
-	for id := range gameIDs {
-		idSlice = append(idSlice, id)
-	}
 	var games []models.Game
-	config.DB.Where("id IN ?", idSlice).Find(&games)
+	filterGamesQuery(playerCount, gameMode, gameType).Find(&games)
+	if len(games) == 0 {
+		respondOK(c, []gin.H{})
+		return
+	}
 
-	for _, game := range games {
-		pt := calculatePT(&game)
-		for pid, ptv := range pt {
+	gameIDs := make([]string, 0, len(games))
+	gameByID := make(map[string]*models.Game, len(games))
+	for i := range games {
+		gameIDs = append(gameIDs, games[i].ID)
+		gameByID[games[i].ID] = &games[i]
+	}
+	gpsByGame := gamePlayersByGameID(gameIDs)
+
+	for gid, gps := range gpsByGame {
+		game := gameByID[gid]
+		if game == nil {
+			continue
+		}
+		for pid, ptv := range calculatePTFromGPS(game, gps) {
 			if _, ok := ptMap[pid]; !ok {
 				ptMap[pid] = &ptRow{PlayerID: pid}
 			}
@@ -562,21 +639,53 @@ func PtRanking(c *gin.Context) {
 		ptRow
 		GameCount int
 	}
-	items := make([]rankItem, 0)
+	playerIDs := make([]string, 0, len(ptMap))
+	items := make([]rankItem, 0, len(ptMap))
 	for pid, row := range ptMap {
-		var gc int64
-		config.DB.Model(&models.GamePlayer{}).Where("player_id = ? AND score IS NOT NULL", pid).Count(&gc)
-		items = append(items, rankItem{ptRow: *row, GameCount: int(gc)})
+		playerIDs = append(playerIDs, pid)
+		items = append(items, rankItem{ptRow: *row})
+	}
+
+	gameCountByPlayer := make(map[string]int)
+	if len(playerIDs) > 0 {
+		type gcRow struct {
+			PlayerID string
+			Cnt      int64
+		}
+		var gcRows []gcRow
+		config.DB.Model(&models.GamePlayer{}).
+			Select("player_id, COUNT(*) AS cnt").
+			Where("player_id IN ? AND score IS NOT NULL", playerIDs).
+			Group("player_id").
+			Scan(&gcRows)
+		for _, r := range gcRows {
+			gameCountByPlayer[r.PlayerID] = int(r.Cnt)
+		}
+	}
+	for i := range items {
+		items[i].GameCount = gameCountByPlayer[items[i].PlayerID]
 	}
 
 	sort.Slice(items, func(i, j int) bool { return items[i].TotalPT > items[j].TotalPT })
 
+	playersByID := make(map[string]*models.Player)
+	if len(playerIDs) > 0 {
+		var players []models.Player
+		config.DB.Where("id IN ?", playerIDs).Find(&players)
+		for i := range players {
+			playersByID[players[i].ID] = &players[i]
+		}
+	}
+
 	result := make([]gin.H, 0, len(items))
 	for _, item := range items {
-		var player models.Player
-		config.DB.Where("id = ?", item.PlayerID).First(&player)
+		p := playersByID[item.PlayerID]
+		pData := gin.H{"id": item.PlayerID, "nickname": ""}
+		if p != nil {
+			pData = getPlayerListData(p)
+		}
 		result = append(result, gin.H{
-			"player":     getPlayerListData(&player),
+			"player":     pData,
 			"total_pt":   math.Round(item.TotalPT*100) / 100,
 			"game_count": item.GameCount,
 		})
@@ -603,18 +712,15 @@ func FunRanking(c *gin.Context) {
 
 	stats := make(map[string]*playerStat)
 
+	var gameIDs []string
+	filterGamesQuery(playerCount, gameMode, gameType).Pluck("id", &gameIDs)
+	if len(gameIDs) == 0 {
+		respondOK(c, []gin.H{})
+		return
+	}
+
 	var gps []models.GamePlayer
-	qs := config.DB.Where("score IS NOT NULL")
-	if playerCount != "" {
-		qs = qs.Joins("JOIN games ON games.id = game_players.game_id AND games.player_count = ?", playerCount)
-	}
-	if gameMode != "" {
-		qs = qs.Joins("JOIN games g ON g.id = game_players.game_id AND g.game_mode = ?", gameMode)
-	}
-	if gameType == "offline" || gameType == "online" {
-		qs = qs.Joins("JOIN games g2 ON g2.id = game_players.game_id AND g2.game_type = ?", gameType)
-	}
-	qs.Preload("Player").Find(&gps)
+	config.DB.Preload("Player").Where("game_id IN ? AND score IS NOT NULL", gameIDs).Find(&gps)
 
 	for _, gp := range gps {
 		pid := gp.PlayerID
@@ -639,34 +745,9 @@ func FunRanking(c *gin.Context) {
 		}
 	}
 
-	gameRanks := make(map[string][]struct {
-		PID  string
-		Rank int
-	})
+	gpsByGame := gamePlayersByGameID(gameIDs)
 	for _, gp := range gps {
-		gid := gp.GameID
-		if _, ok := gameRanks[gid]; !ok {
-			var gameGPS []models.GamePlayer
-			config.DB.Where("game_id = ? AND score IS NOT NULL", gid).Order("score DESC").Find(&gameGPS)
-			ranks := make([]struct {
-				PID  string
-				Rank int
-			}, len(gameGPS))
-			for i, g := range gameGPS {
-				ranks[i] = struct {
-					PID  string
-					Rank int
-				}{g.PlayerID, i + 1}
-			}
-			gameRanks[gid] = ranks
-		}
-		rank := 0
-		for _, r := range gameRanks[gid] {
-			if r.PID == gp.PlayerID {
-				rank = r.Rank
-				break
-			}
-		}
+		rank := rankInGameGPS(gpsByGame[gp.GameID], gp.PlayerID)
 		if rank >= 1 && rank <= 4 {
 			stats[gp.PlayerID].Ranks[rank]++
 			stats[gp.PlayerID].RankSum += rank
@@ -878,21 +959,40 @@ func PlayerStats(c *gin.Context) {
 		recentLimit = 50
 	}
 
-	qs := config.DB.Model(&models.GamePlayer{}).Where("player_id = ? AND score IS NOT NULL", pk)
-	if playerCount != "" {
-		qs = qs.Joins("JOIN games ON games.id = game_players.game_id AND games.player_count = ?", playerCount)
+	var gameIDs []string
+	filterGamesQuery(playerCount, gameMode, gameType).Pluck("id", &gameIDs)
+	if len(gameIDs) == 0 {
+		respondOK(c, gin.H{
+			"total_games":       0,
+			"total_pt":          0,
+			"rank_distribution": gin.H{},
+			"recent_ranking":    []interface{}{},
+			"recent_series":     []interface{}{},
+		})
+		return
 	}
-	if gameMode != "" {
-		qs = qs.Joins("JOIN games g ON g.id = game_players.game_id AND g.game_mode = ?", gameMode)
-	}
-	if gameType == "offline" || gameType == "online" {
-		qs = qs.Joins("JOIN games g2 ON g2.id = game_players.game_id AND g2.game_type = ?", gameType)
-	}
-	qs = qs.Joins("LEFT JOIN games g3 ON g3.id = game_players.game_id").
-		Order("COALESCE(g3.end_time, g3.start_time) DESC, g3.created_at DESC")
 
 	var gps []models.GamePlayer
-	qs.Preload("Game").Find(&gps)
+	config.DB.Preload("Game").Where("player_id = ? AND game_id IN ? AND score IS NOT NULL", pk, gameIDs).Find(&gps)
+	sort.Slice(gps, func(i, j int) bool {
+		gi, gj := gps[i].Game, gps[j].Game
+		if gi == nil || gj == nil {
+			return false
+		}
+		ti := gi.StartTime
+		if gi.EndTime != nil {
+			ti = *gi.EndTime
+		}
+		tj := gj.StartTime
+		if gj.EndTime != nil {
+			tj = *gj.EndTime
+		}
+		if !ti.Equal(tj) {
+			return ti.After(tj)
+		}
+		return gi.CreatedAt.After(gj.CreatedAt)
+	})
+	gpsByGame := gamePlayersByGameID(gameIDs)
 
 	totalGames := len(gps)
 	if totalGames == 0 {
@@ -916,21 +1016,13 @@ func PlayerStats(c *gin.Context) {
 			continue
 		}
 
-		var allGPS []models.GamePlayer
-		config.DB.Where("game_id = ? AND score IS NOT NULL", game.ID).Order("score DESC").Find(&allGPS)
-
-		rank := len(allGPS)
-		for i, g := range allGPS {
-			if g.PlayerID == pk {
-				rank = i + 1
-				break
-			}
-		}
+		allGPS := gpsByGame[game.ID]
+		rank := rankInGameGPS(allGPS, pk)
 		if rank >= 1 && rank <= 4 {
 			rankDist[rank]++
 		}
 
-		pt := calculatePT(game)
+		pt := calculatePTFromGPS(game, allGPS)
 		playerPT := pt[pk]
 		totalPT += playerPT
 

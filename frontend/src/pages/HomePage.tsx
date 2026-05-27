@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Gamepad2, Users, TrendingUp, Sparkles, Info, Trophy } from 'lucide-react';
@@ -23,32 +25,34 @@ export default function HomePage() {
   const [ongoingLeagueSeasons, setOngoingLeagueSeasons] = useState<LeagueSeason[]>([]);
   const [showRules, setShowRules] = useState(false);
 
-  const loadData = async () => {
-    try {
-      const [rooms, players, t, u, leagueOngoing] = await Promise.all([
-        getRooms({ status: 'open' }),
-        getPlayers(),
-        getRankTiers(),
-        getUmaConfigs(),
-        getLeagueSeasons({ status: 'ongoing' }).catch(() => [] as LeagueSeason[]),
-      ]);
-      setOpenRooms(rooms);
-      setPlayerCount(players.length);
-      setTiers(t);
-      setUmaConfigs(u);
-      setOngoingLeagueSeasons(leagueOngoing);
-      const allRooms = await getRooms();
-      const games = allRooms.reduce((sum, r) => sum + r.game_count, 0);
-      setTotalGames(games);
-      const recent = await getRecentYakumans(5);
-      setRecentYakumans(recent);
-    } catch {
-      // silently handle
-    }
-  };
-
-  useEffect(() => {
-    void Promise.resolve().then(() => loadData());
+  useAbortableEffect((signal) => {
+    const req = { signal };
+    (async () => {
+      try {
+        const [rooms, players, tiersData, uma, leagueOngoing] = await Promise.all([
+          getRooms({ status: 'open' }, req),
+          getPlayers('', req),
+          getRankTiers(req),
+          getUmaConfigs(req),
+          getLeagueSeasons({ status: 'ongoing' }, req).catch(() => [] as LeagueSeason[]),
+        ]);
+        if (signal.aborted) return;
+        setOpenRooms(rooms);
+        setPlayerCount(players.length);
+        setTiers(tiersData);
+        setUmaConfigs(uma);
+        setOngoingLeagueSeasons(leagueOngoing);
+        const allRooms = await getRooms(undefined, req);
+        if (signal.aborted) return;
+        setTotalGames(allRooms.reduce((sum, r) => sum + r.game_count, 0));
+        const recent = await getRecentYakumans(5, undefined, req);
+        if (!signal.aborted) setRecentYakumans(recent);
+      } catch (e) {
+        if (!isAbortError(e)) {
+          // silently handle
+        }
+      }
+    })();
   }, []);
 
   const stats = [

@@ -57,7 +57,7 @@ func InitDB(configPath string) *gorm.DB {
 	dbPath := filepath.Join(ProjectRoot, Cfg.Database.SQLitePath)
 
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Discard,
 	})
 	if err != nil {
 		panic("failed to connect database: " + err.Error())
