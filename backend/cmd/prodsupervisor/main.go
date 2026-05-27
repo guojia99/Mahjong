@@ -18,6 +18,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"mahjong-backend/config"
 )
 
 const (
@@ -72,6 +74,20 @@ func main() {
 	if st, err := os.Stat(absStatic); err != nil || !st.IsDir() {
 		logger.fatal("static dir missing: %s (run make build-prod first)", absStatic)
 	}
+
+	absConfig, err := filepath.Abs(configPath)
+	if err != nil {
+		logger.fatal("config path: %v", err)
+	}
+	if _, err := os.Stat(absConfig); err != nil {
+		logger.fatal("config missing: %s (cp db_config.example.json db_config.json in backend/)", absConfig)
+	}
+	dbPath, err := config.ResolveDBPath(absConfig)
+	if err != nil {
+		logger.fatal("database path: %v", err)
+	}
+	logger.log("config=%s database=%s", absConfig, dbPath)
+	configPath = absConfig
 
 	backendArgs := []string{"--config", configPath, "--port", fmt.Sprintf("%d", backendPort)}
 	gatewayArgs := []string{

@@ -54,6 +54,12 @@ prod: build-prod
 		echo "  Stop: make prod-stop  (or make prod:stop)"; \
 		exit 1; \
 	fi
+	@if [ ! -f backend/db_config.json ]; then \
+		echo "Missing backend/db_config.json"; \
+		echo "  cp backend/db_config.example.json backend/db_config.json"; \
+		echo "  Edit sqlite_path (e.g. marjong.db or db.sqlite3) relative to backend/"; \
+		exit 1; \
+	fi
 	@$(MAKE) free-prod-ports
 	@rm -f $(PID_FILE)
 	@cd backend && nohup ./mahjong-prodsupervisor $(PROD_SUPERVISOR_FLAGS) >> $(LOG_FILE) 2>&1 </dev/null &
