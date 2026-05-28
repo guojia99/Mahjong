@@ -99,7 +99,7 @@ function MeldView({ meld }: { meld: Meld }) {
     const next = meld.tiles[i + 1];
     if (t.sideways && next && next.sideways && next.stacked) {
       elements.push(
-        <span key={`m${i}`} style={{ position: 'relative', display: 'inline-block', width: TILE_H_SIDEWAYS, height: TILE_W_UPRIGHT * 2 + 2, alignSelf: 'flex-end' }}>
+        <span key={`m${i}`} style={{ position: 'relative', display: 'inline-block', width: TILE_H_SIDEWAYS, height: TILE_H_SIDEWAYS * 2 + 2, alignSelf: 'flex-end' }}>
           <img
             src={tileSrc(t.tile, false, true)}
             alt={t.tile}
