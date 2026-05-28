@@ -13,6 +13,7 @@ import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types'
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil, Trophy } from 'lucide-react';
 import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
+import { PaipuReplayPanel, canShowPaipuReplay } from '@/components/PaipuReplayPanel';
 import { useTranslation } from 'react-i18next';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
@@ -65,6 +66,7 @@ export default function GameDetailPage() {
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
+  const [paipuTab, setPaipuTab] = useState<'replay' | 'summary'>('replay');
 
   const loadGame = useCallback(async (signal?: AbortSignal) => {
     if (!gameId) return;
@@ -602,10 +604,45 @@ export default function GameDetailPage() {
               </div>
             </>
           )}
-          {canShowPaipuDetailPanel(game) && (
+          {(canShowPaipuDetailPanel(game) || canShowPaipuReplay(game)) && (
             <div className={game.source_url ? 'mt-6 pt-4 border-t' : ''} style={game.source_url ? { borderColor: 'var(--color-border)' } : undefined}>
-              <h3 className="font-bold mb-3">{t('paipuDetail.modalTitle')}</h3>
-              <PaipuDetailPanel game={game} />
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h3 className="font-bold">{t('paipuDetail.modalTitle')}</h3>
+                <div className="flex gap-1 rounded-lg overflow-hidden" style={{ border: '1.5px solid var(--color-border)' }}>
+                  {canShowPaipuReplay(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('replay')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'replay' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'replay' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                      }}
+                    >
+                      {t('paipuReplay.tabReplay')}
+                    </button>
+                  )}
+                  {canShowPaipuDetailPanel(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('summary')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'summary' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'summary' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                        borderLeft: '1px solid var(--color-border)',
+                      }}
+                    >
+                      {t('paipuReplay.tabSummary')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {paipuTab === 'replay' && canShowPaipuReplay(game) ? (
+                <PaipuReplayPanel game={game} />
+              ) : (
+                <PaipuDetailPanel game={game} />
+              )}
             </div>
           )}
         </div>

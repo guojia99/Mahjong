@@ -22,7 +22,7 @@ Mahjong/
 │   ├── paipu-data-schema.md             # 牌谱数据结构说明
 │   ├── django-skills/                   # Django 开发提示词规范 (历史存档)
 │   ├── react-agent-skills/              # React 开发提示词规范
-│   ├── v2.0.0.md ~ v2.3.1.md           # 各版本更新日志
+│   ├── v2.0.0.md ~ v2.4.0.md           # 各版本更新日志
 │   └── image/                           # 文档图片资源
 │
 ├── scripts/                             # 辅助脚本
@@ -137,7 +137,8 @@ Mahjong/
         │   ├── SortablePlayerList.tsx # 可排序雀士列表
         │   ├── RankTierBadge.tsx      # 段位徽章
         │   ├── PaipuDetailModal.tsx   # 牌谱详情弹窗
-        │   ├── PaipuDetailPanel.tsx   # 牌谱详情面板
+        │   ├── PaipuDetailPanel.tsx   # 牌谱详情面板（各局得分/汇总统计）
+        │   ├── PaipuReplayPanel.tsx   # 线上牌谱可视化重放（牌桌/步进/牌山）
         │   ├── StartingHandsWeightsModal.tsx # 起手牌权重弹窗
         │   ├── RulesMdReader.tsx      # Markdown 规则文档渲染器
         │   ├── LeagueMarkdownBody.tsx # 联赛 Markdown 正文渲染
@@ -157,7 +158,8 @@ Mahjong/
         │   └── problem.ts             # 练习题数据结构
         │
         ├── paipu/                     # 牌谱解析模型
-        │   └── paipuDetailModel.ts    # 牌谱详情数据模型
+        │   ├── paipuDetailModel.ts    # 牌谱详情数据模型（各局得分/统计）
+        │   └── paipuReplayModel.ts     # 牌谱重放帧模型（手牌/副露/牌河/宝牌）
         │
         ├── pages/                     # 页面组件
         │   ├── LoginPage.tsx          # 登录页

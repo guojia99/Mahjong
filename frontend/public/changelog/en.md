@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.0 — 2026-05-28
+
+- Online game detail adds a "Replay" tab: switch between rounds and step through actions to visualise hands, melds, river and riichi sticks
+- Center panel shows live dora indicators, riichi stick count and remaining wall; ura-dora is revealed on win, exhaustive draw lists tenpai status and deltas
+- Hands of other players can be hidden, and the full wall (paishan) can be expanded for review / teaching
+
 ## v2.3.3 — 2026-05-27
 
 - Fix league player/stage counts and show registered players on the league page
