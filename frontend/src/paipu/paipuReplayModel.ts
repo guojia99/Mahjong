@@ -497,7 +497,7 @@ function huPoints(h: Record<string, unknown>): number {
   );
 }
 
-function buildHuleBrief(h: Record<string, unknown>, dealerSeat: number, baseDoras: string[]): HuleInfoBrief {
+function buildHuleBrief(h: Record<string, unknown>, _dealerSeat: number, baseDoras: string[]): HuleInfoBrief {
   const seat = asNumber(h.seat, 0);
   const zimo = Boolean(h.zimo);
   // 荣和方支付者：data.delta_scores 最负的座位
