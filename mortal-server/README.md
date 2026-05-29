@@ -75,9 +75,21 @@ MORTAL_PORT=9000 MORTAL_PLAYER_ID=2 ./start.sh
 MORTAL_CFG=config.toml python3 serve.py --host 127.0.0.1 --port 9996 --player-id 0
 ```
 
-服务启动后会自动根据操作系统复制对应的 `libriichi.so`。
+服务启动后会自动根据操作系统复制对应的 `libriichi.so`（`make venv` 同样会先选择正确平台的库）。
 
-### 4. 验证
+### 4. libriichi 原生库（可选：从源码编译）
+
+仓库已附带 `lib/linux_amd64/` 与 `lib/darwin_arm64/` 预编译库。根目录的 `mortal-server/libriichi.so` 为运行时生成，**不应提交到 git**。
+
+若预编译库与当前 Python 版本不兼容，可从 [Mortal/libriichi](https://github.com/Equim-chan/Mortal/tree/main/libriichi) 编译：
+
+```bash
+# 在项目根目录
+ln -s /path/to/Mortal/libriichi libriichi   # 或 export LIBRIICHI_SRC=...
+make build-libriichi                        # 需 Rust (rustup) + make venv
+```
+
+### 5. 验证
 
 ```bash
 curl http://127.0.0.1:9996/health

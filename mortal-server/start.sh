@@ -4,39 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-OS=$(uname -s)
-ARCH=$(uname -m)
-
-case "$OS" in
-    Darwin)
-        if [ "$ARCH" = "arm64" ]; then
-            LIB_DIR="lib/darwin_arm64"
-        else
-            LIB_DIR="lib/darwin_amd64"
-            echo "Warning: darwin_amd64 not bundled, attempting darwin_arm64"
-            LIB_DIR="lib/darwin_arm64"
-        fi
-        ;;
-    Linux)
-        if [ "$ARCH" = "x86_64" ]; then
-            LIB_DIR="lib/linux_amd64"
-        else
-            echo "Error: unsupported architecture $ARCH on Linux"
-            exit 1
-        fi
-        ;;
-    *)
-        echo "Error: unsupported OS $OS"
-        exit 1
-        ;;
-esac
-
-if [ ! -f "$LIB_DIR/libriichi.so" ]; then
-    echo "Error: $LIB_DIR/libriichi.so not found"
-    exit 1
-fi
-
-cp "$LIB_DIR/libriichi.so" ./libriichi.so
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+bash "$REPO_ROOT/scripts/select-libriichi.sh"
 
 if [ ! -f "config.toml" ]; then
     echo "Error: config.toml not found"
@@ -55,7 +24,6 @@ echo "  config: config.toml"
 export MORTAL_CFG="$SCRIPT_DIR/config.toml"
 
 # Prefer repo-root .venv (created by `make venv` / `make mortal` / `make dev`).
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PYTHON="${PYTHON:-}"
 if [ -z "$PYTHON" ] && [ -x "$REPO_ROOT/.venv/bin/python" ]; then
     PYTHON="$REPO_ROOT/.venv/bin/python"

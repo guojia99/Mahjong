@@ -1,4 +1,4 @@
-.PHONY: dev prod prod-stop prod\:stop build-prod free-dev-ports free-prod-ports venv \
+.PHONY: dev prod prod-stop prod\:stop build-prod build-libriichi free-dev-ports free-prod-ports venv \
 	mortal mortal-stop mortal\:stop mortal-prod mortal-prod-stop mortal-prod\:stop
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -31,6 +31,10 @@ PROD_SUPERVISOR_FLAGS := \
 # Python venv for mortal-server (Tsinghua pip mirror). Idempotent.
 venv:
 	@bash "$(ROOT_DIR)/scripts/ensure-venv.sh"
+
+# Build libriichi Rust extension for the current platform (requires LIBRIICHI_SRC or ./libriichi).
+build-libriichi: venv
+	@bash "$(ROOT_DIR)/scripts/build-libriichi.sh"
 
 # Kill orphaned backend / vite from a previous `make dev`.
 free-dev-ports:

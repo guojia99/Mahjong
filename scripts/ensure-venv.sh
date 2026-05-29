@@ -55,6 +55,7 @@ ensure_venv() {
 }
 
 verify_imports() {
+	bash "$ROOT/scripts/select-libriichi.sh"
 	(
 		cd "$ROOT/mortal-server"
 		"$PY" -c "
