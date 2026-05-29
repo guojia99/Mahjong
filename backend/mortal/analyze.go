@@ -9,11 +9,11 @@ import (
 )
 
 // AnalyzeGame runs Mortal review for all 4 seats and returns JSON-ready result.
-func AnalyzeGame(gameID string, pd models.JSONField, client *Client, gradeTiers []GradeTier) (*AnalysisResult, error) {
+func AnalyzeGame(gameID string, pd models.JSONField, client *Client, gradeTiers []GradeTier, modelName, modelVersion string) (*AnalysisResult, error) {
 	if client == nil {
 		url := "http://127.0.0.1:9996"
-		if config.Cfg != nil && config.Cfg.MortalBaseURL != "" {
-			url = config.Cfg.MortalBaseURL
+		if len(config.MortalBackends()) > 0 {
+			url = config.MortalBackends()[0].URL
 		}
 		client = NewClient(url)
 	}
@@ -37,10 +37,14 @@ func AnalyzeGame(gameID string, pd models.JSONField, client *Client, gradeTiers 
 		gradeTiers = DefaultGradeTiers()
 	}
 
+	key := ModelKey(modelName, modelVersion)
 	result := &AnalysisResult{
-		Version:  AnalysisVersion,
-		ModelTag: info.ModelTag,
-		Players:  make([]PlayerAnalysis, 0, 4),
+		Version:      AnalysisVersion,
+		ModelKey:     key,
+		ModelName:    modelName,
+		ModelVersion: modelVersion,
+		ModelTag:     info.ModelTag,
+		Players:      make([]PlayerAnalysis, 0, 4),
 	}
 
 	for perspective := 0; perspective < 4; perspective++ {
@@ -81,7 +85,8 @@ func AnalyzeGame(gameID string, pd models.JSONField, client *Client, gradeTiers 
 
 			reactions, err := client.React(gid, []string{ev.JSON})
 			if err != nil {
-				return nil, fmt.Errorf("game %s seat %d react %s (action %d): %w", gameID, perspective, evType, ev.ActionIndex, err)
+				_ = client.ResetGame(gid)
+				return nil, fmt.Errorf("game %s seat %d react %s (action %d, kind %s): %w", gameID, perspective, evType, ev.ActionIndex, ev.Kind, err)
 			}
 
 			for _, r := range reactions {
@@ -209,7 +214,7 @@ func recordImmediateHumanDecision(
 	return rec
 }
 
-// ToJSONField converts analysis to models.JSONField.
+// ToJSONField converts a single analysis result to models.JSONField (legacy helper).
 func ToJSONField(a *AnalysisResult) (models.JSONField, error) {
 	b, err := json.Marshal(a)
 	if err != nil {

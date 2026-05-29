@@ -17,6 +17,7 @@ type mjaiBuilder struct {
 	names       [4]string
 	out         []builtEvent
 	gameStarted bool
+	inKyoku     bool
 	doraCount   int // indicators revealed so far this kyoku
 	openPon     [4][]string // rotated seat -> pon tile(s) still open (not yet kakan)
 	riichiPending [4]bool   // reach declared, waiting for reach_accepted
@@ -95,6 +96,7 @@ func (b *mjaiBuilder) handleAction(actionIndex int, act map[string]interface{}) 
 		return nil
 	}
 	if endsWith(name, "RecordNoTile") {
+		b.inKyoku = false
 		b.emit(map[string]interface{}{"type": "ryukyoku"}, actionIndex, "ryukyoku")
 		b.emit(map[string]interface{}{"type": "end_kyoku"}, actionIndex, "end_kyoku")
 		return nil
@@ -172,6 +174,7 @@ func (b *mjaiBuilder) onNewRound(actionIndex int, data map[string]interface{}) e
 		return fmt.Errorf("missing dora marker in newround")
 	}
 
+	b.inKyoku = true
 	b.emit(map[string]interface{}{
 		"type":        "start_kyoku",
 		"bakaze":      bakaze,
@@ -208,6 +211,20 @@ func (b *mjaiBuilder) onNewRound(actionIndex int, data map[string]interface{}) e
 
 func (b *mjaiBuilder) onDealTile(actionIndex int, data map[string]interface{}) {
 	seat := rotateSeat(toInt(data["seat"]), b.perspective)
+	if !b.inKyoku {
+		// After end_kyoku / between games: only reach_accepted from liqi, no draw.
+		if lq, ok := data["liqi"].(map[string]interface{}); ok {
+			lqSeat := rotateSeat(toInt(lq["seat"]), b.perspective)
+			if lqSeat >= 0 && lqSeat < 4 && b.riichiPending[lqSeat] {
+				b.emit(map[string]interface{}{
+					"type":  "reach_accepted",
+					"actor": lqSeat,
+				}, actionIndex, "reach_accepted")
+				b.riichiPending[lqSeat] = false
+			}
+		}
+		return
+	}
 	if lq, ok := data["liqi"].(map[string]interface{}); ok {
 		lqSeat := rotateSeat(toInt(lq["seat"]), b.perspective)
 		if lqSeat >= 0 && lqSeat < 4 && b.riichiPending[lqSeat] {
@@ -223,7 +240,13 @@ func (b *mjaiBuilder) onDealTile(actionIndex int, data map[string]interface{}) {
 		b.emitDorasFromList(actionIndex, stringSlice(data["doras"]), "dora_after_ankan")
 		b.rinshanAfterAnkanActor = -1
 	}
-	tile := majsoulTileToMjai(toString(data["tile"]))
+	tileRaw := toString(data["tile"])
+	if tileRaw == "" {
+		// Liqi-only deal rows have no tile; do not emit tsumo.
+		b.emitDorasFromList(actionIndex, stringSlice(data["doras"]), "dora_deal")
+		return
+	}
+	tile := majsoulTileToMjai(tileRaw)
 	if seat == 0 {
 		b.emit(map[string]interface{}{
 			"type":  "tsumo",
@@ -407,6 +430,7 @@ func (b *mjaiBuilder) onHule(actionIndex int, data map[string]interface{}) {
 		}
 		b.emit(ev, actionIndex, "hora")
 	}
+	b.inKyoku = false
 	b.emit(map[string]interface{}{"type": "end_kyoku"}, actionIndex, "end_kyoku")
 }
 
@@ -419,6 +443,7 @@ func (b *mjaiBuilder) onRyukyoku(actionIndex int, data map[string]interface{}) {
 		}
 		ev["deltas"] = rotateSeats4([4]int{deltas[0], deltas[1], deltas[2], deltas[3]}, b.perspective)
 	}
+	b.inKyoku = false
 	b.emit(ev, actionIndex, "ryukyoku")
 	b.emit(map[string]interface{}{"type": "end_kyoku"}, actionIndex, "end_kyoku")
 }

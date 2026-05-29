@@ -11,7 +11,7 @@ import (
 
 // Cooldown after each Mortal API call (except /health): short on success, long on failure.
 const (
-	requestCooldownSuccess = 3 * time.Millisecond
+	requestCooldownSuccess = 1 * time.Millisecond
 	requestCooldownFailure = 3 * time.Second
 )
 

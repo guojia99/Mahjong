@@ -8,6 +8,18 @@
     "majsoul_oauth2_type": 1,
     "majsoul_login_request_b64": "",
     "mortal_base_url": "http://127.0.0.1:9996",
+    "mortal_backends": [
+        {
+            "name": "mortal_v4",
+            "version": "1",
+            "url": "http://127.0.0.1:9996"
+        },
+        {
+            "name": "mortal_v5",
+            "version": "1",
+            "url": "http://127.0.0.1:9995"
+        }
+    ],
     "ai_grade_tiers": [
         { "grade": "AI", "min": 99 },
         { "grade": "S+", "min": 95 },

@@ -295,6 +295,7 @@ func run(cmd *cobra.Command, args []string) error {
 			games.GET("/paipu-stats/", handlers.PaipuStatsRanking)
 			games.GET("/ai-paipu-stats/", handlers.AiPaipuStatsRanking)
 			games.GET("/ai-grade-tiers/", handlers.AiGradeTiers)
+			games.GET("/ai-mortal-backends/", handlers.AiMortalBackends)
 			games.GET("/:pk/ai-analysis/", handlers.GameAiAnalysisDetail)
 			games.POST("/:pk/ai-analysis/trigger/", handlers.GameAiAnalysisTrigger)
 			games.GET("/starting-hands/", handlers.StartingHands)

@@ -115,6 +115,49 @@ func TestType3WithoutPonIsAnkan(t *testing.T) {
 	t.Fatal("no event at action 511")
 }
 
+func TestDealTileEmitsTsumoWhenWallEmpty(t *testing.T) {
+	// Last draw before exhaustive draw: left_tile_count is 0 but tile is present.
+	events, err := BuildMjaiEvents([]map[string]interface{}{
+		{"name": ".lq.RecordNewRound", "data": map[string]interface{}{
+			"chang": 0, "ju": 0, "ben": 0, "liqibang": 0,
+			"scores": []interface{}{25000, 25000, 25000, 25000},
+			"doras":  []interface{}{"1m"},
+			"tiles0": []interface{}{"1m", "2m", "3m", "4m", "5m", "6m", "7m", "8m", "9m", "1p", "2p", "3p", "4p"},
+			"tiles1": []interface{}{"1m", "2m", "3m", "4m", "5m", "6m", "7m", "8m", "9m", "1p", "2p", "3p", "4p"},
+			"tiles2": []interface{}{"1m", "2m", "3m", "4m", "5m", "6m", "7m", "8m", "9m", "1p", "2p", "3p", "4p"},
+			"tiles3": []interface{}{"1m", "2m", "3m", "4m", "5m", "6m", "7m", "8m", "9m", "1p", "2p", "3p", "4p"},
+		}},
+		{"name": ".lq.RecordDealTile", "data": map[string]interface{}{
+			"seat": 1, "tile": "4z", "left_tile_count": 0,
+		}},
+		{"name": ".lq.RecordDiscardTile", "data": map[string]interface{}{
+			"seat": 1, "tile": "4z", "moqie": true,
+		}},
+		{"name": ".lq.RecordNoTile", "data": map[string]interface{}{}},
+	}, 1, [4]string{"a", "b", "c", "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawTsumo, sawDahai bool
+	for _, ev := range events {
+		if ev.ActionIndex == 1 && ev.Kind == "tsumo" {
+			sawTsumo = true
+			if !strings.Contains(ev.JSON, `"N"`) {
+				t.Fatalf("tsumo: want N (4z), got %s", ev.JSON)
+			}
+		}
+		if ev.ActionIndex == 2 && ev.Kind == "dahai" {
+			sawDahai = true
+		}
+	}
+	if !sawTsumo {
+		t.Fatal("expected tsumo at last draw when left_tile_count=0")
+	}
+	if !sawDahai {
+		t.Fatal("expected dahai after last-draw tsumo")
+	}
+}
+
 func TestNoAnkanWithFourVisibleHonors(t *testing.T) {
 	// Regression: pon 3z then RecordAnGangAddGang type 2 must not emit ankan (5th W).
 	events, err := BuildMjaiEvents([]map[string]interface{}{

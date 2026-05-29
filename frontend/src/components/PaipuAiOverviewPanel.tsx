@@ -6,7 +6,7 @@ import { getGameAiAnalysis } from '@/api/games';
 import { buildMajsoulAccountBindings } from '@/paipu/paipuDetailModel';
 import { buildPaipuReplayModel } from '@/paipu/paipuReplayModel';
 import { extractPaipuActions } from '@/paipu/paipuDetailModel';
-import type { AiAnalysisFull } from '@/paipu/aiAnalysis';
+import { modelDisplayLabel, type AiAnalysisFull, type AiModelInfo } from '@/paipu/aiAnalysis';
 import { PaipuAiMatchScoresTable } from '@/components/PaipuAiPanel';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
@@ -24,6 +24,8 @@ export function canShowPaipuAiOverview(game: Game | null): boolean {
 export function PaipuAiOverviewPanel({ game }: Props) {
   const { t } = useTranslation();
   const [analysis, setAnalysis] = useState<AiAnalysisFull | null>(null);
+  const [models, setModels] = useState<AiModelInfo[]>([]);
+  const [modelKey, setModelKey] = useState('');
   const [status, setStatus] = useState<string>('loading');
   const [avatars, setAvatars] = useState<Record<string, string>>({});
 
@@ -57,7 +59,11 @@ export function PaipuAiOverviewPanel({ game }: Props) {
       .then((res) => {
         if (cancelled) return;
         setStatus(res.status);
-        setAnalysis(res.analysis ?? null);
+        const list = res.models ?? [];
+        setModels(list);
+        const key = res.model_key ?? list[0]?.key ?? '';
+        setModelKey(key);
+        setAnalysis(res.analysis ?? (key ? res.analyses?.[key] : undefined) ?? null);
       })
       .catch(() => {
         if (!cancelled) setStatus('failed');
@@ -66,6 +72,20 @@ export function PaipuAiOverviewPanel({ game }: Props) {
       cancelled = true;
     };
   }, [game.id]);
+
+  useEffect(() => {
+    if (!modelKey) return;
+    let cancelled = false;
+    getGameAiAnalysis(game.id, { model: modelKey })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.analysis) setAnalysis(res.analysis);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [game.id, modelKey]);
 
   const kyokuCount = Math.max(0, ...(analysis?.players.map((p) => p.kyoku.length) ?? [0]));
 
@@ -88,11 +108,27 @@ export function PaipuAiOverviewPanel({ game }: Props) {
       </div>
 
       <div className="p-4 min-w-0">
+        {models.length > 1 && (
+          <label className="text-xs block mb-3" style={{ color: 'var(--color-text-light)' }}>
+            {t('paipuAi.model')}
+            <select
+              className="mt-1 w-full text-xs rounded border px-2 py-1"
+              value={modelKey}
+              onChange={(e) => setModelKey(e.target.value)}
+            >
+              {models.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {modelDisplayLabel(m)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {status === 'loading' ? (
           <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
             {t('paipuAi.loading')}
           </p>
-        ) : status !== 'done' || !analysis ? (
+        ) : !analysis ? (
           <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
             {t('paipuAi.notReady', { status })}
           </p>

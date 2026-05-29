@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.1.0 — 2026-05-29
+
+- Mortal multi-model: configure multiple inference servers (ports 9996/9995/9994); `make mortal-9995` starts extra instances
+- Backend stores analysis per model; paipu replay can switch models
+- Model comparison table for per-move score diffs; candidate table adds πτ×100 column
+
 ## v3.0.3 — 2026-05-29
 
 - Linux production: `make prod` builds and registers a systemd service; `make prod-stop` removes it

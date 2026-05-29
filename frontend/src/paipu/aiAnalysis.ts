@@ -7,11 +7,21 @@ export interface AiGradeTier {
   min: number;
 }
 
+export interface AiModelInfo {
+  key: string;
+  name: string;
+  version: string;
+  model_tag: string;
+  analyzed_at?: string;
+}
+
 export interface AiAnalysisSummary {
   status: string;
   has_ai_analysis: boolean;
   analyzed_at?: string | null;
+  model_key?: string;
   model_tag?: string;
+  models?: AiModelInfo[];
   players?: {
     seat: number;
     match_avg: number;
@@ -57,8 +67,83 @@ export interface AiPlayerAnalysis {
 
 export interface AiAnalysisFull {
   version: number;
+  model_key?: string;
+  model_name?: string;
+  model_version?: string;
   model_tag: string;
   players: AiPlayerAnalysis[];
+}
+
+export interface AiModelDiffRow {
+  action_index: number;
+  kind: string;
+  chosen_label: string;
+  /** Human's chosen action (for tile / label rendering). */
+  chosen_option: AiDecisionOption | null;
+  score_a: number;
+  pi_a: number;
+  score_b: number;
+  pi_b: number;
+  score_diff: number;
+  pi_diff: number;
+  top_label_a: string;
+  top_label_b: string;
+  top_option_a: AiDecisionOption | null;
+  top_option_b: AiDecisionOption | null;
+}
+
+export function chosenOption(decision: AiDecisionRecord): AiDecisionOption | null {
+  return decision.options.find((o) => o.chosen) ?? null;
+}
+
+/** πτ(a|s) × 100 per Mortal FAQ notation. */
+export function piTimes100(pi: number): string {
+  return (pi * 100).toFixed(2);
+}
+
+/** Per-decision comparison between two model analyses for one player/round. */
+export function buildModelDiffRows(
+  analysisA: AiAnalysisFull,
+  analysisB: AiAnalysisFull,
+  seat: number,
+  roundIndex: number,
+): AiModelDiffRow[] {
+  const pa = playerAnalysisForSeat(analysisA, seat);
+  const pb = playerAnalysisForSeat(analysisB, seat);
+  if (!pa || !pb) return [];
+  const ka = pa.kyoku.find((k) => k.kyoku_index === roundIndex);
+  const kb = pb.kyoku.find((k) => k.kyoku_index === roundIndex);
+  if (!ka || !kb) return [];
+  const byIndexB = new Map(kb.decisions.map((d) => [d.action_index, d]));
+  const rows: AiModelDiffRow[] = [];
+  for (const da of ka.decisions) {
+    const db = byIndexB.get(da.action_index);
+    if (!db) continue;
+    const topA = [...da.options].sort((a, b) => b.pi - a.pi)[0] ?? null;
+    const topB = [...db.options].sort((a, b) => b.pi - a.pi)[0] ?? null;
+    rows.push({
+      action_index: da.action_index,
+      kind: da.kind,
+      chosen_label: da.chosen_label,
+      chosen_option: chosenOption(da),
+      score_a: da.chosen_score,
+      pi_a: da.chosen_pi,
+      score_b: db.chosen_score,
+      pi_b: db.chosen_pi,
+      score_diff: da.chosen_score - db.chosen_score,
+      pi_diff: da.chosen_pi - db.chosen_pi,
+      top_label_a: topA?.label ?? da.chosen_label,
+      top_label_b: topB?.label ?? db.chosen_label,
+      top_option_a: topA,
+      top_option_b: topB,
+    });
+  }
+  return rows;
+}
+
+export function modelDisplayLabel(m: AiModelInfo): string {
+  const tag = m.model_tag ? ` (${m.model_tag})` : '';
+  return `${m.name} v${m.version}${tag}`;
 }
 
 export const DEFAULT_AI_GRADE_TIERS: AiGradeTier[] = [
@@ -94,23 +179,60 @@ export function playerAnalysisForSeat(analysis: AiAnalysisFull | null | undefine
   return analysis.players.find((p) => p.seat === seat) ?? null;
 }
 
+/** Human chose 跳过 on an opponent discard (stored on that discard's action_index). */
+export function isPassDecision(d: AiDecisionRecord): boolean {
+  if (d.chosen_label === '跳过') return true;
+  const chosen = d.options.find((o) => o.chosen);
+  return chosen?.type === 'none' || chosen?.label === '跳过';
+}
+
+function isCallKind(kind: string): boolean {
+  return kind === 'chi' || kind === 'pon' || kind === 'daiminkan' || kind === 'ankan' || kind === 'kakan' || kind === 'hora' || kind === 'reach';
+}
+
 /**
- * AI decisions are keyed to the paipu action index where the human act is applied.
- * Replay frames show that state *after* the act, so show the decision one frame earlier
- * (e.g. on 摸牌帧 while the tile is still in hand, not on 出牌帧 when it is in the river).
+ * Replay frame where the UI should show this decision:
+ * - Own 摸牌 → 打牌: on your deal frame (not on your discard).
+ * - Opponent 打牌 → 过/吃/碰: on opponent's discard frame (not on their deal).
+ * - Others' 摸牌 / your 打牌: no decision frame.
  */
+export function replayFrameIndexForDecision(d: AiDecisionRecord, frames: Frame[], viewSeat: number): number {
+  for (let fi = 0; fi < frames.length; fi++) {
+    const f = frames[fi];
+    const next = frames[fi + 1];
+    const sum = f.summary;
+
+    if (isPassDecision(d) && f.actionIndex === d.action_index) {
+      if (sum.kind === 'discard' && sum.seat !== viewSeat) return fi;
+      continue;
+    }
+
+    if (isCallKind(d.kind) && next?.actionIndex === d.action_index) {
+      if (sum.kind === 'discard' && sum.seat !== viewSeat) return fi;
+      continue;
+    }
+
+    if (d.kind === 'dahai' && !isPassDecision(d) && next?.actionIndex === d.action_index) {
+      if (sum.kind === 'deal' && sum.seat === viewSeat) return fi;
+    }
+  }
+  return -1;
+}
+
 export function decisionForReplayFrame(
   player: AiPlayerAnalysis | null,
   roundIndex: number,
   frames: Frame[],
   frameIdx: number,
+  viewSeat: number,
 ): AiDecisionRecord | null {
   if (!player || frameIdx < 0) return null;
   const kyoku = player.kyoku.find((k) => k.kyoku_index === roundIndex);
   if (!kyoku) return null;
-  const next = frames[frameIdx + 1];
-  if (!next) return null;
-  return kyoku.decisions.find((d) => d.action_index === next.actionIndex) ?? null;
+  for (const d of kyoku.decisions) {
+    if (replayFrameIndexForDecision(d, frames, viewSeat) === frameIdx) return d;
+  }
+  return null;
 }
 
 /** Top options by π weight; always include chosen. */
@@ -177,18 +299,22 @@ export function decisionFrameIndices(
   player: AiPlayerAnalysis | null,
   roundIndex: number,
   frames: Frame[],
+  viewSeat: number,
   onlyDiff = false,
 ): number[] {
-  if (!player || frames.length < 2) return [];
+  if (!player || frames.length === 0) return [];
   const kyoku = player.kyoku.find((k) => k.kyoku_index === roundIndex);
   if (!kyoku?.decisions?.length) return [];
   const out: number[] = [];
-  for (let fi = 0; fi < frames.length - 1; fi++) {
-    const decision = kyoku.decisions.find((d) => d.action_index === frames[fi + 1].actionIndex);
-    if (!decision) continue;
-    if (onlyDiff && !isDecisionMismatch(decision)) continue;
+  const seen = new Set<number>();
+  for (const d of kyoku.decisions) {
+    const fi = replayFrameIndexForDecision(d, frames, viewSeat);
+    if (fi < 0 || seen.has(fi)) continue;
+    if (onlyDiff && !isDecisionMismatch(d)) continue;
+    seen.add(fi);
     out.push(fi);
   }
+  out.sort((a, b) => a - b);
   return out;
 }
 

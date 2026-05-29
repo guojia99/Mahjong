@@ -51,7 +51,9 @@ export interface AiAnalysisSummary {
     status: string;
     has_ai_analysis: boolean;
     analyzed_at?: string | null;
+    model_key?: string;
     model_tag?: string;
+    models?: { key: string; name: string; version: string; model_tag: string }[];
     players?: {
         seat: number;
         match_avg: number;

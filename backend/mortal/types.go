@@ -1,10 +1,13 @@
 package mortal
 
-// AnalysisResult is stored in Game.ai_analysis_data.
+// AnalysisResult is one model's full review for a game.
 type AnalysisResult struct {
-	Version  int    `json:"version"`
-	ModelTag string `json:"model_tag"`
-	Players  []PlayerAnalysis `json:"players"`
+	Version      int              `json:"version"`
+	ModelKey     string           `json:"model_key,omitempty"`
+	ModelName    string           `json:"model_name,omitempty"`
+	ModelVersion string           `json:"model_version,omitempty"`
+	ModelTag     string           `json:"model_tag"`
+	Players      []PlayerAnalysis `json:"players"`
 }
 
 type PlayerAnalysis struct {

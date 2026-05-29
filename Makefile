@@ -1,13 +1,15 @@
 .PHONY: dev prod prod-stop prod\:stop build-prod build-libriichi free-dev-ports free-prod-ports venv \
-	mortal mortal-stop mortal\:stop mortal-prod mortal-prod-stop mortal-prod\:stop
+	mortal-dev mortal-dev-stop mortal-dev-status mortal-dev-list \
+	mortal mortal-stop mortal\:stop \
+	mortal-prod mortal-prod-stop mortal-prod\:stop
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 UNAME_S := $(shell uname -s)
 VENV := $(ROOT_DIR)/.venv
 VENV_PYTHON := $(VENV)/bin/python
 MORTAL_DIR := mortal-server
-MORTAL_PID := /tmp/mahjong_mortal.pid
-MORTAL_LOG := /tmp/mahjong_mortal.log
+MORTAL_DEV_SCRIPT := $(ROOT_DIR)/scripts/mortal-dev.sh
+MORTAL_PROD_SCRIPT := $(ROOT_DIR)/scripts/mortal-prod.sh
 
 BACKEND_PORT := 9997
 FRONTEND_PORT := 9998
@@ -56,7 +58,7 @@ dev: venv free-dev-ports
 	echo ""; \
 	echo "  Frontend: http://localhost:$(FRONTEND_PORT)"; \
 	echo "  Backend:  http://localhost:$(BACKEND_PORT)"; \
-	echo "  Python:   $(VENV_PYTHON) (mortal: make mortal or make mortal-prod on Linux)"; \
+	echo "  Python:   $(VENV_PYTHON) (Mortal: make mortal-dev-list / make mortal-dev)"; \
 	echo ""; \
 	wait
 
@@ -148,56 +150,35 @@ endif
 prod\:stop: prod-stop
 	@:
 
-# Mortal AI inference server (http://127.0.0.1:9996) — foreground-style daemon (dev / macOS).
-mortal: venv
-	@if [ -f $(MORTAL_PID) ] && kill -0 $$(cat $(MORTAL_PID)) 2>/dev/null; then \
-		echo "mortal already running (pid $$(cat $(MORTAL_PID)))"; \
-		echo "  Health: curl http://127.0.0.1:9996/health"; \
-		echo "  Stop: make mortal-stop"; \
-		exit 0; \
-	fi
-	@cd $(MORTAL_DIR) && nohup env PYTHON="$(VENV_PYTHON)" ./start.sh >> $(MORTAL_LOG) 2>&1 </dev/null & echo $$! > $(MORTAL_PID); \
-	sleep 2; \
-	if kill -0 $$(cat $(MORTAL_PID)) 2>/dev/null; then \
-		echo "Mortal started (pid $$(cat $(MORTAL_PID)))"; \
-		echo "  Python: $(VENV_PYTHON)"; \
-		echo "  Health: curl http://127.0.0.1:9996/health"; \
-		echo "  Log:  $(MORTAL_LOG)"; \
-		echo "  Stop: make mortal-stop"; \
-	else \
-		echo "Failed to start mortal, see $(MORTAL_LOG)"; \
-		rm -f $(MORTAL_PID); \
-		exit 1; \
-	fi
+# Mortal dev — auto-start all mortal-server/*.toml (port from filename suffix)
+mortal-dev: venv
+	@ROOT_DIR="$(ROOT_DIR)" VENV_PYTHON="$(VENV_PYTHON)" bash "$(MORTAL_DEV_SCRIPT)" start
 
-mortal-stop:
-	@if [ -f $(MORTAL_PID) ]; then \
-		PID=$$(cat $(MORTAL_PID)); \
-		if kill -0 $$PID 2>/dev/null; then kill -TERM $$PID 2>/dev/null; sleep 1; fi; \
-		if kill -0 $$PID 2>/dev/null; then kill -KILL $$PID 2>/dev/null; fi; \
-		rm -f $(MORTAL_PID); \
-	fi
-	@pids=$$(lsof -tiTCP:9996 -sTCP:LISTEN 2>/dev/null); \
-	if [ -n "$$pids" ]; then echo "Releasing port 9996 (pid $$pids)"; kill -TERM $$pids 2>/dev/null || true; fi
-	@echo "Mortal stopped."
+mortal-dev-stop:
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(MORTAL_DEV_SCRIPT)" stop
 
-mortal\:stop: mortal-stop
-	@:
+mortal-dev-status:
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(MORTAL_DEV_SCRIPT)" status
 
-# Mortal AI — Linux systemd service (install + enable + start).
+mortal-dev-list:
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(MORTAL_DEV_SCRIPT)" list
+
+mortal: mortal-dev
+mortal-stop: mortal-dev-stop
+mortal\:stop: mortal-dev-stop
+
+# Mortal prod — one systemd unit per *.toml (mahjong-mortal-<port>.service)
 mortal-prod: venv
 ifeq ($(UNAME_S),Linux)
-	@ROOT_DIR="$(ROOT_DIR)" bash "$(SYSTEMD_SCRIPT)" mortal install
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(MORTAL_PROD_SCRIPT)" install
 else
-	@echo "mortal-prod is Linux-only; use: make mortal" >&2; \
+	@echo "mortal-prod is Linux-only; use: make mortal-dev" >&2; \
 	exit 1
 endif
 
 mortal-prod-stop:
 ifeq ($(UNAME_S),Linux)
-	@ROOT_DIR="$(ROOT_DIR)" bash "$(SYSTEMD_SCRIPT)" mortal remove || true
-	@pids=$$(lsof -tiTCP:9996 -sTCP:LISTEN 2>/dev/null); \
-	if [ -n "$$pids" ]; then echo "Releasing port 9996 (pid $$pids)"; kill -TERM $$pids 2>/dev/null || true; fi
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(MORTAL_PROD_SCRIPT)" remove || true
 else
 	@echo "mortal-prod-stop is Linux-only" >&2; \
 	exit 1

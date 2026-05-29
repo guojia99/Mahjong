@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"math"
 	"net/http"
 	"sort"
+	"time"
 
 	"mahjong-backend/config"
 	"mahjong-backend/models"
@@ -25,30 +25,49 @@ func mortalGradeTiers() []mortal.GradeTier {
 }
 
 func mortalClient() *mortal.Client {
-	url := "http://127.0.0.1:9996"
-	if config.Cfg != nil && config.Cfg.MortalBaseURL != "" {
-		url = config.Cfg.MortalBaseURL
+	backends := config.MortalBackends()
+	if len(backends) > 0 {
+		return mortal.NewClient(backends[0].URL)
 	}
-	return mortal.NewClient(url)
+	return mortal.NewClient("http://127.0.0.1:9996")
 }
 
 func aiSummaryForGame(game *models.Game) gin.H {
-	if !mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
-		status := game.AiAnalysisStatus
-		if status == "done" {
-			status = "outdated"
-		}
-		return gin.H{
-			"status":            status,
-			"has_ai_analysis":   false,
-			"analysis_version":  mortal.AnalysisVersion,
-			"stored_version":    mortal.StoredAnalysisVersion(game.AiAnalysisData),
-		}
+	store, err := mortal.ParseAnalysisStore(game.AiAnalysisData)
+	if err != nil {
+		return aiSummaryNotReady(game, store, "failed")
 	}
-	var ar mortal.AnalysisResult
-	if err := json.Unmarshal([]byte(game.AiAnalysisData), &ar); err != nil {
-		return gin.H{"status": "failed", "has_ai_analysis": false}
+	ar, modelKey, ok := mortal.PickAnalysis(store, "")
+	if !ok || ar == nil {
+		return aiSummaryNotReady(game, store, game.AiAnalysisStatus)
 	}
+	status := mortal.AggregateStatus(store)
+	if status == "" {
+		status = game.AiAnalysisStatus
+	}
+	if mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
+		status = "done"
+	}
+	return aiSummaryFromResult(ar, modelKey, game.AiAnalyzedAt, mortal.AvailableModels(store), status)
+}
+
+func aiSummaryNotReady(game *models.Game, store *mortal.AnalysisStore, status string) gin.H {
+	if status == "done" && len(mortal.AvailableModels(store)) == 0 {
+		status = "outdated"
+	}
+	if status == "" {
+		status = "pending"
+	}
+	return gin.H{
+		"status":           status,
+		"has_ai_analysis":  false,
+		"analysis_version": mortal.AnalysisVersion,
+		"stored_version":   mortal.StoredAnalysisVersion(game.AiAnalysisData),
+		"models":           mortal.AvailableModels(store),
+	}
+}
+
+func aiSummaryFromResult(ar *mortal.AnalysisResult, modelKey string, analyzedAt *time.Time, modelsList []map[string]string, status string) gin.H {
 	bySeat := make([]gin.H, 0, len(ar.Players))
 	for _, p := range ar.Players {
 		kyokuScores := make([]gin.H, 0, len(p.Kyoku))
@@ -66,14 +85,22 @@ func aiSummaryForGame(game *models.Game) gin.H {
 			"kyoku":       kyokuScores,
 		})
 	}
-	return gin.H{
-		"status":            "done",
-		"has_ai_analysis":   true,
-		"analyzed_at":       formatTimePointer(game.AiAnalyzedAt),
-		"model_tag":         ar.ModelTag,
-		"analysis_version":  ar.Version,
-		"players":           bySeat,
+	if status == "" {
+		status = "done"
 	}
+	out := gin.H{
+		"status":           status,
+		"has_ai_analysis":  true,
+		"model_key":        modelKey,
+		"model_tag":        ar.ModelTag,
+		"analysis_version": ar.Version,
+		"players":          bySeat,
+		"models":           modelsList,
+	}
+	if analyzedAt != nil {
+		out["analyzed_at"] = formatTimePointer(analyzedAt)
+	}
+	return out
 }
 
 func aiSummaryForViewer(game *models.Game, viewerSeat int) gin.H {
@@ -81,8 +108,11 @@ func aiSummaryForViewer(game *models.Game, viewerSeat int) gin.H {
 	if base["has_ai_analysis"] != true {
 		return base
 	}
-	var ar mortal.AnalysisResult
-	_ = json.Unmarshal([]byte(game.AiAnalysisData), &ar)
+	store, _ := mortal.ParseAnalysisStore(game.AiAnalysisData)
+	ar, _, ok := mortal.PickAnalysis(store, "")
+	if !ok {
+		return base
+	}
 	for _, p := range ar.Players {
 		if p.Seat == viewerSeat {
 			base["viewer"] = gin.H{
@@ -96,38 +126,56 @@ func aiSummaryForViewer(game *models.Game, viewerSeat int) gin.H {
 	return base
 }
 
-// GameAiAnalysisDetail returns full AI analysis for replay (detail only).
+// GameAiAnalysisDetail returns full AI analysis for replay (?model=key for a specific backend).
 func GameAiAnalysisDetail(c *gin.Context) {
 	pk := c.Param("pk")
+	modelKey := c.Query("model")
 	var game models.Game
 	if err := config.DB.First(&game, "id = ?", pk).Error; err != nil {
 		respondError(c, http.StatusNotFound, "对局不存在")
 		return
 	}
-	if !mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
+	store, err := mortal.ParseAnalysisStore(game.AiAnalysisData)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "解析 AI 数据失败")
+		return
+	}
+	ar, pickedKey, ok := mortal.PickAnalysis(store, modelKey)
+	if !ok || ar == nil {
 		status := game.AiAnalysisStatus
 		if status == "done" {
 			status = "outdated"
 		}
 		respondOK(c, gin.H{
-			"status":            status,
-			"error":             game.AiAnalysisError,
-			"has_ai_analysis":   false,
-			"analysis_version":  mortal.AnalysisVersion,
-			"stored_version":    mortal.StoredAnalysisVersion(game.AiAnalysisData),
+			"status":           status,
+			"error":            game.AiAnalysisError,
+			"has_ai_analysis":  false,
+			"analysis_version": mortal.AnalysisVersion,
+			"stored_version":   mortal.StoredAnalysisVersion(game.AiAnalysisData),
+			"models":           mortal.AvailableModels(store),
 		})
 		return
 	}
-	var ar mortal.AnalysisResult
-	if err := json.Unmarshal([]byte(game.AiAnalysisData), &ar); err != nil {
-		respondError(c, http.StatusInternalServerError, "解析 AI 数据失败")
-		return
+	analyses := mortal.CurrentAnalyses(store)
+	status := mortal.AggregateStatus(store)
+	if status == "" {
+		status = game.AiAnalysisStatus
+	}
+	if mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
+		status = "done"
+	}
+	analysesOut := gin.H{}
+	for k, a := range analyses {
+		analysesOut[k] = a
 	}
 	respondOK(c, gin.H{
-		"status":          "done",
+		"status":          status,
 		"has_ai_analysis": true,
 		"analyzed_at":     formatTimePointer(game.AiAnalyzedAt),
+		"model_key":       pickedKey,
 		"analysis":        ar,
+		"analyses":        analysesOut,
+		"models":          mortal.AvailableModels(store),
 		"grade_tiers":     mortalGradeTiers(),
 	})
 }
@@ -157,9 +205,25 @@ func AiGradeTiers(c *gin.Context) {
 	respondOK(c, gin.H{"tiers": mortalGradeTiers()})
 }
 
+// AiMortalBackends lists configured Mortal inference endpoints.
+func AiMortalBackends(c *gin.Context) {
+	backends := config.MortalBackends()
+	out := make([]gin.H, 0, len(backends))
+	for _, b := range backends {
+		out = append(out, gin.H{
+			"name":    b.Name,
+			"version": b.Version,
+			"url":     b.URL,
+			"key":     mortal.ModelKey(b.Name, b.Version),
+		})
+	}
+	respondOK(c, out)
+}
+
 // AiPaipuStatsRanking returns per-player average AI scores across games.
 func AiPaipuStatsRanking(c *gin.Context) {
 	minGames := parseQueryInt(c, "min_games", 1)
+	modelKey := c.Query("model")
 	var games []models.Game
 	config.DB.Where("game_type = ? AND ai_analysis_status = ?", "online", "done").Find(&games)
 
@@ -186,8 +250,12 @@ func AiPaipuStatsRanking(c *gin.Context) {
 		if !mortal.IsAnalysisDataCurrent(g.AiAnalysisStatus, g.AiAnalysisData) {
 			continue
 		}
-		var ar mortal.AnalysisResult
-		if err := json.Unmarshal([]byte(g.AiAnalysisData), &ar); err != nil {
+		store, err := mortal.ParseAnalysisStore(g.AiAnalysisData)
+		if err != nil {
+			continue
+		}
+		ar, _, ok := mortal.PickAnalysis(store, modelKey)
+		if !ok || ar == nil {
 			continue
 		}
 		playersList := paipuPlayersList(g.PaipuData)
@@ -243,6 +311,7 @@ func PlayerAiMatchScoreSeries(c *gin.Context) {
 	playerCount := c.Query("player_count")
 	gameMode := c.Query("game_mode")
 	gameType := c.Query("game_type")
+	modelKey := c.Query("model")
 	recentLimit := parseQueryInt(c, "recent_limit", 50)
 	if recentLimit != 10 && recentLimit != 20 && recentLimit != 50 && recentLimit != 100 {
 		recentLimit = 50
@@ -306,8 +375,12 @@ func PlayerAiMatchScoreSeries(c *gin.Context) {
 		if !mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
 			continue
 		}
-		var ar mortal.AnalysisResult
-		if err := json.Unmarshal([]byte(game.AiAnalysisData), &ar); err != nil {
+		store, err := mortal.ParseAnalysisStore(game.AiAnalysisData)
+		if err != nil {
+			continue
+		}
+		ar, _, ok := mortal.PickAnalysis(store, modelKey)
+		if !ok || ar == nil {
 			continue
 		}
 		matchAvg := 0

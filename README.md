@@ -137,9 +137,12 @@ make dev
 | `make dev` | 启动开发环境（后端 + 前端） |
 | `make prod` | 构建并部署生产环境（Linux 注册 systemd 服务） |
 | `make prod-stop` | 停止并移除生产 systemd 服务 |
-| `make mortal` | 后台启动 Mortal AI 推理（开发 / 非 Linux） |
-| `make mortal-prod` | 构建 venv 并注册 Mortal systemd 服务（Linux） |
-| `make mortal-prod-stop` | 停止并移除 Mortal systemd 服务 |
+| `make mortal-dev-list` | 列出 `mortal-server/*.toml` 及对应端口 |
+| `make mortal-dev` | 按 toml 自动启动全部 Mortal 实例（dev） |
+| `make mortal-dev-stop` | 停止全部 dev 实例 |
+| `make mortal` | 同 `mortal-dev` |
+| `make mortal-prod` | 每个 toml 注册 systemd `mahjong-mortal-<port>`（Linux） |
+| `make mortal-prod-stop` | 移除全部 Mortal systemd 单元 |
 
 ### 生产部署（Linux）
 
@@ -152,8 +155,8 @@ cp backend/db_config.example.json backend/db_config.json
 # 2. 构建并注册主应用服务（网关 :9999）
 make prod
 
-# 3. 可选：注册 Mortal AI 推理服务（:9996）
-#    需先配置 mortal-server/config.toml 中的模型权重
+# 3. 可选：Mortal AI（每个 mortal-server/*.toml 一个 service，端口见文件名）
+#    config.toml → :9996；config-9995.toml → :9995
 make mortal-prod
 ```
 
@@ -167,9 +170,9 @@ make mortal-prod-stop
 日志位置：
 
 - 主应用：`logs/mahjong-prod.log`
-- Mortal：`journalctl -u mahjong-mortal.service -f`
+- Mortal：`journalctl -u mahjong-mortal-9996.service -f`（端口因配置而异）
 
-非 Linux 环境（如 macOS）下 `make prod` / `make mortal` 仍使用后台进程方式运行。
+开发：`make mortal-dev` 自动读取 `mortal-server/*.toml` 并启动。非 Linux 下 `make prod` 使用后台进程。
 
 ## 配置
 

@@ -46,4 +46,7 @@ logs/
 
 mortal-server/mortal_model.pth
 mortal-server/libriichi.so
-mortal-server/models
+mortal-server/models/
+models/
+models/mortal_model_297k_202603.pth
+models/mortal_akagi_202401.pth

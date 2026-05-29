@@ -103,29 +103,6 @@ WantedBy=multi-user.target
 EOF
 }
 
-write_mortal_unit() {
-	local unit_path="$1"
-	cat >"$unit_path" <<EOF
-[Unit]
-Description=Mahjong Mortal AI inference server
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=${RUN_USER}
-Group=${RUN_GROUP}
-WorkingDirectory=${ROOT_DIR}/mortal-server
-Environment=PYTHON=${ROOT_DIR}/.venv/bin/python
-ExecStart=${ROOT_DIR}/mortal-server/start.sh
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-}
-
 install_service() {
 	require_linux
 	require_sudo
@@ -149,22 +126,11 @@ install_service() {
 		mkdir -p "$LOG_DIR"
 		chown "$RUN_USER:$RUN_GROUP" "$LOG_DIR" 2>/dev/null || true
 		;;
-	mortal)
-		if [ ! -x "$ROOT_DIR/.venv/bin/python" ]; then
-			echo "Missing .venv — run: make venv" >&2
-			exit 1
-		fi
-		if [ ! -f "$ROOT_DIR/mortal-server/config.toml" ]; then
-			echo "Missing mortal-server/config.toml" >&2
-			exit 1
-		fi
-		if [ ! -x "$ROOT_DIR/mortal-server/start.sh" ]; then
-			echo "Missing mortal-server/start.sh" >&2
-			exit 1
-		fi
-		assert_dir_access "$ROOT_DIR/mortal-server"
-		;;
 	esac
+
+	if [ "$SERVICE_KIND" = "mortal" ]; then
+		exec bash "$ROOT_DIR/scripts/mortal-prod.sh" install
+	fi
 
 	echo "Installing ${name}.service (user=${RUN_USER}, root=${ROOT_DIR})"
 
@@ -172,10 +138,7 @@ install_service() {
 	tmp_unit="$(mktemp)"
 	trap "rm -f '$tmp_unit'" EXIT
 
-	case "$SERVICE_KIND" in
-	prod) write_prod_unit "$tmp_unit" ;;
-	mortal) write_mortal_unit "$tmp_unit" ;;
-	esac
+	write_prod_unit "$tmp_unit"
 
 	$SUDO cp "$tmp_unit" "/etc/systemd/system/${name}.service"
 	$SUDO systemctl daemon-reload
@@ -185,17 +148,9 @@ install_service() {
 	sleep 1
 	if $SUDO systemctl is-active --quiet "${name}.service"; then
 		echo "${name}.service installed and running"
-		case "$SERVICE_KIND" in
-		prod)
-			echo "  App:  http://127.0.0.1:${GATEWAY_PORT}"
-			echo "  Log:  ${PROD_LOG}"
-			;;
-		mortal)
-			echo "  Health: curl http://127.0.0.1:9996/health"
-			echo "  Log:    journalctl -u ${name}.service -f"
-			;;
-		esac
-		echo "  Stop: make ${SERVICE_KIND}-stop"
+		echo "  App:  http://127.0.0.1:${GATEWAY_PORT}"
+		echo "  Log:  ${PROD_LOG}"
+		echo "  Stop: make prod-stop"
 		rm -f "$tmp_unit"
 		trap - EXIT
 	else
@@ -208,6 +163,10 @@ install_service() {
 remove_service() {
 	require_linux
 	require_sudo
+
+	if [ "$SERVICE_KIND" = "mortal" ]; then
+		exec bash "$ROOT_DIR/scripts/mortal-prod.sh" remove
+	fi
 
 	local name
 	name="$(service_name)"

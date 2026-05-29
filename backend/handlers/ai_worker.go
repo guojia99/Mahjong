@@ -14,7 +14,7 @@ const aiWorkerInterval = 30 * time.Second
 
 var aiWorkerBusy atomic.Bool
 
-// StartAiAnalysisWorker polls pending online games and runs Mortal analysis.
+// StartAiAnalysisWorker polls pending online games and runs Mortal analysis for each configured backend.
 func StartAiAnalysisWorker() {
 	go func() {
 		runAiAnalysisBatch()
@@ -24,7 +24,7 @@ func StartAiAnalysisWorker() {
 			runAiAnalysisBatch()
 		}
 	}()
-	log.Println("AI analysis worker started (interval:", aiWorkerInterval, ", processes all pending per tick)")
+	log.Println("AI analysis worker started (interval:", aiWorkerInterval, ", multi-model)")
 }
 
 func runAiAnalysisBatch() {
@@ -33,16 +33,15 @@ func runAiAnalysisBatch() {
 	}
 	defer aiWorkerBusy.Store(false)
 
-	client := mortalClient()
-	if err := client.Health(); err != nil {
-		log.Printf("AI analysis batch skipped: mortal unreachable (%s): %v", client.BaseURL, err)
+	backends := config.MortalBackends()
+	if len(backends) == 0 {
 		return
 	}
 	games := gamesNeedingAiAnalysis()
 	if len(games) == 0 {
 		return
 	}
-	log.Printf("AI analysis batch: %d game(s) to process", len(games))
+	log.Printf("AI analysis batch: %d game(s), %d mortal backend(s)", len(games), len(backends))
 
 	for i := range games {
 		g := &games[i]
@@ -54,7 +53,7 @@ func runAiAnalysisBatch() {
 			log.Printf("AI analysis skipped game %s: no paipu actions", g.ID)
 			continue
 		}
-		processGameAiAnalysis(g, client)
+		processGameAiAnalysisMulti(g)
 	}
 }
 
@@ -73,54 +72,107 @@ func gamesNeedingAiAnalysis() []models.Game {
 	out = append(out, pending...)
 	for i := range done {
 		g := done[i]
-		if mortal.IsAnalysisDataCurrent(g.AiAnalysisStatus, g.AiAnalysisData) {
+		store, err := mortal.ParseAnalysisStore(g.AiAnalysisData)
+		if err != nil {
+			if len(paipuActionsFromGameData(g.PaipuData)) > 0 {
+				out = append(out, g)
+			}
+			continue
+		}
+		if mortal.IsStoreCurrent(store) {
 			continue
 		}
 		if len(paipuActionsFromGameData(g.PaipuData)) == 0 {
 			continue
 		}
-		stored := mortal.StoredAnalysisVersion(g.AiAnalysisData)
-		log.Printf("AI analysis outdated game %s (stored version %d, want %d)", g.ID, stored, mortal.AnalysisVersion)
+		log.Printf("AI analysis outdated game %s (need version %d for all backends)", g.ID, mortal.AnalysisVersion)
 		out = append(out, g)
 	}
 	return out
 }
 
-func processGameAiAnalysis(game *models.Game, client *mortal.Client) {
+func processGameAiAnalysisMulti(game *models.Game) {
 	start := time.Now()
 	log.Printf("AI analysis started game %s", game.ID)
+
+	store, err := mortal.ParseAnalysisStore(game.AiAnalysisData)
+	if err != nil {
+		store = &mortal.AnalysisStore{Version: mortal.AnalysisStoreVersion, Models: map[string]*mortal.ModelEntry{}}
+	}
 
 	config.DB.Model(game).Updates(map[string]interface{}{
 		"ai_analysis_status": "processing",
 		"ai_analysis_error":  "",
 	})
-	result, err := mortal.AnalyzeGame(game.ID, game.PaipuData, client, mortalGradeTiers())
+
+	backends := config.MortalBackends()
+	anySuccess := false
+	var lastErr string
+
+	persist := func() {
+		persistAnalysisStore(game, store)
+	}
+
+	for _, b := range backends {
+		key := mortal.ModelKey(b.Name, b.Version)
+		if mortal.IsModelCurrent(store.Models[key]) {
+			continue
+		}
+		client := mortal.NewClient(b.URL)
+		if err := client.Health(); err != nil {
+			log.Printf("AI analysis skip backend %s (%s): %v", key, b.URL, err)
+			mortal.MarkModelFailed(store, key, b.Name, b.Version, b.URL, truncateErr(err.Error(), 480))
+			lastErr = err.Error()
+			persist()
+			continue
+		}
+		mortal.MarkModelProcessing(store, key, b.Name, b.Version, b.URL)
+		persist()
+
+		result, err := mortal.AnalyzeGame(game.ID, game.PaipuData, client, mortalGradeTiers(), b.Name, b.Version)
+		if err != nil {
+			mortal.MarkModelFailed(store, key, b.Name, b.Version, b.URL, truncateErr(err.Error(), 480))
+			lastErr = err.Error()
+			log.Printf("AI analysis failed game %s backend %s: %v", game.ID, key, err)
+			persist()
+			continue
+		}
+		mortal.MarkModelDone(store, key, b.Name, b.Version, b.URL, result)
+		anySuccess = true
+		log.Printf("AI analysis completed game %s backend %s model=%s", game.ID, key, result.ModelTag)
+		persist()
+	}
+
+	status := persistAnalysisStore(game, store)
+	if status == "" && !anySuccess && lastErr != "" {
+		config.DB.Model(game).Update("ai_analysis_error", truncateErr(lastErr, 480))
+	}
+	log.Printf("AI analysis game %s finished status=%s (%s)", game.ID, status, time.Since(start).Round(time.Second))
+}
+
+// persistAnalysisStore writes ai_analysis_data and derived status after each model slot update.
+func persistAnalysisStore(game *models.Game, store *mortal.AnalysisStore) string {
+	field, err := mortal.StoreToJSONField(store)
 	if err != nil {
+		log.Printf("AI analysis save failed game %s: %v", game.ID, err)
 		config.DB.Model(game).Updates(map[string]interface{}{
 			"ai_analysis_status": "failed",
 			"ai_analysis_error":  truncateErr(err.Error(), 480),
 		})
-		log.Printf("AI analysis failed game %s (%s): %v", game.ID, time.Since(start).Round(time.Second), err)
-		// Mortal may have crashed; next health check will skip until `make mortal`.
-		return
+		return "failed"
 	}
-	field, err := mortal.ToJSONField(result)
-	if err != nil {
-		config.DB.Model(game).Updates(map[string]interface{}{
-			"ai_analysis_status": "failed",
-			"ai_analysis_error":  truncateErr(err.Error(), 480),
-		})
-		log.Printf("AI analysis failed game %s (%s): encode result: %v", game.ID, time.Since(start).Round(time.Second), err)
-		return
-	}
-	now := time.Now()
-	config.DB.Model(game).Updates(map[string]interface{}{
+	status := mortal.AggregateStatus(store)
+	updates := map[string]interface{}{
 		"ai_analysis_data":   field,
-		"ai_analyzed_at":     &now,
-		"ai_analysis_status": "done",
-		"ai_analysis_error":  "",
-	})
-	log.Printf("AI analysis completed game %s (%s, model=%s, seats=%d)", game.ID, time.Since(start).Round(time.Second), result.ModelTag, len(result.Players))
+		"ai_analysis_status": status,
+	}
+	if status == "done" {
+		now := time.Now()
+		updates["ai_analyzed_at"] = &now
+		updates["ai_analysis_error"] = ""
+	}
+	config.DB.Model(game).Updates(updates)
+	return status
 }
 
 func truncateErr(s string, n int) string {
@@ -130,20 +182,19 @@ func truncateErr(s string, n int) string {
 	return s[:n]
 }
 
-// RunAiAnalysisForGameID is used by CLI to analyze one game synchronously.
+// RunAiAnalysisForGameID is used by CLI to analyze one game synchronously (all backends).
 func RunAiAnalysisForGameID(gameID string) error {
 	var game models.Game
 	if err := config.DB.First(&game, "id = ?", gameID).Error; err != nil {
 		return err
 	}
-	client := mortalClient()
-	if err := client.Health(); err != nil {
-		return err
-	}
-	processGameAiAnalysis(&game, client)
+	processGameAiAnalysisMulti(&game)
 	config.DB.First(&game, "id = ?", gameID)
 	if game.AiAnalysisStatus == "failed" {
 		return errFromString(game.AiAnalysisError)
+	}
+	if game.AiAnalysisStatus != "done" {
+		return errFromString("analysis incomplete: " + game.AiAnalysisStatus)
 	}
 	return nil
 }

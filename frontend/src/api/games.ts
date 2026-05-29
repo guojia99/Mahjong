@@ -313,15 +313,29 @@ export type PaipuStatRankType =
   | 'avg_riichi_tsumo_after_turn'
   | 'avg_riichi_hu_after_turn';
 
-export async function getGameAiAnalysis(gameId: string, opts?: ApiRequestOptions): Promise<{
+export async function getGameAiAnalysis(
+  gameId: string,
+  opts?: ApiRequestOptions & { model?: string },
+): Promise<{
   status: string;
   has_ai_analysis: boolean;
   analyzed_at?: string | null;
+  model_key?: string;
   analysis?: import('@/paipu/aiAnalysis').AiAnalysisFull;
+  analyses?: Record<string, import('@/paipu/aiAnalysis').AiAnalysisFull>;
+  models?: import('@/paipu/aiAnalysis').AiModelInfo[];
   grade_tiers?: import('@/paipu/aiAnalysis').AiGradeTier[];
   error?: string;
 }> {
-  const { data } = await api.get(`/games/${gameId}/ai-analysis/`, mergeApiOptions(opts));
+  const params = opts?.model ? { model: opts.model } : undefined;
+  const { data } = await api.get(`/games/${gameId}/ai-analysis/`, { params, ...mergeApiOptions(opts) });
+  return data;
+}
+
+export async function getAiMortalBackends(opts?: ApiRequestOptions): Promise<
+  { name: string; version: string; url: string; key: string }[]
+> {
+  const { data } = await api.get('/games/ai-mortal-backends/', mergeApiOptions(opts));
   return data;
 }
 

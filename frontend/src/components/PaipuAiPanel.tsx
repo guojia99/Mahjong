@@ -3,15 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { Brain, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReplayRound } from '@/paipu/paipuReplayModel';
 import {
+  buildModelDiffRows,
   decisionForReplayFrame,
   decisionFrameIndices,
+  replayFrameIndexForDecision,
   formatOptionLabel,
   gradeColor,
+  modelDisplayLabel,
   optionShowsTileImage,
   playerAnalysisForSeat,
   topOptions,
   type AiAnalysisFull,
   type AiDecisionOption,
+  type AiModelDiffRow,
+  type AiModelInfo,
 } from '@/paipu/aiAnalysis';
 import { getGameAiAnalysis } from '@/api/games';
 import { MahjongTile } from '@/components/MahjongTile';
@@ -39,6 +44,11 @@ export function PaipuAiPanel({
 }: Props) {
   const { t } = useTranslation();
   const [analysis, setAnalysis] = useState<AiAnalysisFull | null>(null);
+  const [allAnalyses, setAllAnalyses] = useState<Record<string, AiAnalysisFull>>({});
+  const [models, setModels] = useState<AiModelInfo[]>([]);
+  const [modelKey, setModelKey] = useState<string>('');
+  const [compareKey, setCompareKey] = useState<string>('');
+  const [showCompare, setShowCompare] = useState(false);
   const [status, setStatus] = useState<string>('loading');
 
   useEffect(() => {
@@ -48,7 +58,15 @@ export function PaipuAiPanel({
       .then((res) => {
         if (cancelled) return;
         setStatus(res.status);
-        setAnalysis(res.analysis ?? null);
+        const list = res.models ?? [];
+        setModels(list);
+        setAllAnalyses(res.analyses ?? {});
+        const key = res.model_key ?? list[0]?.key ?? '';
+        setModelKey(key);
+        if (list.length > 1) {
+          setCompareKey((prev) => prev || list.find((m) => m.key !== key)?.key || '');
+        }
+        setAnalysis(res.analysis ?? (key ? res.analyses?.[key] : undefined) ?? null);
       })
       .catch(() => {
         if (!cancelled) setStatus('failed');
@@ -58,23 +76,56 @@ export function PaipuAiPanel({
     };
   }, [gameId]);
 
+  useEffect(() => {
+    if (!modelKey) return;
+    const cached = allAnalyses[modelKey];
+    if (cached) {
+      setAnalysis(cached);
+      return;
+    }
+    let cancelled = false;
+    getGameAiAnalysis(gameId, { model: modelKey })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.analysis) {
+          setAnalysis(res.analysis);
+          setAllAnalyses((prev) => ({ ...prev, [modelKey]: res.analysis! }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, modelKey]);
+
   const player = playerAnalysisForSeat(analysis, viewSeat);
-  const decision = decisionForReplayFrame(player, roundIndex, round.frames, frameIdx);
+  const decision = decisionForReplayFrame(player, roundIndex, round.frames, frameIdx, viewSeat);
   const top = topOptions(decision, 3);
   const viewPlayer = analysis?.players.find((p) => p.seat === viewSeat);
   const kyokuRow = viewPlayer?.kyoku.find((k) => k.kyoku_index === roundIndex);
 
   const decisionFrames = useMemo(
-    () => decisionFrameIndices(player, roundIndex, round.frames, false),
-    [player, roundIndex, round.frames],
+    () => decisionFrameIndices(player, roundIndex, round.frames, viewSeat, false),
+    [player, roundIndex, round.frames, viewSeat],
   );
   const diffFrames = useMemo(
-    () => decisionFrameIndices(player, roundIndex, round.frames, true),
-    [player, roundIndex, round.frames],
+    () => decisionFrameIndices(player, roundIndex, round.frames, viewSeat, true),
+    [player, roundIndex, round.frames, viewSeat],
   );
 
   const decisionPos = decisionFrames.indexOf(frameIdx);
   const diffPos = diffFrames.indexOf(frameIdx);
+
+  const compareAnalysis = compareKey ? allAnalyses[compareKey] : null;
+  const modelDiffRows: AiModelDiffRow[] =
+    showCompare && analysis && compareAnalysis
+      ? buildModelDiffRows(analysis, compareAnalysis, viewSeat, roundIndex)
+      : [];
+  const currentDiffRow = modelDiffRows.find((r) => {
+    const d = kyokuRow?.decisions.find((x) => x.action_index === r.action_index);
+    if (!d) return false;
+    return replayFrameIndexForDecision(d, round.frames, viewSeat) === frameIdx;
+  });
 
   const panelShell = (children: ReactNode) => (
     <aside
@@ -128,7 +179,7 @@ export function PaipuAiPanel({
       </p>,
     );
   }
-  if (status !== 'done' || !analysis) {
+  if (!analysis) {
     return panelShell(
       <p className="text-xs" style={{ padding: 12, color: 'var(--color-text-light)' }}>
         {t('paipuAi.notReady', { status })}
@@ -145,12 +196,60 @@ export function PaipuAiPanel({
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
           <Brain size={15} style={{ color: '#4f46e5' }} />
           <span className="text-sm font-semibold" style={{ color: '#312e81' }}>
             {t('paipuAi.title')}
           </span>
         </div>
+        {models.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+            <label className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+              {t('paipuAi.model')}
+              <select
+                className="ml-1 mt-1 w-full text-xs rounded border px-2 py-1"
+                value={modelKey}
+                onChange={(e) => setModelKey(e.target.value)}
+              >
+                {models.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {modelDisplayLabel(m)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {models.length > 1 && (
+              <>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showCompare}
+                    onChange={(e) => setShowCompare(e.target.checked)}
+                  />
+                  {t('paipuAi.compareModels')}
+                </label>
+                {showCompare && (
+                  <label className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                    {t('paipuAi.compareWith')}
+                    <select
+                      className="ml-1 mt-1 w-full text-xs rounded border px-2 py-1"
+                      value={compareKey}
+                      onChange={(e) => setCompareKey(e.target.value)}
+                    >
+                      {models
+                        .filter((m) => m.key !== modelKey)
+                        .map((m) => (
+                          <option key={m.key} value={m.key}>
+                            {modelDisplayLabel(m)}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
+          </div>
+        )}
         {viewPlayer && (
           <div
             style={{
@@ -225,6 +324,9 @@ export function PaipuAiPanel({
 
       <div style={{ flex: 1, overflow: 'auto', padding: '10px 12px', minWidth: 0 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {showCompare && currentDiffRow ? (
+            <ModelDiffStepTable row={currentDiffRow} modelA={modelKey} modelB={compareKey} t={t} />
+          ) : null}
           {decision ? (
             <>
               <div className="text-xs font-medium" style={{ color: '#4338ca' }}>
@@ -238,7 +340,10 @@ export function PaipuAiPanel({
                   <AiOptionChip key={`${o.label}-${o.pai}-${o.action_id}`} option={o} />
                 ))}
               </div>
-              <OptionsTable options={decision.options} t={t} />
+              {!showCompare ? <OptionsTable options={decision.options} t={t} /> : null}
+              {showCompare && modelDiffRows.length > 0 && (
+                <ModelDiffTable rows={modelDiffRows} modelA={modelKey} modelB={compareKey} t={t} />
+              )}
             </>
           ) : (
             <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
@@ -412,7 +517,7 @@ function OptionsTable({
   t,
 }: {
   options: AiDecisionOption[];
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, string>) => string;
 }) {
   const sorted = [...options].sort((a, b) => b.pi - a.pi);
   return (
@@ -439,6 +544,140 @@ function OptionsTable({
   );
 }
 
+function ModelDiffStepTable({
+  row,
+  modelA,
+  modelB,
+  t,
+}: {
+  row: AiModelDiffRow;
+  modelA: string;
+  modelB: string;
+  t: (key: string, opts?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div
+      className="text-xs rounded-md p-2"
+      style={{ background: 'rgba(251, 191, 36, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)' }}
+    >
+      <div className="font-semibold mb-2">{t('paipuAi.modelDiffStep')}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+        <ModelDiffActionCell option={row.chosen_option} label={row.chosen_label} tileHeight={36} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <ModelDiffModelBlock name={modelA} score={row.score_a} top={row.top_option_a} t={t} />
+        <ModelDiffModelBlock name={modelB} score={row.score_b} top={row.top_option_b} t={t} />
+      </div>
+      <div style={{ fontWeight: 700, marginTop: 8 }}>
+        {t('paipuAi.scoreDiff')}: {row.score_diff > 0 ? '+' : ''}
+        {row.score_diff}
+      </div>
+    </div>
+  );
+}
+
+function ModelDiffTable({
+  rows,
+  modelA,
+  modelB,
+  t,
+}: {
+  rows: AiModelDiffRow[];
+  modelA: string;
+  modelB: string;
+  t: (key: string) => string;
+}) {
+  const mismatches = rows.filter((r) => r.score_diff !== 0 || r.top_label_a !== r.top_label_b);
+  if (mismatches.length === 0) return null;
+  return (
+    <div>
+      <div className="text-xs font-semibold mb-1" style={{ color: '#4338ca' }}>
+        {t('paipuAi.modelDiffTable')}
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>{t('paipuAi.modelDiffAction')}</th>
+              <th style={thStyle}>{modelA}</th>
+              <th style={thStyle}>{modelB}</th>
+              <th style={thStyle}>{t('paipuAi.scoreDiff')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mismatches.map((r) => (
+              <tr key={r.action_index}>
+                <td style={tdStyle}>
+                  <ModelDiffActionCell option={r.chosen_option} label={r.chosen_label} tileHeight={32} />
+                </td>
+                <td style={tdStyle}>
+                  <ModelDiffMetrics score={r.score_a} t={t} />
+                </td>
+                <td style={tdStyle}>
+                  <ModelDiffMetrics score={r.score_b} t={t} />
+                </td>
+                <td style={{ ...tdStyle, fontWeight: 700, verticalAlign: 'middle' }}>
+                  {r.score_diff > 0 ? '+' : ''}
+                  {r.score_diff}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ModelDiffActionCell({
+  option,
+  label,
+  tileHeight = 32,
+}: {
+  option: AiDecisionOption | null;
+  label: string;
+  tileHeight?: number;
+}) {
+  if (option) {
+    return <AiOptionCell option={option} tileHeight={tileHeight} showChosen={false} />;
+  }
+  return <span>{label}</span>;
+}
+
+function ModelDiffMetrics({ score, t }: { score: number; t: (key: string) => string }) {
+  return (
+    <div style={{ lineHeight: 1.35 }}>
+      <span style={{ color: 'var(--color-text-light)' }}>{t('paipuAi.score')}: </span>
+      <span style={{ fontWeight: 600 }}>{score}</span>
+    </div>
+  );
+}
+
+function ModelDiffModelBlock({
+  name,
+  score,
+  top,
+  t,
+}: {
+  name: string;
+  score: number;
+  top: AiDecisionOption | null;
+  t: (key: string) => string;
+}) {
+  return (
+    <div style={{ lineHeight: 1.4 }}>
+      <div className="font-semibold mb-1">{name}</div>
+      <ModelDiffMetrics score={score} t={t} />
+      {top && !top.chosen ? (
+        <div style={{ marginTop: 6, color: 'var(--color-text-light)' }}>
+          <span>{t('paipuAi.modelDiffTop')}: </span>
+          <AiOptionCell option={top} tileHeight={24} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AiOptionChip({ option: o }: { option: AiDecisionOption }) {
   return (
     <span
@@ -461,12 +700,22 @@ function AiOptionChip({ option: o }: { option: AiDecisionOption }) {
   );
 }
 
-function AiOptionCell({ option: o, tileHeight = 24 }: { option: AiDecisionOption; tileHeight?: number }) {
+function AiOptionCell({
+  option: o,
+  tileHeight = 24,
+  showChosen = true,
+}: {
+  option: AiDecisionOption;
+  tileHeight?: number;
+  /** In model-diff tables the row is already the human action; omit ✓ / highlight. */
+  showChosen?: boolean;
+}) {
+  const mark = showChosen && o.chosen;
   if (optionShowsTileImage(o) && o.pai) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <MahjongTile tile={o.pai} height={tileHeight} highlight={o.chosen} ariaLabel={o.pai} />
-        {o.chosen ? <span aria-hidden>✓</span> : null}
+        <MahjongTile tile={o.pai} height={tileHeight} highlight={mark} ariaLabel={o.pai} />
+        {mark ? <span aria-hidden>✓</span> : null}
       </span>
     );
   }
@@ -474,7 +723,7 @@ function AiOptionCell({ option: o, tileHeight = 24 }: { option: AiDecisionOption
   return (
     <span>
       {text}
-      {o.chosen ? ' ✓' : ''}
+      {mark ? ' ✓' : ''}
     </span>
   );
 }

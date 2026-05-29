@@ -23,8 +23,16 @@ type DBConfig struct {
 	MajsoulAccessToken     string `json:"majsoul_access_token"`
 	MajsoulOAuth2Type      int    `json:"majsoul_oauth2_type"`
 	MajsoulLoginRequestB64 string `json:"majsoul_login_request_b64"`
-	MortalBaseURL          string           `json:"mortal_base_url"`
-	AiGradeTiers           []AiGradeTierCfg `json:"ai_grade_tiers"`
+	MortalBaseURL          string              `json:"mortal_base_url"`
+	MortalBackends         []MortalBackendCfg  `json:"mortal_backends"`
+	AiGradeTiers           []AiGradeTierCfg    `json:"ai_grade_tiers"`
+}
+
+// MortalBackendCfg is one Mortal inference server endpoint.
+type MortalBackendCfg struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	URL     string `json:"url"`
 }
 
 // AiGradeTierCfg is the minimum score (inclusive) for a letter grade label.
@@ -59,6 +67,42 @@ func Load(configPath string) {
 	Cfg = &DBConfig{}
 	if err := json.Unmarshal(data, Cfg); err != nil {
 		panic("cannot parse config " + absConfig + ": " + err.Error())
+	}
+	normalizeMortalBackends()
+}
+
+// MortalBackends returns configured Mortal endpoints (multi-model or legacy single URL).
+func MortalBackends() []MortalBackendCfg {
+	if Cfg == nil {
+		return nil
+	}
+	if len(Cfg.MortalBackends) > 0 {
+		return Cfg.MortalBackends
+	}
+	if Cfg.MortalBaseURL != "" {
+		return []MortalBackendCfg{{
+			Name:    "mortal",
+			Version: "1",
+			URL:     Cfg.MortalBaseURL,
+		}}
+	}
+	return []MortalBackendCfg{{
+		Name:    "mortal",
+		Version: "1",
+		URL:     "http://127.0.0.1:9996",
+	}}
+}
+
+func normalizeMortalBackends() {
+	if Cfg == nil {
+		return
+	}
+	if len(Cfg.MortalBackends) == 0 && Cfg.MortalBaseURL != "" {
+		Cfg.MortalBackends = []MortalBackendCfg{{
+			Name:    "mortal",
+			Version: "1",
+			URL:     Cfg.MortalBaseURL,
+		}}
 	}
 }
 
