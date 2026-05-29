@@ -46,3 +46,4 @@ logs/
 
 mortal-server/mortal_model.pth
 mortal-server/libriichi.so
+mortal-server/models
