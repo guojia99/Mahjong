@@ -6,7 +6,8 @@ set -euo pipefail
 SERVICE_KIND="${1:-}"
 ACTION="${2:-}"
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
+ROOT_DIR="$(cd "$ROOT_DIR" && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-9997}"
 GATEWAY_PORT="${GATEWAY_PORT:-9999}"
 LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
@@ -48,6 +49,29 @@ service_name() {
 	esac
 }
 
+resolve_run_user() {
+	# Use project directory owner — avoids SUDO_USER=ubuntu + project in /root/ CHDIR failures.
+	RUN_USER="$(stat -c '%U' "$ROOT_DIR")"
+	RUN_GROUP="$(stat -c '%G' "$ROOT_DIR")"
+}
+
+assert_dir_access() {
+	local dir="$1"
+	if [ ! -d "$dir" ]; then
+		echo "Directory missing: $dir" >&2
+		exit 1
+	fi
+	if [ "$(id -u)" -eq 0 ]; then
+		if ! runuser -u "$RUN_USER" -- test -d "$dir" 2>/dev/null; then
+			echo "User $RUN_USER cannot access: $dir" >&2
+			exit 1
+		fi
+	elif ! sudo -u "$RUN_USER" test -d "$dir" 2>/dev/null; then
+		echo "User $RUN_USER cannot access: $dir" >&2
+		exit 1
+	fi
+}
+
 write_prod_unit() {
 	local unit_path="$1"
 	mkdir -p "$LOG_DIR"
@@ -63,10 +87,10 @@ User=${RUN_USER}
 Group=${RUN_GROUP}
 WorkingDirectory=${ROOT_DIR}/backend
 ExecStart=${ROOT_DIR}/backend/mahjong-prodsupervisor \\
-	--backend-bin ./mahjong-backend \\
-	--gateway-bin ./mahjong-gateway \\
-	--static-dir ../frontend/dist \\
-	--config db_config.json \\
+	--backend-bin ${ROOT_DIR}/backend/mahjong-backend \\
+	--gateway-bin ${ROOT_DIR}/backend/mahjong-gateway \\
+	--static-dir ${ROOT_DIR}/frontend/dist \\
+	--config ${ROOT_DIR}/backend/db_config.json \\
 	--backend-port ${BACKEND_PORT} \\
 	--gateway-port ${GATEWAY_PORT} \\
 	--log ${PROD_LOG} \\
@@ -108,8 +132,7 @@ install_service() {
 
 	local name
 	name="$(service_name)"
-	RUN_USER="${SUDO_USER:-${USER:-root}}"
-	RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
+	resolve_run_user
 
 	case "$SERVICE_KIND" in
 	prod)
@@ -122,6 +145,9 @@ install_service() {
 			echo "  cp backend/db_config.example.json backend/db_config.json" >&2
 			exit 1
 		fi
+		assert_dir_access "$ROOT_DIR/backend"
+		mkdir -p "$LOG_DIR"
+		chown "$RUN_USER:$RUN_GROUP" "$LOG_DIR" 2>/dev/null || true
 		;;
 	mortal)
 		if [ ! -x "$ROOT_DIR/.venv/bin/python" ]; then
@@ -136,8 +162,11 @@ install_service() {
 			echo "Missing mortal-server/start.sh" >&2
 			exit 1
 		fi
+		assert_dir_access "$ROOT_DIR/mortal-server"
 		;;
 	esac
+
+	echo "Installing ${name}.service (user=${RUN_USER}, root=${ROOT_DIR})"
 
 	local tmp_unit
 	tmp_unit="$(mktemp)"
