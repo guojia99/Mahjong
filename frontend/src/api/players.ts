@@ -1,21 +1,29 @@
 import api from './client';
-import type { Player, MajsoulAccount, Game, HandRecord } from '@/types';
+import type { ApiRequestOptions } from './types';
+import { mergeApiOptions } from './types';
+import type { Player, MajsoulAccount, Game, HandRecord, PlayerAiMatchScoreSeries } from '@/types';
 
-export async function getPlayers(query = ''): Promise<Player[]> {
+export async function getPlayers(query = '', opts?: ApiRequestOptions): Promise<Player[]> {
   const params = query ? { q: query } : {};
-  const { data } = await api.get('/players/', { params });
+  const { data } = await api.get('/players', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
+/** 获取单个雀士头像 */
+export async function getPlayerAvatar(id: string): Promise<string> {
+  const { data } = await api.get<{ avatar: string }>(`/players/${id}/avatar/`);
+  return data.avatar ?? '';
+}
+
 /** 批量取头像（id -> 头像 URL 或空串，可能为 data: 或 http(s)） */
-export async function getPlayerAvatarsBatch(ids: string[]): Promise<Record<string, string>> {
+export async function getPlayerAvatarsBatch(ids: string[], opts?: ApiRequestOptions): Promise<Record<string, string>> {
   if (!ids.length) return {};
-  const { data } = await api.post<Record<string, string>>('/players/batch-avatars/', { ids });
+  const { data } = await api.post<Record<string, string>>('/players/batch-avatars/', { ids }, mergeApiOptions(opts));
   return data ?? {};
 }
 
-export async function getPlayer(id: string): Promise<Player> {
-  const { data } = await api.get(`/players/${id}/`);
+export async function getPlayer(id: string, opts?: ApiRequestOptions): Promise<Player> {
+  const { data } = await api.get(`/players/${id}/`, mergeApiOptions(opts));
   return data;
 }
 
@@ -64,8 +72,17 @@ export async function deleteMajsoulAccount(accountId: string): Promise<void> {
   await api.delete(`/players/majsoul-accounts/${accountId}/`);
 }
 
-export async function getPlayerGames(playerId: string): Promise<Game[]> {
-  const { data } = await api.get(`/players/${playerId}/games/`);
+export async function getPlayerGames(playerId: string, opts?: ApiRequestOptions): Promise<Game[]> {
+  const { data } = await api.get(`/players/${playerId}/games/`, mergeApiOptions(opts));
+  return data;
+}
+
+export async function getPlayerAiMatchScores(
+  playerId: string,
+  params?: Record<string, string | number>,
+  opts?: ApiRequestOptions,
+): Promise<PlayerAiMatchScoreSeries> {
+  const { data } = await api.get(`/players/${playerId}/ai-match-scores/`, { params, ...mergeApiOptions(opts) });
   return data;
 }
 

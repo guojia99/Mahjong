@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { CircleHelp, Loader2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +15,7 @@ import { getPlayers } from '@/api/players';
 import type { Player } from '@/types';
 import { useToast } from '@/hooks/useToast';
 import StartingHandsWeightsModal from '@/components/StartingHandsWeightsModal';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -113,8 +116,9 @@ function doraTileFromIndicator(ind: string): string | null {
   return null;
 }
 
-function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: number; showPlayer: boolean }) {
+function HandCard({ item, rank, showPlayer, avatarUrl }: { item: StartingHandItem; rank: number; showPlayer: boolean; avatarUrl?: string }) {
   const { t } = useTranslation();
+  const breakdown = item.breakdown;
   const doraSet = useMemo(() => {
     const s = new Set<string>();
     for (const ind of item.dora_indicators) {
@@ -141,8 +145,8 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
             className="flex items-center gap-2 min-w-0"
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            {item.player.avatar ? (
-              <img src={item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+            {(avatarUrl || item.player.avatar) ? (
+              <img src={avatarUrl || item.player.avatar} alt={item.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
             ) : (
               <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}>{item.player.nickname.charAt(0)}</div>
             )}
@@ -165,20 +169,24 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
         </span>
         <span>·</span>
         <span>{item.is_dealer ? t('startingHands.dealer') : `${t('startingHands.seat')} ${item.seat + 1}`}</span>
-        <span>·</span>
-        <span>
-          {t('startingHands.shanten')}: <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{item.breakdown.shanten}</span>
-        </span>
-        {item.breakdown.dora_count > 0 && (
+        {breakdown != null && (
           <>
             <span>·</span>
-            <span>{t('startingHands.dora')}: {item.breakdown.dora_count}</span>
-          </>
-        )}
-        {item.breakdown.red_dora > 0 && (
-          <>
-            <span>·</span>
-            <span style={{ color: '#e74c3c' }}>{t('startingHands.redDora')}: {item.breakdown.red_dora}</span>
+            <span>
+              {t('startingHands.shanten')}: <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{breakdown.shanten}</span>
+            </span>
+            {breakdown.dora_count > 0 && (
+              <>
+                <span>·</span>
+                <span>{t('startingHands.dora')}: {breakdown.dora_count}</span>
+              </>
+            )}
+            {breakdown.red_dora > 0 && (
+              <>
+                <span>·</span>
+                <span style={{ color: '#e74c3c' }}>{t('startingHands.redDora')}: {breakdown.red_dora}</span>
+              </>
+            )}
           </>
         )}
         {item.dora_indicators.length > 0 && (
@@ -199,9 +207,9 @@ function HandCard({ item, rank, showPlayer }: { item: StartingHandItem; rank: nu
         </Link>
       </div>
 
-      {item.breakdown.yaku_potential && Object.keys(item.breakdown.yaku_potential).length > 0 && (
+      {breakdown?.yaku_potential && Object.keys(breakdown.yaku_potential).length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
-          {Object.entries(item.breakdown.yaku_potential)
+          {Object.entries(breakdown.yaku_potential)
             .sort((a, b) => b[1] - a[1])
             .map(([key, val]) => {
               const color = YAKU_COLORS[key] || '#7e57c2';
@@ -256,6 +264,7 @@ export default function StartingHandsPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>('');
   const [personal, setPersonal] = useState<StartingHandListResponse | null>(null);
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [weightsModalOpen, setWeightsModalOpen] = useState(false);
   const [overallListLoading, setOverallListLoading] = useState(true);
   const [personalListLoading, setPersonalListLoading] = useState(false);
@@ -276,21 +285,38 @@ export default function StartingHandsPage() {
     setPageJumpDraft(String(page));
   }, [page]);
 
-  useEffect(() => {
-    let active = true;
-    getPlayers()
-      .then((arr) => {
-        if (active) setAllPlayers(arr);
-      })
-      .catch(() => {
-        // non-fatal
+  useAbortableEffect((signal) => {
+    getPlayers('', { signal })
+      .then(setAllPlayers)
+      .catch((e) => {
+        if (!isAbortError(e)) {
+          // non-fatal
+        }
       });
-    return () => {
-      active = false;
-    };
   }, []);
 
-  useEffect(() => {
+  const avatarPlayerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of overall?.results ?? []) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    for (const item of personal?.results ?? []) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    for (const row of averages) {
+      if (row.player?.id) ids.push(row.player.id);
+    }
+    return [...new Set(ids)];
+  }, [overall, personal, averages]);
+
+  useAbortableEffect((signal) => {
+    if (avatarPlayerIds.length === 0) return;
+    loadPlayerAvatarsForList(avatarPlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [avatarPlayerIds]);
+
+  useAbortableEffect((signal) => {
     if (tab !== 'overall') return;
     const params: Parameters<typeof getStartingHands>[0] = {
       tab: 'overall',
@@ -301,47 +327,40 @@ export default function StartingHandsPage() {
     if (gameMode) params.game_mode = gameMode;
     setOverallListLoading(true);
     const seq = ++overallFetchSeq.current;
-    let active = true;
-    getStartingHands(params)
+    getStartingHands(params, { signal })
       .then((data) => {
-        if (!active || seq !== overallFetchSeq.current) return;
+        if (signal.aborted || seq !== overallFetchSeq.current) return;
         setOverall(data);
       })
-      .catch(() => {
-        if (!active || seq !== overallFetchSeq.current) return;
+      .catch((e) => {
+        if (isAbortError(e) || seq !== overallFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
       })
       .finally(() => {
-        if (seq === overallFetchSeq.current) setOverallListLoading(false);
+        if (seq === overallFetchSeq.current && !signal.aborted) setOverallListLoading(false);
       });
-    return () => {
-      active = false;
-    };
   }, [tab, page, pageSize, playerCount, gameMode, showToast, t]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (tab !== 'personal') return;
     const params: Parameters<typeof getStartingHandPlayerAverages>[0] = { min_hands: minHands };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
-    let active = true;
-    getStartingHandPlayerAverages(params)
+    getStartingHandPlayerAverages(params, { signal })
       .then((rows) => {
-        if (!active) return;
+        if (signal.aborted) return;
         setAverages(rows);
         if (rows.length > 0 && !rows.some((r) => r.player.id === selectedPlayerId)) {
           setSelectedPlayerId(rows[0].player.id);
         }
       })
-      .catch(() => {
-        if (active) showToast(t('startingHands.loadFailed'));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('startingHands.loadFailed'));
       });
-    return () => {
-      active = false;
-    };
   }, [tab, playerCount, gameMode, minHands, selectedPlayerId, showToast, t]);
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     if (tab !== 'personal' || !selectedPlayerId) return;
     const params: Parameters<typeof getStartingHands>[0] = {
       tab: 'personal',
@@ -353,22 +372,18 @@ export default function StartingHandsPage() {
     if (gameMode) params.game_mode = gameMode;
     setPersonalListLoading(true);
     const seq = ++personalFetchSeq.current;
-    let active = true;
-    getStartingHands(params)
+    getStartingHands(params, { signal })
       .then((data) => {
-        if (!active || seq !== personalFetchSeq.current) return;
+        if (signal.aborted || seq !== personalFetchSeq.current) return;
         setPersonal(data);
       })
-      .catch(() => {
-        if (!active || seq !== personalFetchSeq.current) return;
+      .catch((e) => {
+        if (isAbortError(e) || seq !== personalFetchSeq.current) return;
         showToast(t('startingHands.loadFailed'));
       })
       .finally(() => {
-        if (seq === personalFetchSeq.current) setPersonalListLoading(false);
+        if (seq === personalFetchSeq.current && !signal.aborted) setPersonalListLoading(false);
       });
-    return () => {
-      active = false;
-    };
   }, [tab, selectedPlayerId, page, pageSize, playerCount, gameMode, showToast, t]);
 
   const setTabReset = (next: 'overall' | 'personal') => {
@@ -553,6 +568,7 @@ export default function StartingHandsPage() {
                       item={item}
                       rank={(page - 1) * pageSize + idx + 1}
                       showPlayer
+                      avatarUrl={playerAvatars[item.player.id]}
                     />
                   ))}
                 </div>
@@ -591,8 +607,8 @@ export default function StartingHandsPage() {
                       <div className="text-sm font-bold" style={{ color: idx < 3 ? MEDAL_COLORS[idx] : 'var(--color-text-light)', minWidth: '1.5rem', textAlign: 'center' }}>
                         {idx + 1}
                       </div>
-                      {row.player.avatar ? (
-                        <img src={row.player.avatar} alt={row.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
+                      {(playerAvatars[row.player.id] || row.player.avatar) ? (
+                        <img src={playerAvatars[row.player.id] || row.player.avatar} alt={row.player.nickname} className="avatar" style={{ width: '1.75rem', height: '1.75rem' }} />
                       ) : (
                         <div className="avatar-placeholder" style={{ width: '1.75rem', height: '1.75rem', fontSize: '0.75rem' }}>{row.player.nickname.charAt(0)}</div>
                       )}
@@ -679,6 +695,7 @@ export default function StartingHandsPage() {
                       item={item}
                       rank={(page - 1) * pageSize + idx + 1}
                       showPlayer={false}
+                      avatarUrl={playerAvatars[item.player.id]}
                     />
                   ))}
                 </div>

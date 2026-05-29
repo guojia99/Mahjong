@@ -1,20 +1,42 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getRankingLeaderboard } from '@/api/ranking';
 import { useToast } from '@/hooks/useToast';
 import type { PlayerRankingScore } from '@/types';
 import { Trophy } from 'lucide-react';
 import RankTierBadge from '@/components/RankTierBadge';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 export default function RankingLeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<PlayerRankingScore[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const { showToast, ToastComponent } = useToast();
 
-  useEffect(() => {
-    getRankingLeaderboard()
+  useAbortableEffect((signal) => {
+    getRankingLeaderboard({ signal })
       .then(setLeaderboard)
-      .catch(() => showToast('加载排位排行失败'));
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast('加载排位排行失败');
+      });
   }, [showToast]);
+
+  const playerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of leaderboard) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    return [...new Set(ids)];
+  }, [leaderboard]);
+
+  useAbortableEffect((signal) => {
+    if (playerIds.length === 0) return;
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [playerIds]);
 
   return (
     <div>
@@ -64,8 +86,8 @@ export default function RankingLeaderboardPage() {
                 >
                   {idx + 1}
                 </div>
-                {item.player.avatar ? (
-                  <img src={item.player.avatar} alt={item.player.nickname} className="avatar" />
+                {playerAvatars[item.player.id] ? (
+                  <img src={playerAvatars[item.player.id]} alt={item.player.nickname} className="avatar" />
                 ) : (
                   <div className="avatar-placeholder">{item.player.nickname.charAt(0)}</div>
                 )}

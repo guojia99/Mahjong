@@ -1,13 +1,15 @@
 import api from './client';
+import type { ApiRequestOptions } from './types';
+import { mergeApiOptions } from './types';
 import type { Room, Game, GameScore, HandRecord, PlayerStats, PtRankingItem } from '@/types';
 
-export async function getRooms(params?: { status?: string; room_type?: 'offline' | 'online' }): Promise<Room[]> {
-  const { data } = await api.get('/rooms/', { params: params || {} });
+export async function getRooms(params?: { status?: string; room_type?: 'offline' | 'online' }, opts?: ApiRequestOptions): Promise<Room[]> {
+  const { data } = await api.get('/rooms/', { params: params || {}, ...mergeApiOptions(opts) });
   return data;
 }
 
-export async function getRoom(id: string): Promise<Room> {
-  const { data } = await api.get(`/rooms/${id}/`);
+export async function getRoom(id: string, opts?: ApiRequestOptions): Promise<Room> {
+  const { data } = await api.get(`/rooms/${id}/`, mergeApiOptions(opts));
   return data;
 }
 
@@ -65,8 +67,8 @@ export async function createRoomGame(
   return data;
 }
 
-export async function getGame(id: string): Promise<Game> {
-  const { data } = await api.get(`/games/${id}/`);
+export async function getGame(id: string, opts?: ApiRequestOptions): Promise<Game> {
+  const { data } = await api.get(`/games/${id}/`, mergeApiOptions(opts));
   return data;
 }
 
@@ -180,8 +182,8 @@ export type GamesListParams = {
   page_size?: number;
 };
 
-export async function getGamesList(params?: GamesListParams): Promise<GamesListResponse> {
-  const { data } = await api.get('/games/', { params: params || {} });
+export async function getGamesList(params?: GamesListParams, opts?: ApiRequestOptions): Promise<GamesListResponse> {
+  const { data } = await api.get('/games/', { params: params || {}, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -226,16 +228,16 @@ export async function deleteHandRecord(gameId: string, recordId: string) {
   await api.delete(`/games/${gameId}/hand-records/${recordId}/`);
 }
 
-export async function getRecentYakumans(limit = 10, recordType?: string): Promise<HandRecord[]> {
+export async function getRecentYakumans(limit = 10, recordType?: string, opts?: ApiRequestOptions): Promise<HandRecord[]> {
   const params: Record<string, string | number> = { limit };
   if (recordType) params.record_type = recordType;
-  const { data } = await api.get('/games/yakumans/recent/', { params });
+  const { data } = await api.get('/games/yakumans/recent/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
-export async function getAllYakumans(recordType?: string): Promise<HandRecord[]> {
+export async function getAllYakumans(recordType?: string, opts?: ApiRequestOptions): Promise<HandRecord[]> {
   const params = recordType ? { record_type: recordType } : {};
-  const { data } = await api.get('/games/yakumans/', { params });
+  const { data } = await api.get('/games/yakumans/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -244,8 +246,8 @@ export async function getPlayerStats(playerId: string, params?: {
   game_mode?: string;
   game_type?: 'offline' | 'online' | '';
   recent_limit?: number;
-}): Promise<PlayerStats> {
-  const { data } = await api.get(`/players/${playerId}/stats/`, { params });
+}, opts?: ApiRequestOptions): Promise<PlayerStats> {
+  const { data } = await api.get(`/players/${playerId}/stats/`, { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -253,8 +255,8 @@ export async function getPtRanking(params?: {
   player_count?: number;
   game_mode?: string;
   game_type?: 'offline' | 'online';
-}): Promise<PtRankingItem[]> {
-  const { data } = await api.get('/games/pt-ranking/', { params });
+}, opts?: ApiRequestOptions): Promise<PtRankingItem[]> {
+  const { data } = await api.get('/games/pt-ranking/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -273,8 +275,8 @@ export async function getFunRanking(params?: {
   game_mode?: string;
   game_type?: 'offline' | 'online';
   min_games?: number;
-}): Promise<FunRankingItem[]> {
-  const { data } = await api.get('/games/fun-ranking/', { params });
+}, opts?: ApiRequestOptions): Promise<FunRankingItem[]> {
+  const { data } = await api.get('/games/fun-ranking/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -311,14 +313,43 @@ export type PaipuStatRankType =
   | 'avg_riichi_tsumo_after_turn'
   | 'avg_riichi_hu_after_turn';
 
+export async function getGameAiAnalysis(gameId: string, opts?: ApiRequestOptions): Promise<{
+  status: string;
+  has_ai_analysis: boolean;
+  analyzed_at?: string | null;
+  analysis?: import('@/paipu/aiAnalysis').AiAnalysisFull;
+  grade_tiers?: import('@/paipu/aiAnalysis').AiGradeTier[];
+  error?: string;
+}> {
+  const { data } = await api.get(`/games/${gameId}/ai-analysis/`, mergeApiOptions(opts));
+  return data;
+}
+
+export async function getAiGradeTiers(opts?: ApiRequestOptions): Promise<{ tiers: import('@/paipu/aiAnalysis').AiGradeTier[] }> {
+  const { data } = await api.get('/games/ai-grade-tiers/', mergeApiOptions(opts));
+  return data;
+}
+
+export interface AiPaipuStatsItem {
+  player_id: string;
+  nickname: string;
+  avg: number;
+  games: number;
+}
+
+export async function getAiPaipuStatsRanking(params?: { min_games?: number }, opts?: ApiRequestOptions): Promise<AiPaipuStatsItem[]> {
+  const { data } = await api.get('/games/ai-paipu-stats/', { params, ...mergeApiOptions(opts) });
+  return data;
+}
+
 export async function getPaipuStatsRanking(params?: {
   rank_type?: PaipuStatRankType;
   player_count?: number;
   game_mode?: string;
   game_type?: 'offline' | 'online';
   min_games?: number;
-}): Promise<FunRankingItem[]> {
-  const { data } = await api.get('/games/paipu-stats/', { params });
+}, opts?: ApiRequestOptions): Promise<FunRankingItem[]> {
+  const { data } = await api.get('/games/paipu-stats/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -360,7 +391,7 @@ export interface StartingHandItem {
   seat: number;
   is_dealer: boolean;
   dora_indicators: string[];
-  breakdown: StartingHandBreakdown;
+  breakdown: StartingHandBreakdown | null;
   game_id: string;
   game_mode: string;
   player_count: number;
@@ -397,8 +428,8 @@ export async function getStartingHands(params?: {
   game_mode?: string;
   page?: number;
   page_size?: number;
-}): Promise<StartingHandListResponse> {
-  const { data } = await api.get('/games/starting-hands/', { params });
+}, opts?: ApiRequestOptions): Promise<StartingHandListResponse> {
+  const { data } = await api.get('/games/starting-hands/', { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -406,7 +437,7 @@ export async function getStartingHandPlayerAverages(params?: {
   player_count?: number | string;
   game_mode?: string;
   min_hands?: number;
-}): Promise<StartingHandPlayerAverage[]> {
-  const { data } = await api.get('/games/starting-hands/player-averages/', { params });
+}, opts?: ApiRequestOptions): Promise<StartingHandPlayerAverage[]> {
+  const { data } = await api.get('/games/starting-hands/player-averages/', { params, ...mergeApiOptions(opts) });
   return data;
 }

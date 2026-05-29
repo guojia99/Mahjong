@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { getAllYakumans } from '@/api/games';
 import { Sparkles } from 'lucide-react';
 import type { HandRecord } from '@/types';
@@ -29,8 +31,13 @@ export default function YakumanListPage() {
   ];
   const [typeFilter, setTypeFilter] = useState('');
 
-  useEffect(() => {
-    getAllYakumans(typeFilter || undefined).then(setRecords).catch(() => setRecords([]));
+  useAbortableEffect((signal) => {
+    getAllYakumans(typeFilter || undefined, { signal })
+      .then(setRecords)
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        setRecords([]);
+      });
   }, [typeFilter]);
 
   const typeLabel = typeFilter ? HAND_RECORD_TYPE_LABELS[typeFilter] : '';

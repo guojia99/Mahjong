@@ -1,4 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { getPlayers } from '@/api/players';
@@ -6,6 +8,7 @@ import SearchBar from '@/components/SearchBar';
 import RankTierBadge from '@/components/RankTierBadge';
 import type { Player, RankTier } from '@/types';
 import { Users } from 'lucide-react';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 type PlayerListItem = Player & {
   ranking_tier?: RankTier | null;
@@ -19,11 +22,16 @@ type SortKey = 'default' | 'ranking_score' | 'total_game_count' | 'last_game_tim
 export default function PlayerListPage() {
   const { t } = useTranslation();
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('default');
 
-  useEffect(() => {
-    getPlayers(query).then((data) => setPlayers(data as PlayerListItem[]));
+  useAbortableEffect((signal) => {
+    getPlayers(query, { signal })
+      .then((data) => setPlayers(data as PlayerListItem[]))
+      .catch((e) => {
+        if (!isAbortError(e)) throw e;
+      });
   }, [query]);
 
   const sorted = useMemo(() => {
@@ -41,6 +49,17 @@ export default function PlayerListPage() {
     });
     return arr;
   }, [players, sortKey]);
+
+  const playerIds = useMemo(() => {
+    return [...new Set(sorted.map((p) => p.id))];
+  }, [sorted]);
+
+  useAbortableEffect((signal) => {
+    if (playerIds.length === 0) return;
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [playerIds]);
 
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: 'default', label: t('playerList.sortDefault') },
@@ -93,8 +112,8 @@ export default function PlayerListPage() {
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
                 <div className="flex items-start gap-3">
-                  {player.avatar ? (
-                    <img src={player.avatar} alt={player.nickname} className="avatar" style={{ width: '2.75rem', height: '2.75rem', minWidth: '2.75rem' }} />
+                  {(playerAvatars[player.id] || player.avatar) ? (
+                    <img src={playerAvatars[player.id] || player.avatar} alt={player.nickname} className="avatar" style={{ width: '2.75rem', height: '2.75rem', minWidth: '2.75rem' }} />
                   ) : (
                     <div className="avatar-placeholder" style={{ width: '2.75rem', height: '2.75rem', minWidth: '2.75rem', fontSize: '1rem' }}>
                       {player.nickname.charAt(0)}

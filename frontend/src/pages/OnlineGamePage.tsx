@@ -9,6 +9,7 @@ import SearchBar from '@/components/SearchBar';
 import type { Player, Room, Game } from '@/types';
 import { ROOM_TYPE_LABELS } from '@/types';
 import { ExternalLink, Link2, AlertTriangle, Download, Home, ListOrdered, UserPlus, Trash2, RefreshCw, CheckSquare, Square } from 'lucide-react';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 type RowState = {
   id: string;
@@ -85,6 +86,20 @@ export default function OnlineGamePage() {
   const [paipuOpenUrl, setPaipuOpenUrl] = useState<string | null>(null);
   /** 全量雀士（用于解析后按 UID 预填绑定、展示已关联头像昵称） */
   const [playersDirectory, setPlayersDirectory] = useState<Player[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
+
+  const directoryPlayerIds = useMemo(() => {
+    return [...new Set(playersDirectory.map((p) => p.id))];
+  }, [playersDirectory]);
+
+  useEffect(() => {
+    if (directoryPlayerIds.length === 0) return;
+    let cancelled = false;
+    loadPlayerAvatarsForList(directoryPlayerIds).then((map) => {
+      if (!cancelled) setPlayerAvatars(map);
+    });
+    return () => { cancelled = true; };
+  }, [directoryPlayerIds]);
 
   // ===== 重新获取牌谱信息 =====
   const [showRetrySection, setShowRetrySection] = useState(false);
@@ -974,9 +989,9 @@ https://game.maj-soul.com/1/?paipu=..."
                           <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
                             {bound && boundPlayer && (
                               <div className="flex items-center gap-2 px-2 py-1 rounded-lg" style={{ background: 'rgba(255,255,255,0.75)', border: '1px solid var(--color-border)' }}>
-                                {boundPlayer.avatar ? (
+                                {(playerAvatars[boundPlayer.id] || boundPlayer.avatar) ? (
                                   <img
-                                    src={boundPlayer.avatar}
+                                    src={playerAvatars[boundPlayer.id] || boundPlayer.avatar}
                                     alt=""
                                     className="rounded-full object-cover flex-shrink-0"
                                     style={{ width: '1.75rem', height: '1.75rem' }}
@@ -1243,8 +1258,8 @@ https://game.maj-soul.com/1/?paipu=..."
               className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer"
               onClick={() => selectPlayerForBind(p)}
             >
-              {p.avatar ? (
-                <img src={p.avatar} alt={p.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
+              {(playerAvatars[p.id] || p.avatar) ? (
+                <img src={playerAvatars[p.id] || p.avatar} alt={p.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
               ) : (
                 <div className="avatar-placeholder" style={{ width: '2rem', height: '2rem', fontSize: '0.75rem' }}>
                   {p.nickname.charAt(0)}

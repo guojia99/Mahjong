@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
 import { getFunRanking } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import { Medal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 const SELECT_STYLE: React.CSSProperties = {
   padding: '0.375rem 0.75rem',
@@ -47,6 +50,7 @@ function subtitleForRank(rankType: FunRankType, item: FunRankingItem, t: (k: str
 
 export default function FunRankingPage() {
   const [rankings, setRankings] = useState<FunRankingItem[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [rankType, setRankType] = useState<FunRankType>('1st');
   const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
   const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
@@ -70,21 +74,39 @@ export default function FunRankingPage() {
     [t],
   );
 
-  useEffect(() => {
+  useAbortableEffect((signal) => {
     setLoading(true);
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
     if (gameType) params.game_type = gameType;
     if (minGames) params.min_games = minGames;
-    getFunRanking(params).then((data) => {
-      setRankings(data);
-      setLoading(false);
-    }).catch(() => {
-      showToast(t('funRanking.loadFailed'));
-      setLoading(false);
-    });
+    getFunRanking(params, { signal })
+      .then((data) => {
+        setRankings(data);
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('funRanking.loadFailed'));
+        setLoading(false);
+      });
   }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
+
+  const playerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const item of rankings) {
+      if (item.player?.id) ids.push(item.player.id);
+    }
+    return [...new Set(ids)];
+  }, [rankings]);
+
+  useAbortableEffect((signal) => {
+    if (playerIds.length === 0) return;
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [playerIds]);
 
   const currentTab = placementTabs.find(tab => tab.value === rankType) || placementTabs[0];
   const isPercent = ['1st', '2nd', '3rd', '4th'].includes(rankType);
@@ -207,8 +229,8 @@ export default function FunRankingPage() {
                 }}>
                   {idx + 1}
                 </div>
-                {item.player.avatar ? (
-                  <img src={item.player.avatar} alt={item.player.nickname} className="avatar" />
+                {playerAvatars[item.player.id] ? (
+                  <img src={playerAvatars[item.player.id]} alt={item.player.nickname} className="avatar" />
                 ) : (
                   <div className="avatar-placeholder">{item.player.nickname.charAt(0)}</div>
                 )}

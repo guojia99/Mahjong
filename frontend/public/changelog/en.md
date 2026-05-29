@@ -1,5 +1,54 @@
 # Changelog
 
+## v3.0.3 — 2026-05-29
+
+- Linux production: `make prod` builds and registers a systemd service; `make prod-stop` removes it
+- Mortal AI: `make mortal-prod` / `make mortal-prod-stop` install and remove the systemd service
+
+## v3.0.2 — 2026-05-29
+
+- AI match score overview: color-coded grades, taller rows, avatars in table header
+- Mortal AI review: jump to prev/next decision or mismatch; header shows match and hand scores
+- Replay board: larger wind/honba/riichi labels; fix left-seat river rotation and top/bottom river row order
+
+## v3.0.1 — 2026-05-29
+
+- Collapsible icon-only sidebar on desktop
+- Paipu replay board locked to a 1:1 square aspect ratio
+- Game list: one card per row; filters and pagination in the URL; returning from detail restores list state
+- Online paipu stats: tabs and filters synced to the URL
+
+## v3.0.0 — 2026-05-28
+
+- Mortal AI integration: auto-review online paipu with per-move scores (0–100) and letter grades
+- Replay panel AI mode: per-move score, π weights, and full score tables for the selected seat
+- Game list and player profile show AI ratings; paipu stats page adds an AI leaderboard
+- `make mortal` starts the inference server; `mahjong-backend paipu-ai-analyze` for single-game tests
+
+## v2.4.0 — 2026-05-28
+
+- Online game detail adds a "Replay" tab: switch between rounds and step through actions to visualise hands, melds, river and riichi sticks
+- Center panel shows live dora indicators, riichi stick count and remaining wall; ura-dora is revealed on win, exhaustive draw lists tenpai status and deltas
+- Hands of other players can be hidden, and the full wall (paishan) can be expanded for review / teaching
+
+## v2.3.3 — 2026-05-27
+
+- Fix league player/stage counts and show registered players on the league page
+- Optimize stats APIs with batch queries; fix batch avatar loading and cache
+- Add 500 server error panel and global error boundary to prevent blank screens
+
+## v2.3.2 — 2026-05-27
+
+- Fix yakuman list nil-pointer crash; restore online paipu statistics; restore starting hands scoring; fix login token generation
+
+## v2.3.1 — 2026-05-25
+
+- Avatar data removed from list/detail API responses; frontend now loads avatars asynchronously via a dedicated endpoint with 2-hour local cache
+
+## v2.3.0 — 2026-05-25
+
+- Backend rewritten from Python/Django to Go (Gin + GORM); fully API-compatible, no frontend changes required
+
 ## v2.2.2 — 2026-05-14
 
 - Starting hands scoring: edge vs middle sequence melds; ryanmen / kanchan taatsu no longer double-count tiles that belong to a full sequence; dora-equivalent count (red fives merged) with milestone bonuses and +8 when any one dora tile appears ≥3 times; yaku-potential tweaks (tanyao ladder, ittsuu by distinct ranks, sanshoku doukou, chinitsu / honitsu caps) plus iipeikou and daisangen potential; rules modal copy updated

@@ -20,6 +20,8 @@ import {
   Medal,
   ChevronDown,
   ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   BarChart2,
   BookOpen,
   History,
@@ -148,8 +150,18 @@ function matchActive(pathname: string, target: string): boolean {
 }
 
 const SIDEBAR_GROUP_OVERRIDES_KEY = 'mahjong-sidebar-group-overrides';
+const SIDEBAR_COLLAPSED_KEY = 'mahjong-sidebar-collapsed';
 
 type GroupOverride = 'expanded' | 'collapsed';
+
+function loadSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function loadInitialOverrides(): Record<string, GroupOverride> {
   if (typeof window === 'undefined') return {};
@@ -173,6 +185,7 @@ function loadInitialOverrides(): Record<string, GroupOverride> {
 export default function MainLayout() {
   const { t, i18n } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebarCollapsed);
   const [langOpen, setLangOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -196,6 +209,15 @@ export default function MainLayout() {
       // ignore storage errors (e.g. private mode)
     }
   }, [groupOverrides]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? '1' : '0');
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarCollapsed]);
 
   const isGroupExpanded = (group: NavGroup): boolean => {
     const override = groupOverrides[group.id];
@@ -237,21 +259,28 @@ export default function MainLayout() {
   const renderLeaf = (item: NavLeaf, isChild = false) => {
     const Icon = item.icon;
     const active = matchActive(location.pathname, item.path);
+    const label = t(item.labelKey);
+    const collapsed = sidebarCollapsed;
     return (
       <Link
         key={item.path}
         to={item.path}
+        title={collapsed ? label : undefined}
         onClick={() => setSidebarOpen(false)}
-        className={`flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150 ${
-          isChild ? 'pl-9 pr-4 py-2' : 'px-4 py-2.5'
+        className={`flex items-center rounded-xl text-sm font-medium transition-all duration-150 ${
+          collapsed
+            ? 'justify-center px-2 py-2.5'
+            : isChild
+              ? 'gap-3 pl-9 pr-4 py-2'
+              : 'gap-3 px-4 py-2.5'
         }`}
         style={{
           background: active ? 'var(--color-primary-light)' : 'transparent',
           color: active ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
         }}
       >
-        <Icon size={isChild ? 14 : 18} />
-        <span className="truncate">{t(item.labelKey)}</span>
+        <Icon size={collapsed ? 18 : isChild ? 14 : 18} className="flex-shrink-0" />
+        {!collapsed && <span className="truncate">{label}</span>}
       </Link>
     );
   };
@@ -262,6 +291,16 @@ export default function MainLayout() {
     const hasActiveChild = group.children.some((child) =>
       matchActive(location.pathname, child.path),
     );
+    const groupLabel = t(group.labelKey);
+
+    if (sidebarCollapsed) {
+      return (
+        <div key={group.id} className="space-y-1">
+          {group.children.map((child) => renderLeaf(child, false))}
+        </div>
+      );
+    }
+
     return (
       <div key={group.id} className="space-y-1">
         <button
@@ -274,7 +313,7 @@ export default function MainLayout() {
           aria-expanded={expanded}
         >
           <Icon size={18} />
-          <span className="flex-1 text-left truncate">{t(group.labelKey)}</span>
+          <span className="flex-1 text-left truncate">{groupLabel}</span>
           {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         </button>
         {expanded && (
@@ -287,25 +326,39 @@ export default function MainLayout() {
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 md:transform-none md:h-screen md:flex-shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-40 transform transition-[transform,width] duration-200 ease-in-out md:relative md:translate-x-0 md:transform-none md:h-screen md:flex-shrink-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        } ${sidebarCollapsed ? 'w-[4.5rem] md:w-[4.5rem]' : 'w-64 md:w-64'}`}
         style={{
           background: 'white',
           borderRight: '1px solid var(--color-border)',
           boxShadow: sidebarOpen ? '4px 0 20px rgba(0,0,0,0.1)' : 'none',
         }}
       >
-        <div className="p-6 flex flex-col h-full">
-          <div className="flex items-center gap-3 mb-6 flex-shrink-0">
+        <div className={`flex flex-col h-full ${sidebarCollapsed ? 'p-3' : 'p-6'}`}>
+          <div
+            className={`flex items-center mb-4 flex-shrink-0 ${sidebarCollapsed ? 'flex-col gap-2' : 'gap-3 mb-6'}`}
+          >
             <img
               src="https://www.majsoul.tw/homepage/character/1/yiji_0.png"
               alt="Logo"
-              className="w-10 h-10 rounded-full object-cover"
+              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
             />
-            <span className="text-lg font-bold" style={{ color: 'var(--color-primary-dark)' }}>
-              {t('app.name')}
-            </span>
+            {!sidebarCollapsed && (
+              <span className="text-lg font-bold truncate" style={{ color: 'var(--color-primary-dark)' }}>
+                {t('app.name')}
+              </span>
+            )}
+            <button
+              type="button"
+              className="hidden md:flex items-center justify-center p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              style={{ color: 'var(--color-text-light)' }}
+              onClick={() => setSidebarCollapsed((c) => !c)}
+              title={sidebarCollapsed ? t('app.sidebarExpand') : t('app.sidebarCollapse')}
+              aria-label={sidebarCollapsed ? t('app.sidebarExpand') : t('app.sidebarCollapse')}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
           </div>
 
           <nav className="flex-1 space-y-1 overflow-y-auto -mr-3 pr-3">
@@ -320,29 +373,40 @@ export default function MainLayout() {
           >
             {isLoggedIn() ? (
               <>
-                <div className="flex items-center gap-3 px-4 py-2 mb-2">
+                <div
+                  className={`flex items-center mb-2 ${sidebarCollapsed ? 'justify-center py-2' : 'gap-3 px-4 py-2'}`}
+                  title={sidebarCollapsed ? user?.username || 'User' : undefined}
+                >
                   <div className="avatar-placeholder text-xs">
                     {(user?.username || 'U').charAt(0).toUpperCase()}
                   </div>
-                  <span className="text-sm font-medium truncate">{user?.username || 'User'}</span>
+                  {!sidebarCollapsed && (
+                    <span className="text-sm font-medium truncate">{user?.username || 'User'}</span>
+                  )}
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-red-50 text-gray-400 hover:text-red-500"
+                  title={sidebarCollapsed ? t('app.logout') : undefined}
+                  className={`flex items-center rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-red-50 text-gray-400 hover:text-red-500 ${
+                    sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'
+                  }`}
                 >
                   <LogOut size={18} />
-                  {t('app.logout')}
+                  {!sidebarCollapsed && t('app.logout')}
                 </button>
               </>
             ) : (
               <Link
                 to="/login"
+                title={sidebarCollapsed ? t('app.adminLogin') : undefined}
                 onClick={() => setSidebarOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-gray-50"
+                className={`flex items-center rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-gray-50 ${
+                  sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'
+                }`}
                 style={{ color: 'var(--color-text-light)' }}
               >
                 <LogIn size={18} />
-                {t('app.adminLogin')}
+                {!sidebarCollapsed && t('app.adminLogin')}
               </Link>
             )}
           </div>
@@ -356,7 +420,7 @@ export default function MainLayout() {
         />
       )}
 
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto">
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto overflow-x-hidden">
         <header
           className="sticky top-0 z-20 px-4 py-3 md:px-8 md:py-4 flex items-center gap-4"
           style={{
@@ -444,7 +508,7 @@ export default function MainLayout() {
           </div>
         </header>
 
-        <div className="p-4 md:p-8 max-w-5xl mx-auto">
+        <div className="p-4 md:p-8 max-w-5xl mx-auto w-full min-w-0 box-border">
           <Outlet />
         </div>
       </main>
