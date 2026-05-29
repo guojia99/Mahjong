@@ -170,7 +170,7 @@ install_service() {
 
 	local tmp_unit
 	tmp_unit="$(mktemp)"
-	trap 'rm -f "$tmp_unit"' EXIT
+	trap "rm -f '$tmp_unit'" EXIT
 
 	case "$SERVICE_KIND" in
 	prod) write_prod_unit "$tmp_unit" ;;
@@ -196,6 +196,8 @@ install_service() {
 			;;
 		esac
 		echo "  Stop: make ${SERVICE_KIND}-stop"
+		rm -f "$tmp_unit"
+		trap - EXIT
 	else
 		echo "Failed to start ${name}.service" >&2
 		$SUDO systemctl status "${name}.service" --no-pager || true
