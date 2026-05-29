@@ -34,6 +34,8 @@ const ja: Record<string, string> = {
 
   // ===== App =====
   'app.name': '嘉の雀桩',
+  'app.sidebarCollapse': 'サイドバーを折りたたむ',
+  'app.sidebarExpand': 'サイドバーを展開',
   'app.adminLogin': '管理者ログイン',
   'app.logout': 'ログアウト',
 

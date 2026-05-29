@@ -34,6 +34,8 @@ const zhHant: Record<string, string> = {
 
   // ===== App =====
   'app.name': '嘉の雀樁',
+  'app.sidebarCollapse': '收起側邊欄',
+  'app.sidebarExpand': '展開側邊欄',
   'app.adminLogin': '管理員登入',
   'app.logout': '登出',
 

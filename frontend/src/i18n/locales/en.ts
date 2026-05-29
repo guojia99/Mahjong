@@ -34,6 +34,8 @@ const en: Record<string, string> = {
 
   // ===== App =====
   'app.name': 'Kano Mahjong',
+  'app.sidebarCollapse': 'Collapse sidebar',
+  'app.sidebarExpand': 'Expand sidebar',
   'app.adminLogin': 'Admin Login',
   'app.logout': 'Log out',
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.0.1 — 2026-05-29
+
+- Collapsible icon-only sidebar on desktop
+- Paipu replay board locked to a 1:1 square aspect ratio
+- Game list: one card per row; filters and pagination in the URL; returning from detail restores list state
+- Online paipu stats: tabs and filters synced to the URL
+
 ## v3.0.0 — 2026-05-28
 
 - Mortal AI integration: auto-review online paipu with per-move scores (0–100) and letter grades

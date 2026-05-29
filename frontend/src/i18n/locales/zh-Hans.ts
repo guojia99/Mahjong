@@ -34,6 +34,8 @@ const zhHans: Record<string, string> = {
 
   // ===== App =====
   'app.name': '嘉の雀桩',
+  'app.sidebarCollapse': '收起侧边栏',
+  'app.sidebarExpand': '展开侧边栏',
   'app.adminLogin': '管理员登录',
   'app.logout': '退出登录',
 

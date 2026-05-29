@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { getPaipuStatsRanking, getAiPaipuStatsRanking, type AiPaipuStatsItem } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
+import { useSyncedSearchParams } from '@/hooks/useSyncedSearchParams';
 import { BarChart3 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
@@ -52,6 +53,19 @@ export type PaipuStatRankType =
   | 'avg_riichi_discard_turn'
   | 'avg_riichi_tsumo_after_turn'
   | 'avg_riichi_hu_after_turn';
+
+const PAIPU_STAT_RANK_TYPES: PaipuStatRankType[] = [
+  'win_rate', 'avg_win_count', 'avg_riichi', 'riichi_rate', 'damaten_rate', 'damaten_listen_rate',
+  'avg_deal_in', 'deal_in_rate', 'tsumo_rate', 'avg_furo', 'furo_rate', 'avg_win_point',
+  'avg_minkan_win_point', 'avg_deal_point', 'first_riichi_rate', 'chase_riichi_rate',
+  'total_minkan', 'avg_minkan', 'minkan_rate', 'total_ankan', 'avg_ankan', 'ankan_rate',
+  'riichi_win_rate', 'riichi_deal_rate', 'riichi_noten_rate', 'avg_riichi_pt', 'riichi_quality',
+  'riichi_composite', 'avg_riichi_discard_turn', 'avg_riichi_tsumo_after_turn', 'avg_riichi_hu_after_turn',
+];
+
+const DEFAULT_PLAYER_COUNT = '4';
+const DEFAULT_GAME_MODE = 'half_match';
+const DEFAULT_MIN_GAMES = '5';
 
 type TabConfig = {
   value: PaipuStatRankType;
@@ -130,17 +144,27 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
 }
 
 export default function OnlinePaipuStatsPage() {
-  const [pageMode, setPageMode] = useState<'stats' | 'ai'>('stats');
+  const { patch, readFilterString, readEnum } = useSyncedSearchParams();
   const [aiRankings, setAiRankings] = useState<AiPaipuStatsItem[]>([]);
   const [rankings, setRankings] = useState<FunRankingItem[]>([]);
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
-  const [rankType, setRankType] = useState<PaipuStatRankType>('win_rate');
-  const [playerCount, setPlayerCount] = useState<'' | '3' | '4'>('4');
-  const [gameMode, setGameMode] = useState<'' | 'east_wind' | 'half_match'>('half_match');
-  const [gameType, setGameType] = useState<'' | 'offline' | 'online'>('');
-  const [minGames, setMinGames] = useState('5');
   const { showToast, ToastComponent } = useToast();
   const { t } = useTranslation();
+
+  const pageMode = readEnum('mode', ['stats', 'ai'] as const, 'stats');
+  const rankTypeRaw = readFilterString('rank_type', 'win_rate');
+  const rankType: PaipuStatRankType = PAIPU_STAT_RANK_TYPES.includes(rankTypeRaw as PaipuStatRankType)
+    ? (rankTypeRaw as PaipuStatRankType)
+    : 'win_rate';
+  const playerCount = readFilterString('player_count', DEFAULT_PLAYER_COUNT) as '' | '3' | '4';
+  const gameMode = readFilterString('game_mode', DEFAULT_GAME_MODE) as '' | 'east_wind' | 'half_match';
+  const gameType = readFilterString('game_type', '') as '' | 'offline' | 'online';
+  const minGames = readFilterString('min_games', DEFAULT_MIN_GAMES);
+
+  const filterQueryPatch = (key: string, value: string, defaultWhenMissing: string) => {
+    if (value === defaultWhenMissing) return { [key]: null as string | null };
+    return { [key]: value };
+  };
 
   const tabGroups: { titleKey: string; tabs: TabConfig[] }[] = useMemo(
     () => [
@@ -286,7 +310,7 @@ export default function OnlinePaipuStatsPage() {
     <button
       key={tab.value}
       type="button"
-      onClick={() => setRankType(tab.value)}
+      onClick={() => patch(filterQueryPatch('rank_type', tab.value, 'win_rate'))}
       className="px-3 py-1.5 text-xs font-medium rounded-lg transition-all"
       style={{
         background: rankType === tab.value ? tab.color + '22' : 'white',
@@ -315,14 +339,14 @@ export default function OnlinePaipuStatsPage() {
         <button
           type="button"
           className={`btn btn-sm ${pageMode === 'stats' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setPageMode('stats')}
+          onClick={() => patch({ mode: null })}
         >
           {t('paipuStats.modeStats')}
         </button>
         <button
           type="button"
           className={`btn btn-sm ${pageMode === 'ai' ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setPageMode('ai')}
+          onClick={() => patch({ mode: 'ai' })}
         >
           {t('paipuStats.modeAi')}
         </button>
@@ -392,7 +416,7 @@ export default function OnlinePaipuStatsPage() {
             <button
               key={v || 'all'}
               type="button"
-              onClick={() => setGameType(v)}
+              onClick={() => patch({ game_type: v === '' ? '' : v })}
               className="px-3 py-1.5 text-xs font-medium transition-colors"
               style={{
                 background: gameType === v ? 'var(--color-primary-light)' : 'white',
@@ -404,17 +428,29 @@ export default function OnlinePaipuStatsPage() {
             </button>
           ))}
         </div>
-        <select value={playerCount} onChange={(e) => setPlayerCount(e.target.value as typeof playerCount)} style={SELECT_STYLE}>
+        <select
+          value={playerCount}
+          onChange={(e) => patch(filterQueryPatch('player_count', e.target.value, DEFAULT_PLAYER_COUNT))}
+          style={SELECT_STYLE}
+        >
           <option value="">{t('paipuStats.allPlayerCount')}</option>
           <option value="4">{t('playerCount.yonma')}</option>
           <option value="3">{t('playerCount.sanma')}</option>
         </select>
-        <select value={gameMode} onChange={(e) => setGameMode(e.target.value as typeof gameMode)} style={SELECT_STYLE}>
+        <select
+          value={gameMode}
+          onChange={(e) => patch(filterQueryPatch('game_mode', e.target.value, DEFAULT_GAME_MODE))}
+          style={SELECT_STYLE}
+        >
           <option value="">{t('paipuStats.allMode')}</option>
           <option value="east_wind">{t('gameMode.eastWind')}</option>
           <option value="half_match">{t('gameMode.halfMatch')}</option>
         </select>
-        <select value={minGames} onChange={(e) => setMinGames(e.target.value)} style={SELECT_STYLE}>
+        <select
+          value={minGames}
+          onChange={(e) => patch(filterQueryPatch('min_games', e.target.value, DEFAULT_MIN_GAMES))}
+          style={SELECT_STYLE}
+        >
           <option value="1">{t('paipuStats.minGames')}1{t('paipuStats.minGamesUnit')}</option>
           <option value="5">{t('paipuStats.minGames')}5{t('paipuStats.minGamesUnit')}</option>
           <option value="10">{t('paipuStats.minGames')}10{t('paipuStats.minGamesUnit')}</option>
