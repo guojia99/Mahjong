@@ -12,7 +12,7 @@ if [ ! -f "config.toml" ]; then
     exit 1
 fi
 
-HOST="${MORTAL_HOST:-127.0.0.1}"
+HOST="${MORTAL_HOST:-0.0.0.0}"
 PORT="${MORTAL_PORT:-9996}"
 PLAYER_ID="${MORTAL_PLAYER_ID:-0}"
 

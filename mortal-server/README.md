@@ -65,7 +65,7 @@ state_file = '/path/to/mortal.pth'
 ### 3. 启动服务
 
 ```bash
-# 一键启动（默认 127.0.0.1:9996，player_id=0）
+# 一键启动（默认 0.0.0.0:9996，player_id=0）
 ./start.sh
 
 # 指定参数
@@ -661,6 +661,6 @@ kill $(pgrep -f "serve.py")
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `MORTAL_CFG` | `config.toml` | 配置文件路径 |
-| `MORTAL_HOST` | `127.0.0.1` | 绑定地址 |
+| `MORTAL_HOST` | `0.0.0.0` | 绑定地址 |
 | `MORTAL_PORT` | `9996` | 监听端口 |
 | `MORTAL_PLAYER_ID` | `0` | AI 玩家 ID (0-3) |

@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 USAGE = '''Usage: python serve.py [--host HOST] [--port PORT] [--player-id ID]
 
 OPTIONS:
-    --host HOST       Bind address (default: 127.0.0.1)
+    --host HOST       Bind address (default: 0.0.0.0)
     --port PORT       Listen port (default: 8080)
     --player-id ID    Player ID, 0-3 (default: 0)'''
 
 def parse_args():
     args = {
-        'host': '127.0.0.1',
+        'host': '0.0.0.0',
         'port': 8080,
         'player_id': 0,
     }
