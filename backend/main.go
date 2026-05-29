@@ -236,6 +236,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.OptionalAuth())
+	api.Use(middleware.QueryCache())
 	{
 		api.GET("/i18n/languages/", handlers.I18nLanguages)
 
@@ -265,7 +266,7 @@ func run(cmd *cobra.Command, args []string) error {
 			players.DELETE("/majsoul-accounts/:account_pk/", handlers.DeleteMajsoulAccount)
 		}
 
-		rooms := api.Group("/rooms")
+		rooms := api.Group("/rooms", middleware.InvalidateQueryCacheAfterGameWrite())
 		{
 			rooms.GET("", handlers.RoomList)
 			rooms.POST("", handlers.RoomCreate)
@@ -280,7 +281,7 @@ func run(cmd *cobra.Command, args []string) error {
 			rooms.POST("/:pk/games/", handlers.RoomCreateGame)
 		}
 
-		games := api.Group("/games")
+		games := api.Group("/games", middleware.InvalidateQueryCacheAfterGameWrite())
 		{
 			games.GET("", handlers.GameList)
 			games.POST("/online/", handlers.OnlineGameImport)
