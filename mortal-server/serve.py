@@ -11,24 +11,26 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 from model import Brain, DQN
 from engine import MortalEngine
-from common import filtered_trimmed_lines
+from common import filtered_trimmed_lines, load_checkpoint
 from libriichi.mjai import Bot
-from config import config
+from config import config_path, get_config, load_config
 
 logger = logging.getLogger(__name__)
 
-USAGE = '''Usage: python serve.py [--host HOST] [--port PORT] [--player-id ID]
+USAGE = '''Usage: python serve.py [--host HOST] [--port PORT] [--player-id ID] [--config PATH]
 
 OPTIONS:
     --host HOST       Bind address (default: 0.0.0.0)
     --port PORT       Listen port (default: 8080)
-    --player-id ID    Player ID, 0-3 (default: 0)'''
+    --player-id ID    Player ID, 0-3 (default: 0)
+    --config PATH     config.toml path (default: MORTAL_CFG or config.toml)'''
 
 def parse_args():
     args = {
         'host': '0.0.0.0',
         'port': 8080,
         'player_id': 0,
+        'config': None,
     }
     i = 1
     while i < len(sys.argv):
@@ -41,6 +43,9 @@ def parse_args():
             i += 2
         elif key == '--player-id' and i + 1 < len(sys.argv):
             args['player_id'] = int(sys.argv[i + 1])
+            i += 2
+        elif key == '--config' and i + 1 < len(sys.argv):
+            args['config'] = sys.argv[i + 1]
             i += 2
         else:
             print(USAGE, file=sys.stderr)
@@ -179,9 +184,10 @@ class ThreadedHTTPServer(HTTPServer):
 
 
 def load_model():
-    state_file = config['control']['state_file']
+    cfg = get_config()
+    state_file = cfg['control']['state_file']
     device = torch.device('cpu')
-    state = torch.load(state_file, weights_only=True, map_location=device)
+    state = load_checkpoint(state_file, map_location=device)
     cfg = state['config']
     version = cfg['control'].get('version', 1)
     num_blocks = cfg['resnet']['num_blocks']
@@ -218,6 +224,10 @@ def load_model():
 
 def main():
     args = parse_args()
+    if args['config']:
+        os.environ['MORTAL_CFG'] = args['config']
+    load_config(args['config'])
+    logging.info('config: %s', config_path())
     engine, tag = load_model()
     game_state = GameState(engine, args['player_id'])
 

@@ -64,6 +64,34 @@ state_file = '/path/to/mortal.pth'
 
 ### 3. 启动服务
 
+**配置命名**（端口由文件名自动推断）：
+
+| 文件 | 端口 |
+|------|------|
+| `config.toml` | 9996（默认） |
+| `config-9995.toml` | 9995 |
+| `config-9994.toml` | 9994 |
+
+将 `config-9995.toml.example` 复制为 `config-9995.toml` 并设置 `state_file` 即可参与启动。
+
+**本地开发**（扫描所有 `*.toml`，每个配置起一个进程）：
+
+```bash
+make mortal-dev-list   # 预览将启动哪些实例
+make mortal-dev        # 启动全部
+make mortal-dev-stop   # 停止全部并释放端口
+make mortal-dev-status
+```
+
+**Linux 生产**（每个 `*.toml` 注册 `mahjong-mortal-<port>.service`）：
+
+```bash
+make mortal-prod
+make mortal-prod-stop
+```
+
+**直接脚本**（供 systemd 或高级用法）：
+
 ```bash
 # 一键启动（默认 0.0.0.0:9996，player_id=0）
 ./start.sh
@@ -71,8 +99,12 @@ state_file = '/path/to/mortal.pth'
 # 指定参数
 MORTAL_PORT=9000 MORTAL_PLAYER_ID=2 ./start.sh
 
+# 多模型：不同 config + 端口
+MORTAL_PORT=9995 MORTAL_CFG=config-9995.toml ./start.sh
+
 # 或直接用 python
 MORTAL_CFG=config.toml python3 serve.py --host 127.0.0.1 --port 9996 --player-id 0
+python3 serve.py --config config-9995.toml --port 9995 --player-id 0
 ```
 
 服务启动后会自动根据操作系统复制对应的 `libriichi.so`（`make venv` 同样会先选择正确平台的库）。
@@ -664,3 +696,6 @@ kill $(pgrep -f "serve.py")
 | `MORTAL_HOST` | `0.0.0.0` | 绑定地址 |
 | `MORTAL_PORT` | `9996` | 监听端口 |
 | `MORTAL_PLAYER_ID` | `0` | AI 玩家 ID (0-3) |
+| `MORTAL_DEV` | — | 设为 `1` 时由 `make mortal-dev` 启动（日志带 `[dev]` 标记） |
+
+> `make mortal-dev` / `make mortal-dev-stop` 根据目录内 `*.toml` 自动决定端口与实例数量。

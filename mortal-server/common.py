@@ -1,3 +1,4 @@
+import logging
 import torch
 import socket
 import struct
@@ -9,6 +10,22 @@ from tqdm.auto import tqdm as orig_tqdm
 from config import config
 
 tqdm = partial(orig_tqdm, unit='batch', dynamic_ncols=True, ascii=True)
+
+logger = logging.getLogger(__name__)
+
+
+def load_checkpoint(path, map_location=None):
+    """Load a Mortal .pth; fall back to weights_only=False for older checkpoints."""
+    try:
+        return torch.load(path, weights_only=True, map_location=map_location)
+    except Exception as err:
+        logger.warning(
+            'weights_only load failed for %s (%s); retrying with weights_only=False',
+            path,
+            err,
+        )
+        return torch.load(path, weights_only=False, map_location=map_location)
+
 
 def parameter_count(module):
     return sum(p.numel() for p in module.parameters() if p.requires_grad)

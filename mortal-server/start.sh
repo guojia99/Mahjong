@@ -7,8 +7,12 @@ cd "$SCRIPT_DIR"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 bash "$REPO_ROOT/scripts/select-libriichi.sh"
 
-if [ ! -f "config.toml" ]; then
-    echo "Error: config.toml not found"
+MORTAL_CFG_FILE="${MORTAL_CFG:-config.toml}"
+if [ "${MORTAL_CFG_FILE#/}" = "$MORTAL_CFG_FILE" ]; then
+    MORTAL_CFG_FILE="$SCRIPT_DIR/$MORTAL_CFG_FILE"
+fi
+if [ ! -f "$MORTAL_CFG_FILE" ]; then
+    echo "Error: config not found: $MORTAL_CFG_FILE"
     exit 1
 fi
 
@@ -16,12 +20,16 @@ HOST="${MORTAL_HOST:-0.0.0.0}"
 PORT="${MORTAL_PORT:-9996}"
 PLAYER_ID="${MORTAL_PLAYER_ID:-0}"
 
-echo "Starting Mortal inference server..."
+if [ "${MORTAL_DEV:-}" = "1" ]; then
+	echo "Starting Mortal inference server [dev]..."
+else
+	echo "Starting Mortal inference server..."
+fi
 echo "  host: $HOST:$PORT"
 echo "  player_id: $PLAYER_ID"
-echo "  config: config.toml"
+echo "  config: $MORTAL_CFG_FILE"
 
-export MORTAL_CFG="$SCRIPT_DIR/config.toml"
+export MORTAL_CFG="$MORTAL_CFG_FILE"
 
 # Prefer repo-root .venv (created by `make venv` / `make mortal` / `make dev`).
 PYTHON="${PYTHON:-}"
@@ -43,4 +51,4 @@ VENV_PREFIX="$("$PYTHON" -c 'import sys; print(sys.prefix)' 2>/dev/null || echo 
 echo "  python: $PYTHON"
 echo "  sys.prefix: $VENV_PREFIX"
 
-exec "$PYTHON" serve.py --host "$HOST" --port "$PORT" --player-id "$PLAYER_ID"
+exec "$PYTHON" serve.py --host "$HOST" --port "$PORT" --player-id "$PLAYER_ID" --config "$MORTAL_CFG"
