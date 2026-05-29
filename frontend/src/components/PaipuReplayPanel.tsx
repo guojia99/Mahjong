@@ -1122,10 +1122,8 @@ function ReplayTable({
 
   const boardStyle: CSSProperties = {
     width: '100%',
-    maxWidth: 720,
-    minWidth: CENTER_PLATE_MIN_W + 96,
-    margin: '0 auto',
-    aspectRatio: '1',
+    height: '100%',
+    minWidth: 0,
     background: 'linear-gradient(165deg, #0e7a5a 0%, #064a36 48%, #053625 100%)',
     border: '2px solid #032a1e',
     borderRadius: 12,
@@ -1136,7 +1134,8 @@ function ReplayTable({
     gap: 4,
     padding: 6,
     color: '#fff',
-    overflow: 'visible',
+    overflow: 'hidden',
+    boxSizing: 'border-box',
   };
 
   const centerPlate: CSSProperties = {
@@ -1239,7 +1238,17 @@ function ReplayTable({
   };
 
   return (
-    <div style={boardStyle}>
+    <div
+      style={{
+        width: '100%',
+        maxWidth: 720,
+        margin: '0 auto',
+        aspectRatio: '1 / 1',
+        position: 'relative',
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ ...boardStyle, position: 'absolute', inset: 0 }}>
       {/* 上：横跨整行，手牌可完整展开 */}
       <div style={{ gridColumn: '1 / -1', gridRow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'visible' }}>
         {renderEdge('top')}
@@ -1316,6 +1325,7 @@ function ReplayTable({
       {/* 下（视角座位）：横跨整行，手牌可完整展开 */}
       <div style={{ gridColumn: '1 / -1', gridRow: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'visible' }}>
         {renderEdge('bottom')}
+      </div>
       </div>
     </div>
   );

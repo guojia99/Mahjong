@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { getGamesList, type GamesListParams } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
+import { useSyncedSearchParams } from '@/hooks/useSyncedSearchParams';
 import type { Game } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS } from '@/types';
 import { aiMatchForPlayer } from '@/paipu/aiAnalysis';
@@ -143,22 +144,33 @@ const SELECT_STYLE: React.CSSProperties = {
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
+const DEFAULT_PLAYER_COUNT = '4';
+const DEFAULT_MODE = 'half_match';
+const DEFAULT_PAGE_SIZE = 20;
+
 export default function GameListPage() {
   const { t } = useTranslation();
+  const { patch, queryString, readInt, readFilterString } = useSyncedSearchParams();
   const [games, setGames] = useState<Game[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(20);
-  const [playerCountFilter, setPlayerCountFilter] = useState<'' | '3' | '4'>('4');
-  const [modeFilter, setModeFilter] = useState<'' | 'east_wind' | 'half_match'>('half_match');
-  const [typeFilter, setTypeFilter] = useState<'' | 'offline' | 'online'>('');
-  const [leagueFilter, setLeagueFilter] = useState<'' | '1' | '0'>('');
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const { showToast, ToastComponent } = useToast();
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize) || 1);
+  const page = readInt('page', 1);
+  const pageSizeRaw = readFilterString('page_size', String(DEFAULT_PAGE_SIZE));
+  const pageSizeNum = (PAGE_SIZE_OPTIONS as readonly number[]).includes(Number(pageSizeRaw))
+    ? (Number(pageSizeRaw) as (typeof PAGE_SIZE_OPTIONS)[number])
+    : DEFAULT_PAGE_SIZE;
+  const playerCountFilter = readFilterString('player_count', DEFAULT_PLAYER_COUNT);
+  const modeFilter = readFilterString('game_mode', DEFAULT_MODE);
+  const typeFilter = readFilterString('game_type', '');
+  const leagueFilter = readFilterString('league', '') as '' | '0' | '1';
+
+  const listBackTo = `/games${queryString}`;
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSizeNum) || 1);
 
   const playerIds = useMemo(
     () => [...new Set(games.flatMap((g) => g.players.map((p) => p.player.id)))],
@@ -166,7 +178,7 @@ export default function GameListPage() {
   );
 
   useAbortableEffect((signal) => {
-    const params: GamesListParams = { page, page_size: pageSize };
+    const params: GamesListParams = { page, page_size: pageSizeNum };
     if (playerCountFilter) params.player_count = playerCountFilter;
     if (modeFilter) params.game_mode = modeFilter;
     if (typeFilter) params.game_type = typeFilter;
@@ -176,8 +188,8 @@ export default function GameListPage() {
       .then((res) => {
         setGames(res.results);
         setTotalCount(res.count);
-        const maxPage = Math.max(1, Math.ceil(res.count / pageSize) || 1);
-        if (page > maxPage) setPage(maxPage);
+        const maxPage = Math.max(1, Math.ceil(res.count / pageSizeNum) || 1);
+        if (page > maxPage) patch({ page: String(maxPage) }, true);
       })
       .catch((e) => {
         if (isAbortError(e)) return;
@@ -186,7 +198,7 @@ export default function GameListPage() {
       .finally(() => {
         if (!signal.aborted) setListLoading(false);
       });
-  }, [playerCountFilter, modeFilter, typeFilter, leagueFilter, page, pageSize, showToast, t]);
+  }, [playerCountFilter, modeFilter, typeFilter, leagueFilter, page, pageSizeNum, showToast, t, patch]);
 
   useAbortableEffect((signal) => {
     if (playerIds.length === 0) {
@@ -197,6 +209,19 @@ export default function GameListPage() {
       if (!isAbortError(e)) throw e;
     });
   }, [playerIds]);
+
+  const setFilterPage1 = (updates: Record<string, string | null | undefined>) => {
+    patch({ ...updates, page: null });
+  };
+
+  const setPage = (next: number) => {
+    patch({ page: next <= 1 ? null : String(next) });
+  };
+
+  const filterQueryPatch = (key: string, value: string, defaultWhenMissing: string) => {
+    if (value === defaultWhenMissing) return { [key]: null as string | null };
+    return { [key]: value };
+  };
 
   return (
     <div>
@@ -229,10 +254,7 @@ export default function GameListPage() {
       <div className="flex flex-wrap gap-3 mb-6 items-center">
         <select
           value={playerCountFilter}
-          onChange={(e) => {
-            setPlayerCountFilter(e.target.value as typeof playerCountFilter);
-            setPage(1);
-          }}
+          onChange={(e) => setFilterPage1(filterQueryPatch('player_count', e.target.value, DEFAULT_PLAYER_COUNT))}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allPlayerCount')}</option>
@@ -241,10 +263,7 @@ export default function GameListPage() {
         </select>
         <select
           value={modeFilter}
-          onChange={(e) => {
-            setModeFilter(e.target.value as typeof modeFilter);
-            setPage(1);
-          }}
+          onChange={(e) => setFilterPage1(filterQueryPatch('game_mode', e.target.value, DEFAULT_MODE))}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allMode')}</option>
@@ -253,10 +272,7 @@ export default function GameListPage() {
         </select>
         <select
           value={typeFilter}
-          onChange={(e) => {
-            setTypeFilter(e.target.value as typeof typeFilter);
-            setPage(1);
-          }}
+          onChange={(e) => setFilterPage1({ game_type: e.target.value === '' ? '' : e.target.value })}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.allType')}</option>
@@ -265,10 +281,7 @@ export default function GameListPage() {
         </select>
         <select
           value={leagueFilter}
-          onChange={(e) => {
-            setLeagueFilter(e.target.value as typeof leagueFilter);
-            setPage(1);
-          }}
+          onChange={(e) => setFilterPage1({ league: e.target.value === '' ? '' : e.target.value })}
           style={SELECT_STYLE}
         >
           <option value="">{t('gameList.leagueAll')}</option>
@@ -276,10 +289,10 @@ export default function GameListPage() {
           <option value="0">{t('gameList.leagueExclude')}</option>
         </select>
         <select
-          value={String(pageSize)}
+          value={String(pageSizeNum)}
           onChange={(e) => {
-            setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
-            setPage(1);
+            const n = e.target.value;
+            setFilterPage1(filterQueryPatch('page_size', n, String(DEFAULT_PAGE_SIZE)));
           }}
           style={SELECT_STYLE}
         >
@@ -304,9 +317,10 @@ export default function GameListPage() {
         </div>
       ) : (
         <>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {games.map((game) => {
             const ranked = [...game.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+            const detailPath = game.room ? `/rooms/${game.room.id}/games/${game.id}` : `/games/${game.id}`;
             return (
               <div
                 key={game.id}
@@ -351,7 +365,8 @@ export default function GameListPage() {
                   </div>
                 <div className="flex flex-wrap items-center justify-end gap-2 min-w-0 shrink">
                   <Link
-                    to={game.room ? `/rooms/${game.room.id}/games/${game.id}` : `/games/${game.id}`}
+                    to={detailPath}
+                    state={{ backTo: listBackTo }}
                     className="btn btn-sm btn-primary min-w-0 max-w-full text-center"
                     style={{
                       textDecoration: 'none',
@@ -411,7 +426,7 @@ export default function GameListPage() {
               type="button"
               className="btn btn-sm btn-outline inline-flex items-center gap-1"
               disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(Math.max(1, page - 1))}
             >
               <ChevronLeft size={16} /> {t('gameList.pagePrev')}
             </button>
@@ -422,7 +437,7 @@ export default function GameListPage() {
               type="button"
               className="btn btn-sm btn-outline inline-flex items-center gap-1"
               disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(Math.min(totalPages, page + 1))}
             >
               {t('gameList.pageNext')} <ChevronRight size={16} />
             </button>
