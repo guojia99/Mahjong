@@ -150,6 +150,48 @@ export function optionShowsTileImage(o: AiDecisionOption): boolean {
   return o.type === 'dahai' && Boolean(o.pai);
 }
 
+/** CSS color for AI grade letter tiers (S red, A orange, …). */
+export function gradeColor(grade: string): string {
+  const g = grade.trim();
+  if (g.startsWith('S')) return '#dc2626';
+  if (g.startsWith('A')) return '#ea580c';
+  if (g.startsWith('B')) return '#ca8a04';
+  if (g.startsWith('C')) return '#2563eb';
+  if (g === 'AI') return '#7c3aed';
+  if (g === '不正打') return '#991b1b';
+  return '#6b7280';
+}
+
+/** Human pick differs from AI top π option. */
+export function isDecisionMismatch(decision: AiDecisionRecord | null | undefined): boolean {
+  if (!decision?.options?.length) return false;
+  const maxPi = Math.max(...decision.options.map((o) => o.pi));
+  return decision.chosen_pi < maxPi - 1e-9;
+}
+
+/**
+ * Replay frame indices (before the human act) where this player has an AI decision.
+ * Pass onlyDiff=true to keep frames where human ≠ AI top pick.
+ */
+export function decisionFrameIndices(
+  player: AiPlayerAnalysis | null,
+  roundIndex: number,
+  frames: Frame[],
+  onlyDiff = false,
+): number[] {
+  if (!player || frames.length < 2) return [];
+  const kyoku = player.kyoku.find((k) => k.kyoku_index === roundIndex);
+  if (!kyoku?.decisions?.length) return [];
+  const out: number[] = [];
+  for (let fi = 0; fi < frames.length - 1; fi++) {
+    const decision = kyoku.decisions.find((d) => d.action_index === frames[fi + 1].actionIndex);
+    if (!decision) continue;
+    if (onlyDiff && !isDecisionMismatch(decision)) continue;
+    out.push(fi);
+  }
+  return out;
+}
+
 /** Match site player to AI summary by seat_number. */
 export function aiMatchForPlayer(
   game: { ai_analysis?: AiAnalysisSummary; players: { player: { id: string }; seat_number: number }[] },

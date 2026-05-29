@@ -1,7 +1,7 @@
 import api from './client';
 import type { ApiRequestOptions } from './types';
 import { mergeApiOptions } from './types';
-import type { Player, MajsoulAccount, Game, HandRecord } from '@/types';
+import type { Player, MajsoulAccount, Game, HandRecord, PlayerAiMatchScoreSeries } from '@/types';
 
 export async function getPlayers(query = '', opts?: ApiRequestOptions): Promise<Player[]> {
   const params = query ? { q: query } : {};
@@ -74,6 +74,15 @@ export async function deleteMajsoulAccount(accountId: string): Promise<void> {
 
 export async function getPlayerGames(playerId: string, opts?: ApiRequestOptions): Promise<Game[]> {
   const { data } = await api.get(`/players/${playerId}/games/`, mergeApiOptions(opts));
+  return data;
+}
+
+export async function getPlayerAiMatchScores(
+  playerId: string,
+  params?: Record<string, string | number>,
+  opts?: ApiRequestOptions,
+): Promise<PlayerAiMatchScoreSeries> {
+  const { data } = await api.get(`/players/${playerId}/ai-match-scores/`, { params, ...mergeApiOptions(opts) });
   return data;
 }
 

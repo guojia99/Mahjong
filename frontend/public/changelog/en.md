@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.0.3 — 2026-05-29
+
+- Linux production: `make prod` builds and registers a systemd service; `make prod-stop` removes it
+- Mortal AI: `make mortal-prod` / `make mortal-prod-stop` install and remove the systemd service
+
+## v3.0.2 — 2026-05-29
+
+- AI match score overview: color-coded grades, taller rows, avatars in table header
+- Mortal AI review: jump to prev/next decision or mismatch; header shows match and hand scores
+- Replay board: larger wind/honba/riichi labels; fix left-seat river rotation and top/bottom river row order
+
 ## v3.0.1 — 2026-05-29
 
 - Collapsible icon-only sidebar on desktop

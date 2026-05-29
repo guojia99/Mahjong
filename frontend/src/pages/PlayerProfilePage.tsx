@@ -1,17 +1,18 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getPlayer, getPlayerGames } from '@/api/players';
+import { getPlayer, getPlayerGames, getPlayerAiMatchScores } from '@/api/players';
 import { aiMatchForPlayer } from '@/paipu/aiAnalysis';
 import { getPlayerStats } from '@/api/games';
 import { getPlayerYakumans } from '@/api/players';
 import { getPlayerRanking, getPlayerGameRankingResults } from '@/api/ranking';
 import { useToast } from '@/hooks/useToast';
-import type { Player, Game, PlayerStats, PlayerStatsRecentPoint, HandRecord, PlayerRankingScore as PlayerRankingType } from '@/types';
+import type { Player, Game, PlayerStats, PlayerStatsRecentPoint, PlayerAiMatchScoreSeries, HandRecord, PlayerRankingScore as PlayerRankingType } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS, GAME_MODE_FULL_LABELS } from '@/types';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import YakumanCard from '@/components/YakumanCard';
 import PlayerStatsLineChart from '@/components/PlayerStatsLineChart';
+import PlayerAiMatchScoreChart from '@/components/PlayerAiMatchScoreChart';
 import RankTierBadge from '@/components/RankTierBadge';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
@@ -45,6 +46,7 @@ export default function PlayerProfilePage() {
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [games, setGames] = useState<Game[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [aiMatchScores, setAiMatchScores] = useState<PlayerAiMatchScoreSeries | null>(null);
   const [yakumans, setYakumans] = useState<HandRecord[]>([]);
   const [ranking, setRanking] = useState<PlayerRankingType | null>(null);
   const [gameRankingResults, setGameRankingResults] = useState<Record<string, {
@@ -70,6 +72,19 @@ export default function PlayerProfilePage() {
     [id, recentLimit],
   );
 
+  const loadAiMatchScores = useCallback(
+    (pc?: string, gm?: string, gt?: string, rl?: number) => {
+      if (!id) return;
+      const params: Record<string, string | number> = {};
+      if (pc) params.player_count = pc;
+      if (gm) params.game_mode = gm;
+      if (gt) params.game_type = gt;
+      params.recent_limit = rl ?? recentLimit;
+      getPlayerAiMatchScores(id, params).then(setAiMatchScores).catch(() => setAiMatchScores(null));
+    },
+    [id, recentLimit],
+  );
+
   useEffect(() => {
     if (!id) return;
     getPlayer(id).then(setPlayer).catch(() => showToast(t('playerProfile.loadPlayerFailed')));
@@ -90,7 +105,8 @@ export default function PlayerProfilePage() {
 
   useEffect(() => {
     loadStats(filterPlayerCount || undefined, filterGameMode || undefined, filterGameType, recentLimit);
-  }, [filterPlayerCount, filterGameMode, filterGameType, recentLimit, loadStats]);
+    loadAiMatchScores(filterPlayerCount || undefined, filterGameMode || undefined, filterGameType, recentLimit);
+  }, [filterPlayerCount, filterGameMode, filterGameType, recentLimit, loadStats, loadAiMatchScores]);
 
   const chartSeries: PlayerStatsRecentPoint[] = useMemo(() => {
     const enrich = (r: PlayerStatsRecentPoint): PlayerStatsRecentPoint => {
@@ -502,12 +518,44 @@ export default function PlayerProfilePage() {
                   </div>
                 </>
               )}
+
             </>
           ) : (
             <div className="card">
               <div className="empty-state">
                 <p className="text-sm">{t('playerProfile.noDataInCondition')}</p>
               </div>
+            </div>
+          )}
+
+          {filterGameType !== 'offline' && (
+            <div className="card">
+              <h3 className="font-bold mb-2" style={{ fontSize: '0.875rem' }}>{t('playerProfile.aiMatchScoreTitle')}</h3>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>
+                {t('playerProfile.aiMatchScoreHint')}
+              </p>
+              {aiMatchScores && aiMatchScores.series.length > 0 ? (
+                <>
+                  {aiMatchScores.avg_match_score != null && (
+                    <div className="text-sm mb-2" style={{ color: 'var(--color-text-light)' }}>
+                      {t('playerProfile.aiMatchScoreAvg', { avg: aiMatchScores.avg_match_score, n: aiMatchScores.total_games })}
+                    </div>
+                  )}
+                  <PlayerAiMatchScoreChart series={aiMatchScores.series} />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                      {aiMatchScores.series[0]?.start_time || ''}
+                    </span>
+                    <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                      {aiMatchScores.series[aiMatchScores.series.length - 1]?.start_time || ''}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+                  {t('playerProfile.aiMatchScoreNoData')}
+                </p>
+              )}
             </div>
           )}
         </div>

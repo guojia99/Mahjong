@@ -152,6 +152,23 @@ export interface PlayerStats {
     recent_series?: PlayerStatsRecentPoint[];
 }
 
+export interface PlayerAiMatchScorePoint {
+    game_index: number;
+    game_id: string;
+    start_time: string;
+    match_avg: number;
+    match_grade: string;
+    player_count?: number;
+    game_mode?: string;
+    game_type?: string;
+}
+
+export interface PlayerAiMatchScoreSeries {
+    total_games: number;
+    avg_match_score: number | null;
+    series: PlayerAiMatchScorePoint[];
+}
+
 export interface PtRankingItem {
     player: Player;
     total_pt: number;

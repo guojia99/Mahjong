@@ -134,12 +134,42 @@ make dev
 
 | 命令 | 说明 |
 |:----:|:----:|
-| `make dev` | 启动所有服务 |
-| `make check` | 检查服务运行状态 |
-| `make stop` | 停止所有服务 |
-| `make restart` | 重启所有服务 |
-| `make migrate` | 执行数据库迁移 |
-| `make env` | 检查并安装环境依赖 |
+| `make dev` | 启动开发环境（后端 + 前端） |
+| `make prod` | 构建并部署生产环境（Linux 注册 systemd 服务） |
+| `make prod-stop` | 停止并移除生产 systemd 服务 |
+| `make mortal` | 后台启动 Mortal AI 推理（开发 / 非 Linux） |
+| `make mortal-prod` | 构建 venv 并注册 Mortal systemd 服务（Linux） |
+| `make mortal-prod-stop` | 停止并移除 Mortal systemd 服务 |
+
+### 生产部署（Linux）
+
+在项目目录下执行，systemd 服务会以**当前目录**为工作路径：
+
+```bash
+# 1. 配置数据库（首次）
+cp backend/db_config.example.json backend/db_config.json
+
+# 2. 构建并注册主应用服务（网关 :9999）
+make prod
+
+# 3. 可选：注册 Mortal AI 推理服务（:9996）
+#    需先配置 mortal-server/config.toml 中的模型权重
+make mortal-prod
+```
+
+停止并移除服务：
+
+```bash
+make prod-stop
+make mortal-prod-stop
+```
+
+日志位置：
+
+- 主应用：`logs/mahjong-prod.log`
+- Mortal：`journalctl -u mahjong-mortal.service -f`
+
+非 Linux 环境（如 macOS）下 `make prod` / `make mortal` 仍使用后台进程方式运行。
 
 ## 配置
 

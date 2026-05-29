@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"sort"
 
@@ -234,4 +235,146 @@ func AiPaipuStatsRanking(c *gin.Context) {
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Avg > rows[j].Avg })
 	respondOK(c, rows)
+}
+
+// PlayerAiMatchScoreSeries returns chronological match-level AI scores for one player (online paipu with analysis).
+func PlayerAiMatchScoreSeries(c *gin.Context) {
+	pk := c.Param("pk")
+	playerCount := c.Query("player_count")
+	gameMode := c.Query("game_mode")
+	gameType := c.Query("game_type")
+	recentLimit := parseQueryInt(c, "recent_limit", 50)
+	if recentLimit != 10 && recentLimit != 20 && recentLimit != 50 && recentLimit != 100 {
+		recentLimit = 50
+	}
+
+	empty := func() {
+		respondOK(c, gin.H{
+			"total_games":     0,
+			"avg_match_score": nil,
+			"series":          []interface{}{},
+		})
+	}
+
+	if gameType == "offline" {
+		empty()
+		return
+	}
+
+	var gameIDs []string
+	q := config.DB.Model(&models.Game{}).
+		Where("game_type = ? AND ai_analysis_status = ?", "online", "done")
+	if playerCount != "" {
+		q = q.Where("player_count = ?", parseQueryInt(c, "player_count", 4))
+	}
+	if gameMode != "" {
+		q = q.Where("game_mode = ?", gameMode)
+	}
+	q.Pluck("id", &gameIDs)
+	if len(gameIDs) == 0 {
+		empty()
+		return
+	}
+
+	var gps []models.GamePlayer
+	config.DB.Preload("Game").Where("player_id = ? AND game_id IN ? AND score IS NOT NULL", pk, gameIDs).Find(&gps)
+	sort.Slice(gps, func(i, j int) bool {
+		gi, gj := gps[i].Game, gps[j].Game
+		if gi == nil || gj == nil {
+			return false
+		}
+		ti := gi.StartTime
+		if gi.EndTime != nil {
+			ti = *gi.EndTime
+		}
+		tj := gj.StartTime
+		if gj.EndTime != nil {
+			tj = *gj.EndTime
+		}
+		if !ti.Equal(tj) {
+			return ti.After(tj)
+		}
+		return gi.CreatedAt.After(gj.CreatedAt)
+	})
+
+	rows := make([]gin.H, 0, len(gps))
+	for _, gp := range gps {
+		game := gp.Game
+		if game == nil {
+			continue
+		}
+		if !mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData) {
+			continue
+		}
+		var ar mortal.AnalysisResult
+		if err := json.Unmarshal([]byte(game.AiAnalysisData), &ar); err != nil {
+			continue
+		}
+		matchAvg := 0
+		matchGrade := ""
+		found := false
+		for _, p := range ar.Players {
+			if p.Seat == gp.SeatNumber {
+				matchAvg = p.MatchAvg
+				matchGrade = p.MatchGrade
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		ti := game.StartTime
+		if game.EndTime != nil {
+			ti = *game.EndTime
+		}
+		rows = append(rows, gin.H{
+			"game_id":      game.ID,
+			"start_time":   formatTime(ti),
+			"match_avg":    matchAvg,
+			"match_grade":  matchGrade,
+			"player_count": game.PlayerCount,
+			"game_mode":    game.GameMode,
+			"game_type":    game.GameType,
+		})
+	}
+
+	if len(rows) == 0 {
+		empty()
+		return
+	}
+
+	recent := rows
+	if len(recent) > recentLimit {
+		recent = recent[:recentLimit]
+	}
+
+	chrono := make([]gin.H, len(recent))
+	for i, r := range recent {
+		chrono[len(recent)-1-i] = r
+	}
+
+	series := make([]gin.H, 0, len(chrono))
+	sum := 0
+	for idx, r := range chrono {
+		avg, _ := r["match_avg"].(int)
+		sum += avg
+		series = append(series, gin.H{
+			"game_index":   idx,
+			"game_id":      r["game_id"],
+			"start_time":   r["start_time"],
+			"match_avg":    r["match_avg"],
+			"match_grade":  r["match_grade"],
+			"player_count": r["player_count"],
+			"game_mode":    r["game_mode"],
+			"game_type":    r["game_type"],
+		})
+	}
+
+	avgScore := math.Round(float64(sum)/float64(len(chrono))*100) / 100
+	respondOK(c, gin.H{
+		"total_games":     len(chrono),
+		"avg_match_score": avgScore,
+		"series":          series,
+	})
 }

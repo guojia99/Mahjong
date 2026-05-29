@@ -36,6 +36,9 @@ node_modules/
 .make-pids/
 .make-pids/*
 
+# Production logs (make prod)
+logs/
+
 # Cursor
 .cursorignore
 .cursorindexingignore

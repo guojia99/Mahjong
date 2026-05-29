@@ -1,6 +1,8 @@
-.PHONY: dev prod prod-stop prod\:stop build-prod free-dev-ports free-prod-ports venv mortal mortal-stop mortal\:stop
+.PHONY: dev prod prod-stop prod\:stop build-prod free-dev-ports free-prod-ports venv \
+	mortal mortal-stop mortal\:stop mortal-prod mortal-prod-stop mortal-prod\:stop
 
 ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+UNAME_S := $(shell uname -s)
 VENV := $(ROOT_DIR)/.venv
 VENV_PYTHON := $(VENV)/bin/python
 MORTAL_DIR := mortal-server
@@ -10,8 +12,10 @@ MORTAL_LOG := /tmp/mahjong_mortal.log
 BACKEND_PORT := 9997
 FRONTEND_PORT := 9998
 GATEWAY_PORT := 9999
-LOG_FILE := /tmp/mahjong_dev.log
+LOG_DIR := $(ROOT_DIR)/logs
+LOG_FILE := $(LOG_DIR)/mahjong-prod.log
 PID_FILE := /tmp/mahjong_prod.pid
+SYSTEMD_SCRIPT := $(ROOT_DIR)/scripts/systemd-service.sh
 
 PROD_SUPERVISOR_FLAGS := \
 	--backend-bin ./mahjong-backend \
@@ -48,7 +52,7 @@ dev: venv free-dev-ports
 	echo ""; \
 	echo "  Frontend: http://localhost:$(FRONTEND_PORT)"; \
 	echo "  Backend:  http://localhost:$(BACKEND_PORT)"; \
-	echo "  Python:   $(VENV_PYTHON) (mortal: make mortal)"; \
+	echo "  Python:   $(VENV_PYTHON) (mortal: make mortal or make mortal-prod on Linux)"; \
 	echo ""; \
 	wait
 
@@ -72,18 +76,24 @@ free-prod-ports:
 		fi; \
 	done
 
-# Production: daemonized; use `make prod-stop` to stop (not Ctrl+C).
+# Production (Linux): build + install systemd service. Other OS: daemonized nohup.
 prod: build-prod
-	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
-		echo "prod already running (pid $$(cat $(PID_FILE)))"; \
-		echo "  App: http://127.0.0.1:$(GATEWAY_PORT)"; \
-		echo "  Stop: make prod-stop  (or make prod:stop)"; \
-		exit 1; \
-	fi
+	@mkdir -p "$(LOG_DIR)"
 	@if [ ! -f backend/db_config.json ]; then \
 		echo "Missing backend/db_config.json"; \
 		echo "  cp backend/db_config.example.json backend/db_config.json"; \
 		echo "  Edit sqlite_path (e.g. marjong.db or db.sqlite3) relative to backend/"; \
+		exit 1; \
+	fi
+ifeq ($(UNAME_S),Linux)
+	@ROOT_DIR="$(ROOT_DIR)" LOG_DIR="$(LOG_DIR)" PROD_LOG="$(LOG_FILE)" \
+		BACKEND_PORT="$(BACKEND_PORT)" GATEWAY_PORT="$(GATEWAY_PORT)" \
+		bash "$(SYSTEMD_SCRIPT)" prod install
+else
+	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
+		echo "prod already running (pid $$(cat $(PID_FILE)))"; \
+		echo "  App: http://127.0.0.1:$(GATEWAY_PORT)"; \
+		echo "  Stop: make prod-stop  (or make prod:stop)"; \
 		exit 1; \
 	fi
 	@$(MAKE) free-prod-ports
@@ -100,8 +110,13 @@ prod: build-prod
 		rm -f $(PID_FILE); \
 		exit 1; \
 	fi
+endif
 
 prod-stop:
+ifeq ($(UNAME_S),Linux)
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(SYSTEMD_SCRIPT)" prod remove || true
+	@$(MAKE) free-prod-ports
+else
 	@if [ ! -f $(PID_FILE) ]; then \
 		echo "prod supervisor is not running"; \
 		$(MAKE) free-prod-ports; \
@@ -123,12 +138,13 @@ prod-stop:
 	rm -f $(PID_FILE); \
 	$(MAKE) free-prod-ports; \
 	echo "Stopped."
+endif
 
 # `make prod:stop` — colon must be escaped in the Makefile target name.
 prod\:stop: prod-stop
 	@:
 
-# Mortal AI inference server (http://127.0.0.1:9996)
+# Mortal AI inference server (http://127.0.0.1:9996) — foreground-style daemon (dev / macOS).
 mortal: venv
 	@if [ -f $(MORTAL_PID) ] && kill -0 $$(cat $(MORTAL_PID)) 2>/dev/null; then \
 		echo "mortal already running (pid $$(cat $(MORTAL_PID)))"; \
@@ -162,4 +178,26 @@ mortal-stop:
 	@echo "Mortal stopped."
 
 mortal\:stop: mortal-stop
+	@:
+
+# Mortal AI — Linux systemd service (install + enable + start).
+mortal-prod: venv
+ifeq ($(UNAME_S),Linux)
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(SYSTEMD_SCRIPT)" mortal install
+else
+	@echo "mortal-prod is Linux-only; use: make mortal" >&2; \
+	exit 1
+endif
+
+mortal-prod-stop:
+ifeq ($(UNAME_S),Linux)
+	@ROOT_DIR="$(ROOT_DIR)" bash "$(SYSTEMD_SCRIPT)" mortal remove || true
+	@pids=$$(lsof -tiTCP:9996 -sTCP:LISTEN 2>/dev/null); \
+	if [ -n "$$pids" ]; then echo "Releasing port 9996 (pid $$pids)"; kill -TERM $$pids 2>/dev/null || true; fi
+else
+	@echo "mortal-prod-stop is Linux-only" >&2; \
+	exit 1
+endif
+
+mortal-prod\:stop: mortal-prod-stop
 	@:

@@ -258,6 +258,7 @@ func run(cmd *cobra.Command, args []string) error {
 			players.DELETE("/:pk/", handlers.PlayerDelete)
 			players.GET("/:pk/games/", handlers.PlayerGames)
 			players.GET("/:pk/stats/", handlers.PlayerStats)
+			players.GET("/:pk/ai-match-scores/", handlers.PlayerAiMatchScoreSeries)
 			players.GET("/:pk/yakumans/", handlers.PlayerYakumans)
 			players.GET("/:pk/majsoul-accounts/", handlers.PlayerMajsoulAccounts)
 			players.POST("/:pk/majsoul-accounts/", handlers.PlayerAddMajsoulAccount)
