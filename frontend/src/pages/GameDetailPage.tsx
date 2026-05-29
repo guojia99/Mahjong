@@ -14,6 +14,7 @@ import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil, Trophy } from 'lucide-react';
 import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
 import { PaipuReplayPanel, canShowPaipuReplay } from '@/components/PaipuReplayPanel';
+import { PaipuAiOverviewPanel, canShowPaipuAiOverview } from '@/components/PaipuAiOverviewPanel';
 import { useTranslation } from 'react-i18next';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
@@ -66,7 +67,7 @@ export default function GameDetailPage() {
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
-  const [paipuTab, setPaipuTab] = useState<'replay' | 'summary'>('replay');
+  const [paipuTab, setPaipuTab] = useState<'replay' | 'ai' | 'summary'>('replay');
 
   const loadGame = useCallback(async (signal?: AbortSignal) => {
     if (!gameId) return;
@@ -604,7 +605,7 @@ export default function GameDetailPage() {
               </div>
             </>
           )}
-          {(canShowPaipuDetailPanel(game) || canShowPaipuReplay(game)) && (
+          {(canShowPaipuDetailPanel(game) || canShowPaipuReplay(game) || canShowPaipuAiOverview(game)) && (
             <div className={game.source_url ? 'mt-6 pt-4 border-t' : ''} style={game.source_url ? { borderColor: 'var(--color-border)' } : undefined}>
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <h3 className="font-bold">{t('paipuDetail.modalTitle')}</h3>
@@ -622,6 +623,20 @@ export default function GameDetailPage() {
                       {t('paipuReplay.tabReplay')}
                     </button>
                   )}
+                  {canShowPaipuAiOverview(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('ai')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'ai' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'ai' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                        borderLeft: canShowPaipuReplay(game) ? '1px solid var(--color-border)' : undefined,
+                      }}
+                    >
+                      {t('paipuReplay.tabAi')}
+                    </button>
+                  )}
                   {canShowPaipuDetailPanel(game) && (
                     <button
                       type="button"
@@ -630,7 +645,10 @@ export default function GameDetailPage() {
                       style={{
                         background: paipuTab === 'summary' ? 'var(--color-primary-light)' : 'white',
                         color: paipuTab === 'summary' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
-                        borderLeft: '1px solid var(--color-border)',
+                        borderLeft:
+                          canShowPaipuReplay(game) || canShowPaipuAiOverview(game)
+                            ? '1px solid var(--color-border)'
+                            : undefined,
                       }}
                     >
                       {t('paipuReplay.tabSummary')}
@@ -638,11 +656,9 @@ export default function GameDetailPage() {
                   )}
                 </div>
               </div>
-              {paipuTab === 'replay' && canShowPaipuReplay(game) ? (
-                <PaipuReplayPanel game={game} />
-              ) : (
-                <PaipuDetailPanel game={game} />
-              )}
+              {paipuTab === 'replay' && canShowPaipuReplay(game) && <PaipuReplayPanel game={game} />}
+              {paipuTab === 'ai' && canShowPaipuAiOverview(game) && <PaipuAiOverviewPanel game={game} />}
+              {paipuTab === 'summary' && canShowPaipuDetailPanel(game) && <PaipuDetailPanel game={game} />}
             </div>
           )}
         </div>

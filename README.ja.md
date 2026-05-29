@@ -134,12 +134,33 @@ make dev
 
 | コマンド | 説明 |
 |:--------:|:----:|
-| `make dev` | 全サービス起動 |
-| `make check` | サービス状態確認 |
-| `make stop` | 全サービス停止 |
-| `make restart` | 全サービス再起動 |
-| `make migrate` | データベースマイグレーション実行 |
-| `make env` | 環境チェック・依存インストール |
+| `make dev` | 開発環境起動（バックエンド + フロントエンド） |
+| `make prod` | 本番ビルドと systemd サービス登録（Linux） |
+| `make prod-stop` | 本番 systemd サービス停止・削除 |
+| `make mortal` | Mortal AI バックグラウンド起動（開発 / 非 Linux） |
+| `make mortal-prod` | Mortal AI systemd サービス登録（Linux） |
+| `make mortal-prod-stop` | Mortal systemd サービス停止・削除 |
+
+### 本番デプロイ（Linux）
+
+プロジェクトディレクトリで実行。systemd は**現在のディレクトリ**を作業パスに使用：
+
+```bash
+cp backend/db_config.example.json backend/db_config.json
+make prod
+make mortal-prod   # 任意；先に mortal-server/config.toml を設定
+```
+
+停止・削除：
+
+```bash
+make prod-stop
+make mortal-prod-stop
+```
+
+ログ：アプリ → `logs/mahjong-prod.log`、Mortal → `journalctl -u mahjong-mortal.service -f`
+
+Linux 以外（macOS 等）では `make prod` / `make mortal` は従来どおりバックグラウンドプロセスで起動。
 
 ## 設定
 

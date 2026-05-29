@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward, Eye, EyeOff, Layers, Brain } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward, Eye, EyeOff, Layers } from 'lucide-react';
 import { PaipuAiPanel } from '@/components/PaipuAiPanel';
 import type { Game } from '@/types';
 import {
@@ -53,6 +53,12 @@ const CENTER_INFO_MIN_W = 118;
 const CENTER_INFO_MIN_H = 108;
 const CENTER_PLATE_MIN_W = W_SIDE_RIVER_MIN * 2 + CENTER_INFO_MIN_W + 16;
 const CENTER_PLATE_MIN_H = H_RIVER_BAND_MIN * 2 + CENTER_INFO_MIN_H + 16;
+/** 牌桌按此尺寸排版（含四家手牌/牌河），窄屏用容器查询等比缩放到 100% 宽度 */
+const BOARD_DESIGN_SIZE = Math.max(
+  720,
+  W_SIDE_RIVER_MIN * 2 + W_RIVER_BAND_MIN * 2 + CENTER_INFO_MIN_W + 200,
+  CENTER_PLATE_MIN_H + 280,
+);
 
 type TableSide = 'bottom' | 'right' | 'top' | 'left';
 
@@ -217,8 +223,17 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
     const horizontalRiver = side === 'left' || side === 'right';
     const sideways = horizontalRiver ? true : d.sideways;
     const height = sideways ? TILE_H_SIDEWAYS : TILE_H_UPRIGHT;
+    const flipFace = side === 'left';
     return (
-    <span key={key} style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+    <span
+      key={key}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        flexShrink: 0,
+        transform: flipFace ? 'rotate(180deg)' : undefined,
+      }}
+    >
       <Tile
         tile={d.tile}
         sideways={sideways}
@@ -274,14 +289,14 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
 
   if (side === 'bottom') {
     return (
-      <div style={{ ...outer, flexDirection: 'column-reverse', alignItems: 'center' }}>
+      <div style={{ ...outer, flexDirection: 'column', alignItems: 'center' }}>
         {rows.map((row, ri) => rowBlock(row, ri))}
       </div>
     );
   }
   if (side === 'top') {
     return (
-      <div style={{ ...outer, flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ ...outer, flexDirection: 'column-reverse', alignItems: 'center' }}>
         {rows.map((row, ri) => rowBlock(row, ri))}
       </div>
     );
@@ -501,7 +516,7 @@ function WallSummary({
       >
         {remaining}
       </div>
-      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
+      <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center', lineHeight: 1.35 }}>
         {honba}
         {t('paipuReplay.honbaUnit')} · {t('paipuReplay.riichiSticks', { count: riichibou })}
       </div>
@@ -730,7 +745,6 @@ export function PaipuReplayPanel({ game }: Props) {
   const [showOthers, setShowOthers] = useState(true);
   const [showTingpai, setShowTingpai] = useState(true);
   const [showWall, setShowWall] = useState(false);
-  const [aiMode, setAiMode] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700); // ms per step
   const playRef = useRef<number | null>(null);
@@ -794,9 +808,10 @@ export function PaipuReplayPanel({ game }: Props) {
   const skipToEnd = () => setFrameIdx(totalFrames - 1);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden flex flex-col gap-3">
       {/* 控制条 */}
       <div
+        className="w-full min-w-0"
         style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -910,7 +925,7 @@ export function PaipuReplayPanel({ game }: Props) {
           max={Math.max(0, totalFrames - 1)}
           value={frameIdx}
           onChange={(e) => setFrameIdx(parseInt(e.target.value, 10))}
-          style={{ flex: 1, minWidth: 200 }}
+          style={{ flex: 1, minWidth: 0, width: '100%' }}
         />
         <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-light)' }}>
           {frameIdx + 1} / {totalFrames}
@@ -984,25 +999,11 @@ export function PaipuReplayPanel({ game }: Props) {
           <Layers size={14} />
           {showWall ? t('paipuReplay.hideWall') : t('paipuReplay.showWall')}
         </button>
-        <button
-          type="button"
-          className={`btn btn-sm ${aiMode ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => setAiMode((v) => !v)}
-        >
-          <Brain size={14} />
-          {aiMode ? t('paipuReplay.aiModeOn') : t('paipuReplay.aiModeOff')}
-        </button>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: aiMode ? 'row' : 'column',
-          alignItems: 'flex-start',
-          gap: 12,
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="@container w-full min-w-0">
+        <div className="grid grid-cols-1 gap-3 @[50rem]:grid-cols-[minmax(0,1fr)_300px] items-start">
+        <div className="flex flex-col gap-3 min-w-0 w-full">
           <ReplayTable
             round={round}
             frame={frame}
@@ -1026,16 +1027,20 @@ export function PaipuReplayPanel({ game }: Props) {
           )}
         </div>
 
-        {aiMode && (
-          <PaipuAiPanel
-            gameId={game.id}
-            viewSeat={viewSeat}
-            round={round}
-            frameIdx={frameIdx}
-            roundIndex={roundIdx}
-            seatPlayers={seatPlayers}
-          />
-        )}
+        <PaipuAiPanel
+          className="w-full min-w-0 max-w-full @[50rem]:w-[300px] @[50rem]:max-w-[300px]"
+          gameId={game.id}
+          viewSeat={viewSeat}
+          round={round}
+          frameIdx={frameIdx}
+          roundIndex={roundIdx}
+          seatPlayers={seatPlayers}
+          onNavigateFrame={(next) => {
+            setPlaying(false);
+            setFrameIdx(next);
+          }}
+        />
+        </div>
       </div>
     </div>
   );
@@ -1080,7 +1085,7 @@ function EdgePlayerBadge({
         tingpais={state.tingpais}
         showTingpai={showTingpai}
       />
-      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>
+      <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.85)' }}>
         {t(`paipuReplay.windPosition.${ROUND_WIND_KEY[((seatNum - round.dealerSeat + 4) % 4)]}`)}
       </span>
     </div>
@@ -1106,6 +1111,26 @@ function ReplayTable({
 }) {
   const { t } = useTranslation();
   const showUra = frame.kind === 'hule' && frame.uraDoraIndicators.length > 0;
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [viewportSize, setViewportSize] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    return Math.min(window.innerWidth - 32, BOARD_DESIGN_SIZE);
+  });
+
+  useLayoutEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setViewportSize(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const boardScale = viewportSize > 0 ? viewportSize / BOARD_DESIGN_SIZE : 1;
 
   const sideProps = (side: TableSide) => {
     const seatNum = layout[side];
@@ -1121,9 +1146,8 @@ function ReplayTable({
   };
 
   const boardStyle: CSSProperties = {
-    width: '100%',
-    height: '100%',
-    minWidth: 0,
+    width: BOARD_DESIGN_SIZE,
+    height: BOARD_DESIGN_SIZE,
     background: 'linear-gradient(165deg, #0e7a5a 0%, #064a36 48%, #053625 100%)',
     border: '2px solid #032a1e',
     borderRadius: 12,
@@ -1219,7 +1243,7 @@ function ReplayTable({
           minHeight: isSide ? 0 : undefined,
           width: isHorizontal ? 'max-content' : '100%',
           maxWidth: isHorizontal ? '100%' : undefined,
-          overflow: isHorizontal ? 'visible' : undefined,
+          overflow: 'hidden',
           alignSelf: 'center',
         }}
       >
@@ -1238,19 +1262,26 @@ function ReplayTable({
   };
 
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: 720,
-        margin: '0 auto',
-        aspectRatio: '1 / 1',
-        position: 'relative',
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ ...boardStyle, position: 'absolute', inset: 0 }}>
+    <div className="w-full min-w-0 mx-auto" style={{ maxWidth: BOARD_DESIGN_SIZE }}>
+      <div
+        ref={viewportRef}
+        className="relative w-full overflow-hidden"
+        style={{ aspectRatio: '1', contain: 'strict' }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: BOARD_DESIGN_SIZE,
+            height: BOARD_DESIGN_SIZE,
+            transform: `scale(${boardScale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+      <div style={boardStyle}>
       {/* 上：横跨整行，手牌可完整展开 */}
-      <div style={{ gridColumn: '1 / -1', gridRow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'visible' }}>
+      <div style={{ gridColumn: '1 / -1', gridRow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden' }}>
         {renderEdge('top')}
       </div>
 
@@ -1268,7 +1299,7 @@ function ReplayTable({
           alignItems: 'center',
           justifyContent: 'center',
           minWidth: 0,
-          overflow: 'visible',
+          overflow: 'hidden',
         }}
       >
         <div style={centerPlate}>
@@ -1323,9 +1354,11 @@ function ReplayTable({
       </div>
 
       {/* 下（视角座位）：横跨整行，手牌可完整展开 */}
-      <div style={{ gridColumn: '1 / -1', gridRow: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'visible' }}>
+      <div style={{ gridColumn: '1 / -1', gridRow: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden' }}>
         {renderEdge('bottom')}
       </div>
+      </div>
+        </div>
       </div>
     </div>
   );

@@ -420,7 +420,7 @@ export default function MainLayout() {
         />
       )}
 
-      <main className="flex-1 min-w-0 h-screen overflow-y-auto">
+      <main className="flex-1 min-w-0 h-screen overflow-y-auto overflow-x-hidden">
         <header
           className="sticky top-0 z-20 px-4 py-3 md:px-8 md:py-4 flex items-center gap-4"
           style={{
@@ -508,7 +508,7 @@ export default function MainLayout() {
           </div>
         </header>
 
-        <div className="p-4 md:p-8 max-w-5xl mx-auto">
+        <div className="p-4 md:p-8 max-w-5xl mx-auto w-full min-w-0 box-border">
           <Outlet />
         </div>
       </main>

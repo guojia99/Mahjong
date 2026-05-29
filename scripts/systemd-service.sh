@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# Install or remove Linux systemd units for Mahjong production / Mortal AI.
+# Usage: systemd-service.sh <prod|mortal> <install|remove>
+set -euo pipefail
+
+SERVICE_KIND="${1:-}"
+ACTION="${2:-}"
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+BACKEND_PORT="${BACKEND_PORT:-9997}"
+GATEWAY_PORT="${GATEWAY_PORT:-9999}"
+LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
+PROD_LOG="${PROD_LOG:-$LOG_DIR/mahjong-prod.log}"
+
+usage() {
+	echo "Usage: $0 <prod|mortal> <install|remove>" >&2
+	exit 1
+}
+
+require_linux() {
+	if [ "$(uname -s)" != "Linux" ]; then
+		echo "systemd service is Linux-only (current OS: $(uname -s))" >&2
+		exit 1
+	fi
+	if ! command -v systemctl >/dev/null 2>&1; then
+		echo "systemctl not found; is systemd available?" >&2
+		exit 1
+	fi
+}
+
+require_sudo() {
+	if [ "$(id -u)" -eq 0 ]; then
+		SUDO=""
+	else
+		if ! command -v sudo >/dev/null 2>&1; then
+			echo "sudo is required to manage systemd services" >&2
+			exit 1
+		fi
+		SUDO="sudo"
+	fi
+}
+
+service_name() {
+	case "$SERVICE_KIND" in
+	prod) echo "mahjong-prod" ;;
+	mortal) echo "mahjong-mortal" ;;
+	*) usage ;;
+	esac
+}
+
+write_prod_unit() {
+	local unit_path="$1"
+	mkdir -p "$LOG_DIR"
+	cat >"$unit_path" <<EOF
+[Unit]
+Description=Mahjong Assistant (production)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+Group=${RUN_GROUP}
+WorkingDirectory=${ROOT_DIR}/backend
+ExecStart=${ROOT_DIR}/backend/mahjong-prodsupervisor \\
+	--backend-bin ./mahjong-backend \\
+	--gateway-bin ./mahjong-gateway \\
+	--static-dir ../frontend/dist \\
+	--config db_config.json \\
+	--backend-port ${BACKEND_PORT} \\
+	--gateway-port ${GATEWAY_PORT} \\
+	--log ${PROD_LOG} \\
+	--quiet
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_mortal_unit() {
+	local unit_path="$1"
+	cat >"$unit_path" <<EOF
+[Unit]
+Description=Mahjong Mortal AI inference server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+Group=${RUN_GROUP}
+WorkingDirectory=${ROOT_DIR}/mortal-server
+Environment=PYTHON=${ROOT_DIR}/.venv/bin/python
+ExecStart=${ROOT_DIR}/mortal-server/start.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+install_service() {
+	require_linux
+	require_sudo
+
+	local name
+	name="$(service_name)"
+	RUN_USER="${SUDO_USER:-${USER:-root}}"
+	RUN_GROUP="$(id -gn "$RUN_USER" 2>/dev/null || echo "$RUN_USER")"
+
+	case "$SERVICE_KIND" in
+	prod)
+		if [ ! -x "$ROOT_DIR/backend/mahjong-prodsupervisor" ]; then
+			echo "Missing backend/mahjong-prodsupervisor — run: make build-prod" >&2
+			exit 1
+		fi
+		if [ ! -f "$ROOT_DIR/backend/db_config.json" ]; then
+			echo "Missing backend/db_config.json" >&2
+			echo "  cp backend/db_config.example.json backend/db_config.json" >&2
+			exit 1
+		fi
+		;;
+	mortal)
+		if [ ! -x "$ROOT_DIR/.venv/bin/python" ]; then
+			echo "Missing .venv — run: make venv" >&2
+			exit 1
+		fi
+		if [ ! -f "$ROOT_DIR/mortal-server/config.toml" ]; then
+			echo "Missing mortal-server/config.toml" >&2
+			exit 1
+		fi
+		if [ ! -x "$ROOT_DIR/mortal-server/start.sh" ]; then
+			echo "Missing mortal-server/start.sh" >&2
+			exit 1
+		fi
+		;;
+	esac
+
+	local tmp_unit
+	tmp_unit="$(mktemp)"
+	trap 'rm -f "$tmp_unit"' EXIT
+
+	case "$SERVICE_KIND" in
+	prod) write_prod_unit "$tmp_unit" ;;
+	mortal) write_mortal_unit "$tmp_unit" ;;
+	esac
+
+	$SUDO cp "$tmp_unit" "/etc/systemd/system/${name}.service"
+	$SUDO systemctl daemon-reload
+	$SUDO systemctl enable "${name}.service"
+	$SUDO systemctl restart "${name}.service"
+
+	sleep 1
+	if $SUDO systemctl is-active --quiet "${name}.service"; then
+		echo "${name}.service installed and running"
+		case "$SERVICE_KIND" in
+		prod)
+			echo "  App:  http://127.0.0.1:${GATEWAY_PORT}"
+			echo "  Log:  ${PROD_LOG}"
+			;;
+		mortal)
+			echo "  Health: curl http://127.0.0.1:9996/health"
+			echo "  Log:    journalctl -u ${name}.service -f"
+			;;
+		esac
+		echo "  Stop: make ${SERVICE_KIND}-stop"
+	else
+		echo "Failed to start ${name}.service" >&2
+		$SUDO systemctl status "${name}.service" --no-pager || true
+		exit 1
+	fi
+}
+
+remove_service() {
+	require_linux
+	require_sudo
+
+	local name
+	name="$(service_name)"
+
+	if $SUDO systemctl is-active --quiet "${name}.service" 2>/dev/null; then
+		echo "Stopping ${name}.service..."
+		$SUDO systemctl stop "${name}.service"
+	fi
+	if $SUDO systemctl is-enabled --quiet "${name}.service" 2>/dev/null; then
+		$SUDO systemctl disable "${name}.service"
+	fi
+	if [ -f "/etc/systemd/system/${name}.service" ]; then
+		$SUDO rm -f "/etc/systemd/system/${name}.service"
+	fi
+	$SUDO systemctl daemon-reload
+	echo "${name}.service removed"
+}
+
+case "$ACTION" in
+install) install_service ;;
+remove) remove_service ;;
+*) usage ;;
+esac

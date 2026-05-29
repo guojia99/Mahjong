@@ -134,12 +134,33 @@ make dev
 
 | Command | Description |
 |:-------:|:-----------:|
-| `make dev` | Start all services |
-| `make check` | Check service status |
-| `make stop` | Stop all services |
-| `make restart` | Restart all services |
-| `make migrate` | Run database migrations |
-| `make env` | Check and install dependencies |
+| `make dev` | Start dev backend + frontend |
+| `make prod` | Build and deploy production (Linux systemd service) |
+| `make prod-stop` | Stop and remove production systemd service |
+| `make mortal` | Run Mortal AI in background (dev / non-Linux) |
+| `make mortal-prod` | Install Mortal AI systemd service (Linux) |
+| `make mortal-prod-stop` | Stop and remove Mortal systemd service |
+
+### Production (Linux)
+
+Run from the project directory; systemd units use the **current checkout path** as the working directory:
+
+```bash
+cp backend/db_config.example.json backend/db_config.json
+make prod
+make mortal-prod   # optional; configure mortal-server/config.toml first
+```
+
+Stop and remove services:
+
+```bash
+make prod-stop
+make mortal-prod-stop
+```
+
+Logs: app → `logs/mahjong-prod.log`; Mortal → `journalctl -u mahjong-mortal.service -f`.
+
+On non-Linux (e.g. macOS), `make prod` / `make mortal` use background processes instead.
 
 ## Configuration
 

@@ -1,10 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brain } from 'lucide-react';
+import { Brain, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ReplayRound } from '@/paipu/paipuReplayModel';
 import {
   decisionForReplayFrame,
+  decisionFrameIndices,
   formatOptionLabel,
+  gradeColor,
   optionShowsTileImage,
   playerAnalysisForSeat,
   topOptions,
@@ -20,16 +22,24 @@ type Props = {
   round: ReplayRound;
   frameIdx: number;
   roundIndex: number;
-  seatPlayers: { nickname: string }[];
+  seatPlayers: { nickname: string; avatar?: string }[];
+  onNavigateFrame?: (frameIdx: number) => void;
+  className?: string;
 };
 
-type AiTab = 'step' | 'match';
-
-export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, seatPlayers }: Props) {
+export function PaipuAiPanel({
+  gameId,
+  viewSeat,
+  round,
+  frameIdx,
+  roundIndex,
+  seatPlayers,
+  onNavigateFrame,
+  className,
+}: Props) {
   const { t } = useTranslation();
   const [analysis, setAnalysis] = useState<AiAnalysisFull | null>(null);
   const [status, setStatus] = useState<string>('loading');
-  const [tab, setTab] = useState<AiTab>('step');
 
   useEffect(() => {
     let cancelled = false;
@@ -48,13 +58,33 @@ export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, se
     };
   }, [gameId]);
 
+  const player = playerAnalysisForSeat(analysis, viewSeat);
+  const decision = decisionForReplayFrame(player, roundIndex, round.frames, frameIdx);
+  const top = topOptions(decision, 3);
+  const viewPlayer = analysis?.players.find((p) => p.seat === viewSeat);
+  const kyokuRow = viewPlayer?.kyoku.find((k) => k.kyoku_index === roundIndex);
+
+  const decisionFrames = useMemo(
+    () => decisionFrameIndices(player, roundIndex, round.frames, false),
+    [player, roundIndex, round.frames],
+  );
+  const diffFrames = useMemo(
+    () => decisionFrameIndices(player, roundIndex, round.frames, true),
+    [player, roundIndex, round.frames],
+  );
+
+  const decisionPos = decisionFrames.indexOf(frameIdx);
+  const diffPos = diffFrames.indexOf(frameIdx);
+
   const panelShell = (children: ReactNode) => (
     <aside
+      className={className}
       style={{
-        width: 300,
-        flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
         maxHeight: 'min(72vh, 640px)',
         borderRadius: 10,
         border: '1px solid rgba(99, 102, 241, 0.35)',
@@ -65,6 +95,31 @@ export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, se
       {children}
     </aside>
   );
+
+  const navBtnStyle = (disabled: boolean): CSSProperties => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    padding: '4px 6px',
+    borderRadius: 6,
+    border: '1px solid var(--color-border)',
+    background: disabled ? '#f3f4f6' : '#fff',
+    color: disabled ? '#9ca3af' : 'var(--color-text)',
+    fontSize: 10,
+    fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    flex: 1,
+    minWidth: 0,
+  });
+
+  const jumpFrames = (frames: number[], pos: number, delta: number) => {
+    if (!onNavigateFrame || frames.length === 0) return;
+    const nextPos = pos < 0 ? (delta > 0 ? 0 : frames.length - 1) : pos + delta;
+    if (nextPos >= 0 && nextPos < frames.length) {
+      onNavigateFrame(frames[nextPos]);
+    }
+  };
 
   if (status === 'loading') {
     return panelShell(
@@ -81,12 +136,6 @@ export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, se
     );
   }
 
-  const player = playerAnalysisForSeat(analysis, viewSeat);
-  const kyokuCount = Math.max(0, ...analysis.players.map((p) => p.kyoku.length));
-  const decision = decisionForReplayFrame(player, roundIndex, round.frames, frameIdx);
-  const top = topOptions(decision, 3);
-  const viewPlayer = analysis.players.find((p) => p.seat === viewSeat);
-
   return panelShell(
     <>
       <div
@@ -102,9 +151,6 @@ export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, se
             {t('paipuAi.title')}
           </span>
         </div>
-        <span className="text-xs" style={{ color: 'var(--color-text-light)', display: 'block', marginBottom: 8 }}>
-          {analysis.model_tag}
-        </span>
         {viewPlayer && (
           <div
             style={{
@@ -116,151 +162,245 @@ export function PaipuAiPanel({ gameId, viewSeat, round, frameIdx, roundIndex, se
               background: 'rgba(79, 70, 229, 0.08)',
             }}
           >
-            {seatPlayers[viewSeat]?.nickname ?? `S${viewSeat + 1}`}
-            <span style={{ fontWeight: 400, color: 'var(--color-text-light)', marginLeft: 6 }}>
-              {t('paipuAi.match')}: {viewPlayer.match_avg} ({viewPlayer.match_grade})
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          flexShrink: 0,
-          borderBottom: '1px solid rgba(99, 102, 241, 0.15)',
-          padding: '0 8px',
-          gap: 4,
-        }}
-      >
-        <TabButton active={tab === 'step'} onClick={() => setTab('step')}>
-          {t('paipuAi.tabStep')}
-        </TabButton>
-        <TabButton active={tab === 'match'} onClick={() => setTab('match')}>
-          {t('paipuAi.tabMatchScores')}
-        </TabButton>
-      </div>
-
-      <div style={{ flex: 1, overflow: 'auto', padding: '10px 12px' }}>
-        {tab === 'step' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {decision ? (
-              <>
-                <div className="text-xs font-medium" style={{ color: '#4338ca' }}>
-                  {t('paipuAi.stepScore', {
-                    score: decision.chosen_score,
-                    pi: (decision.chosen_pi * 100).toFixed(1),
-                  })}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {top.map((o) => (
-                    <AiOptionChip key={`${o.label}-${o.pai}-${o.action_id}`} option={o} />
-                  ))}
-                </div>
-                <OptionsTable options={decision.options} t={t} />
-              </>
+            <span style={{ fontWeight: 700 }}>{seatPlayers[viewSeat]?.nickname ?? `S${viewSeat + 1}`}</span>
+            {': '}
+            <GradeScore avg={viewPlayer.match_avg} grade={viewPlayer.match_grade} />
+            <span style={{ fontWeight: 400, color: 'var(--color-text-light)', margin: '0 4px' }}>｜</span>
+            {kyokuRow ? (
+              <GradeScore avg={kyokuRow.avg} grade={kyokuRow.grade} />
             ) : (
-              <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                {t('paipuAi.noDecision')}
-              </p>
+              <span style={{ fontWeight: 400, color: 'var(--color-text-light)' }}>—</span>
             )}
           </div>
-        ) : (
-          <MatchScoresTable
-            analysis={analysis}
-            viewSeat={viewSeat}
-            kyokuCount={kyokuCount}
-            seatPlayers={seatPlayers}
-            t={t}
-          />
         )}
+        {onNavigateFrame && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                type="button"
+                style={navBtnStyle(decisionFrames.length === 0 || decisionPos <= 0)}
+                disabled={decisionFrames.length === 0 || decisionPos <= 0}
+                onClick={() => jumpFrames(decisionFrames, decisionPos, -1)}
+                title={t('paipuAi.prevDecision')}
+              >
+                <ChevronLeft size={12} />
+                {t('paipuAi.prevDecision')}
+              </button>
+              <button
+                type="button"
+                style={navBtnStyle(decisionFrames.length === 0 || (decisionPos >= 0 && decisionPos >= decisionFrames.length - 1))}
+                disabled={decisionFrames.length === 0 || (decisionPos >= 0 && decisionPos >= decisionFrames.length - 1)}
+                onClick={() => jumpFrames(decisionFrames, decisionPos, 1)}
+                title={t('paipuAi.nextDecision')}
+              >
+                {t('paipuAi.nextDecision')}
+                <ChevronRight size={12} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                type="button"
+                style={navBtnStyle(diffFrames.length === 0 || diffPos <= 0)}
+                disabled={diffFrames.length === 0 || diffPos <= 0}
+                onClick={() => jumpFrames(diffFrames, diffPos, -1)}
+                title={t('paipuAi.prevDiff')}
+              >
+                <ChevronLeft size={12} />
+                {t('paipuAi.prevDiff')}
+              </button>
+              <button
+                type="button"
+                style={navBtnStyle(diffFrames.length === 0 || (diffPos >= 0 && diffPos >= diffFrames.length - 1))}
+                disabled={diffFrames.length === 0 || (diffPos >= 0 && diffPos >= diffFrames.length - 1)}
+                onClick={() => jumpFrames(diffFrames, diffPos, 1)}
+                title={t('paipuAi.nextDiff')}
+              >
+                {t('paipuAi.nextDiff')}
+                <ChevronRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '10px 12px', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {decision ? (
+            <>
+              <div className="text-xs font-medium" style={{ color: '#4338ca' }}>
+                {t('paipuAi.stepScore', {
+                  score: decision.chosen_score,
+                  pi: (decision.chosen_pi * 100).toFixed(1),
+                })}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {top.map((o) => (
+                  <AiOptionChip key={`${o.label}-${o.pai}-${o.action_id}`} option={o} />
+                ))}
+              </div>
+              <OptionsTable options={decision.options} t={t} />
+            </>
+          ) : (
+            <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+              {t('paipuAi.noDecision')}
+            </p>
+          )}
+        </div>
       </div>
     </>,
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+function GradeScore({ avg, grade }: { avg: number; grade: string }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: '8px 6px',
-        fontSize: 12,
-        fontWeight: active ? 600 : 500,
-        color: active ? '#4f46e5' : 'var(--color-text-light)',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: active ? '2px solid #4f46e5' : '2px solid transparent',
-        cursor: 'pointer',
-        marginBottom: -1,
-      }}
-    >
-      {children}
-    </button>
+    <>
+      {avg}{' '}
+      <span style={{ color: gradeColor(grade), fontWeight: 700 }}>({grade})</span>
+    </>
   );
 }
 
-function MatchScoresTable({
+function cellStyle(highlight: boolean, bold = false): CSSProperties {
+  return {
+    ...tdStyle,
+    textAlign: 'center',
+    fontWeight: bold ? 700 : tdStyle.fontWeight,
+    background: highlight ? 'rgba(99, 102, 241, 0.08)' : undefined,
+  };
+}
+
+function scoreCell(k: { avg: number; grade: string } | undefined) {
+  if (!k) return '—';
+  return (
+    <>
+      {k.avg} <span style={{ color: gradeColor(k.grade), fontWeight: 700 }}>({k.grade})</span>
+    </>
+  );
+}
+
+function PlayerHeaderCell({
+  nickname,
+  avatar,
+  highlight,
+}: {
+  nickname: string;
+  avatar?: string;
+  highlight: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 4,
+        padding: '2px 4px',
+        background: highlight ? 'rgba(99, 102, 241, 0.08)' : undefined,
+      }}
+    >
+      {avatar ? (
+        <img
+          src={avatar}
+          alt={nickname}
+          style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }}
+        />
+      ) : (
+        <span
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            background: 'var(--color-primary-light)',
+            color: 'var(--color-primary-dark)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 11,
+            fontWeight: 700,
+          }}
+        >
+          {nickname.slice(0, 1)}
+        </span>
+      )}
+      <span style={{ fontWeight: 600, textAlign: 'center', lineHeight: 1.2, maxWidth: 72, wordBreak: 'break-word' }}>
+        {nickname}
+      </span>
+    </div>
+  );
+}
+
+export function PaipuAiMatchScoresTable({
   analysis,
-  viewSeat,
+  highlightSeat,
   kyokuCount,
   seatPlayers,
-  t,
 }: {
   analysis: AiAnalysisFull;
-  viewSeat: number;
+  highlightSeat: number;
   kyokuCount: number;
-  seatPlayers: { nickname: string }[];
-  t: (key: string, opts?: Record<string, unknown>) => string;
+  seatPlayers: { nickname: string; avatar?: string }[];
 }) {
+  const { t } = useTranslation();
+  const players = analysis.players;
+
   return (
     <div style={{ overflowX: 'auto' }}>
       <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            <th style={thStyle}>{t('paipuAi.seat')}</th>
-            {Array.from({ length: kyokuCount }, (_, i) => (
-              <th key={i} style={thStyle}>
-                {t('paipuAi.kyokuN', { n: i + 1 })}
+            <th style={thStyle} />
+            {players.map((p) => (
+              <th
+                key={p.seat}
+                style={{
+                  ...thStyle,
+                  padding: '8px 6px',
+                  textAlign: 'center',
+                  verticalAlign: 'bottom',
+                  background: highlightSeat >= 0 && p.seat === highlightSeat ? 'rgba(99, 102, 241, 0.08)' : undefined,
+                }}
+              >
+                <PlayerHeaderCell
+                  nickname={seatPlayers[p.seat]?.nickname ?? `S${p.seat + 1}`}
+                  avatar={seatPlayers[p.seat]?.avatar}
+                  highlight={highlightSeat >= 0 && p.seat === highlightSeat}
+                />
               </th>
             ))}
-            <th style={thStyle}>{t('paipuAi.match')}</th>
           </tr>
         </thead>
         <tbody>
-          {analysis.players.map((p) => (
-            <tr key={p.seat} style={p.seat === viewSeat ? { background: 'rgba(99,102,241,0.08)' } : undefined}>
-              <td style={tdStyle}>{seatPlayers[p.seat]?.nickname ?? `S${p.seat + 1}`}</td>
-              {Array.from({ length: kyokuCount }, (_, i) => {
+          {Array.from({ length: kyokuCount }, (_, i) => (
+            <tr key={i}>
+              <th style={{ ...thStyle, padding: '10px 8px' }}>{t('paipuAi.kyokuN', { n: i + 1 })}</th>
+              {players.map((p) => {
                 const k = p.kyoku.find((x) => x.kyoku_index === i);
                 return (
-                  <td key={i} style={tdStyle}>
-                    {k ? (
-                      <>
-                        {k.avg}{' '}
-                        <span style={{ color: 'var(--color-text-light)' }}>({k.grade})</span>
-                      </>
-                    ) : (
-                      '—'
-                    )}
+                  <td
+                    key={p.seat}
+                    style={{ ...cellStyle(highlightSeat >= 0 && p.seat === highlightSeat), padding: '10px 8px' }}
+                  >
+                    {scoreCell(k)}
                   </td>
                 );
               })}
-              <td style={{ ...tdStyle, fontWeight: 700 }}>
-                {p.match_avg} ({p.match_grade})
-              </td>
             </tr>
           ))}
+          <tr>
+            <th style={{ ...thStyle, padding: '10px 8px' }}>{t('paipuAi.match')}</th>
+            {players.map((p) => (
+              <td
+                key={p.seat}
+                style={{
+                  ...cellStyle(highlightSeat >= 0 && p.seat === highlightSeat, true),
+                  padding: '10px 8px',
+                }}
+              >
+                {p.match_avg}{' '}
+                <span style={{ color: gradeColor(p.match_grade), fontWeight: 700 }}>({p.match_grade})</span>
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
     </div>
@@ -276,7 +416,7 @@ function OptionsTable({
 }) {
   const sorted = [...options].sort((a, b) => b.pi - a.pi);
   return (
-    <table className="text-xs w-full" style={{ borderCollapse: 'collapse' }}>
+    <table className="text-xs w-full max-w-full" style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
       <thead>
         <tr>
           <th style={thStyle}>{t('paipuAi.option')}</th>
@@ -350,4 +490,7 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding: '4px 6px',
   borderBottom: '1px solid rgba(0,0,0,0.06)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  wordBreak: 'break-word',
 };
