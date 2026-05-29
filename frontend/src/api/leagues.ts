@@ -1,4 +1,6 @@
 import api from './client';
+import type { ApiRequestOptions } from './types';
+import { mergeApiOptions } from './types';
 import type {
     LeagueMatch,
     LeagueSeason,
@@ -12,13 +14,13 @@ import type {
 // Series
 // ==========================================================================
 
-export async function getLeagueSeriesList(): Promise<LeagueSeries[]> {
-    const { data } = await api.get('/leagues/series/');
+export async function getLeagueSeriesList(opts?: ApiRequestOptions): Promise<LeagueSeries[]> {
+    const { data } = await api.get('/leagues/series/', mergeApiOptions(opts));
     return data;
 }
 
-export async function getLeagueSeries(id: string): Promise<LeagueSeries> {
-    const { data } = await api.get(`/leagues/series/${id}/`);
+export async function getLeagueSeries(id: string, opts?: ApiRequestOptions): Promise<LeagueSeries> {
+    const { data } = await api.get(`/leagues/series/${id}/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -50,23 +52,23 @@ export async function deleteLeagueSeries(id: string): Promise<void> {
 // Seasons
 // ==========================================================================
 
-export async function getCurrentSeasons(): Promise<LeagueSeason[]> {
-    const { data } = await api.get('/leagues/seasons/current/');
+export async function getCurrentSeasons(opts?: ApiRequestOptions): Promise<LeagueSeason[]> {
+    const { data } = await api.get('/leagues/seasons/current/', mergeApiOptions(opts));
     return data;
 }
 
-export async function getLeagueSeasons(params?: { series_id?: string; status?: string }): Promise<LeagueSeason[]> {
-    const { data } = await api.get('/leagues/seasons/', { params });
+export async function getLeagueSeasons(params?: { series_id?: string; status?: string }, opts?: ApiRequestOptions): Promise<LeagueSeason[]> {
+    const { data } = await api.get('/leagues/seasons/', { params, ...mergeApiOptions(opts) });
     return data;
 }
 
-export async function getSeriesSeasons(seriesId: string): Promise<LeagueSeason[]> {
-    const { data } = await api.get(`/leagues/series/${seriesId}/seasons/`);
+export async function getSeriesSeasons(seriesId: string, opts?: ApiRequestOptions): Promise<LeagueSeason[]> {
+    const { data } = await api.get(`/leagues/series/${seriesId}/seasons/`, mergeApiOptions(opts));
     return data;
 }
 
-export async function getLeagueSeason(id: string): Promise<LeagueSeason> {
-    const { data } = await api.get(`/leagues/seasons/${id}/`);
+export async function getLeagueSeason(id: string, opts?: ApiRequestOptions): Promise<LeagueSeason> {
+    const { data } = await api.get(`/leagues/seasons/${id}/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -118,8 +120,8 @@ export async function reopenLeagueSeason(id: string): Promise<LeagueSeason> {
 // Season players (registration)
 // ==========================================================================
 
-export async function getSeasonPlayers(seasonId: string): Promise<LeagueSeasonPlayerItem[]> {
-    const { data } = await api.get(`/leagues/seasons/${seasonId}/players/`);
+export async function getSeasonPlayers(seasonId: string, opts?: ApiRequestOptions): Promise<LeagueSeasonPlayerItem[]> {
+    const { data } = await api.get(`/leagues/seasons/${seasonId}/players/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -141,8 +143,8 @@ export async function batchRegisterPlayers(seasonId: string, playerIds: string[]
 // Stages
 // ==========================================================================
 
-export async function getLeagueStages(seasonId: string): Promise<LeagueStage[]> {
-    const { data } = await api.get(`/leagues/seasons/${seasonId}/stages/`);
+export async function getLeagueStages(seasonId: string, opts?: ApiRequestOptions): Promise<LeagueStage[]> {
+    const { data } = await api.get(`/leagues/seasons/${seasonId}/stages/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -161,8 +163,8 @@ export async function reorderStages(seasonId: string, orderedIds: string[]): Pro
     return data;
 }
 
-export async function getLeagueStage(id: string): Promise<LeagueStage> {
-    const { data } = await api.get(`/leagues/stages/${id}/`);
+export async function getLeagueStage(id: string, opts?: ApiRequestOptions): Promise<LeagueStage> {
+    const { data } = await api.get(`/leagues/stages/${id}/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -185,8 +187,8 @@ export async function finishLeagueStage(stageId: string): Promise<LeagueStage> {
     return data;
 }
 
-export async function getStageRanking(stageId: string): Promise<LeagueStagePlayer[]> {
-    const { data } = await api.get(`/leagues/stages/${stageId}/ranking/`);
+export async function getStageRanking(stageId: string, opts?: ApiRequestOptions): Promise<LeagueStagePlayer[]> {
+    const { data } = await api.get(`/leagues/stages/${stageId}/ranking/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -204,8 +206,8 @@ export async function promoteStage(stageId: string): Promise<LeagueStagePlayer[]
 // Stage players
 // ==========================================================================
 
-export async function getStagePlayers(stageId: string): Promise<LeagueStagePlayer[]> {
-    const { data } = await api.get(`/leagues/stages/${stageId}/players/`);
+export async function getStagePlayers(stageId: string, opts?: ApiRequestOptions): Promise<LeagueStagePlayer[]> {
+    const { data } = await api.get(`/leagues/stages/${stageId}/players/`, mergeApiOptions(opts));
     return data;
 }
 
@@ -238,8 +240,8 @@ export async function removeStagePlayer(stageId: string, stagePlayerId: string):
 // Matches
 // ==========================================================================
 
-export async function getStageMatches(stageId: string): Promise<LeagueMatch[]> {
-    const { data } = await api.get(`/leagues/stages/${stageId}/matches/`);
+export async function getStageMatches(stageId: string, opts?: ApiRequestOptions): Promise<LeagueMatch[]> {
+    const { data } = await api.get(`/leagues/stages/${stageId}/matches/`, mergeApiOptions(opts));
     return data;
 }
 

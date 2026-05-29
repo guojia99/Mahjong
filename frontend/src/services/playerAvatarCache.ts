@@ -1,65 +1,77 @@
-/**
- * 雀士头像：通过 `POST /api/v1/players/batch-avatars/` 拉取，内存 + sessionStorage 复用，避免同页/多次导航重复请求。
- * 大体积 base64 不落 sessionStorage，仅存在内存，避免占满配额。
- */
-import { getPlayerAvatarsBatch } from '@/api/players';
+import { getPlayerAvatar, getPlayerAvatarsBatch } from '@/api/players';
+
+const CACHE_KEY = 'mj_player_avatars_v2';
+const TTL = 2 * 60 * 60 * 1000;
+
+interface CacheEntry {
+  url: string;
+  ts: number;
+}
 
 const memory = new Map<string, string>();
-const STORAGE_KEY = 'mj_player_avatars_v1';
-const MAX_PERSIST_LEN = 2048; // 单条过长（多为 base64）不持久化
+let hydrated = false;
 
-function safePersistSubset(): void {
+function hydrate(): void {
+  if (hydrated) return;
+  hydrated = true;
   try {
-    const out: Record<string, string> = {};
-    for (const [k, v] of memory) {
-      if (v && v.length < MAX_PERSIST_LEN && (v.startsWith('http://') || v.startsWith('https://') || v === '')) {
-        out[k] = v;
-      }
-    }
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(out));
-  } catch {
-    // 配额等：忽略
-  }
-}
-
-function hydrateFromStorage(): void {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return;
-    const o = JSON.parse(raw) as Record<string, string>;
-    if (o && typeof o === 'object') {
-      for (const [k, v] of Object.entries(o)) {
-        if (typeof v === 'string' && !memory.has(k)) memory.set(k, v);
+    const data: Record<string, CacheEntry> = JSON.parse(raw);
+    const now = Date.now();
+    for (const [id, entry] of Object.entries(data)) {
+      if (typeof entry.url === 'string' && entry.ts + TTL > now) {
+        memory.set(id, entry.url);
       }
     }
   } catch {
-    /* ignore */
+    /* quota etc */
   }
 }
 
-/**
- * 为当前 id 集合加载头像，返回 id -> 头像地址或空串（与内存合并）。
- * 已缓存在内存中的 id 不会再次请求。
- */
-export async function loadPlayerAvatarsForList(ids: string[]): Promise<Record<string, string>> {
-  hydrateFromStorage();
-  const need = [...new Set(ids.map(String).filter(Boolean))].filter((id) => !memory.has(id));
-  if (need.length > 0) {
-    const res = await getPlayerAvatarsBatch(need);
-    for (const [k, v] of Object.entries(res)) {
-      memory.set(k, typeof v === 'string' ? v : '');
+function persist(): void {
+  try {
+    const data: Record<string, CacheEntry> = {};
+    for (const [id, url] of memory) {
+      if (url.length < 2048 && (url.startsWith('http://') || url.startsWith('https://'))) {
+        data[id] = { url, ts: Date.now() };
+      }
     }
-    safePersistSubset();
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch {
+    /* quota etc */
   }
-  const out: Record<string, string> = {};
-  for (const id of [...new Set(ids.map(String).filter(Boolean))]) {
-    out[id] = memory.get(id) ?? '';
-  }
-  return out;
 }
 
 export function getCachedPlayerAvatar(id: string): string | undefined {
-  hydrateFromStorage();
-  if (!memory.has(id)) return undefined;
+  hydrate();
   return memory.get(id);
+}
+
+export async function loadPlayerAvatar(id: string): Promise<string> {
+  hydrate();
+  const cached = memory.get(id);
+  if (cached !== undefined) return cached;
+  const url = await getPlayerAvatar(id);
+  memory.set(id, url);
+  persist();
+  return url;
+}
+
+export async function loadPlayerAvatarsForList(ids: string[], signal?: AbortSignal): Promise<Record<string, string>> {
+  hydrate();
+  const unique = [...new Set(ids.filter(Boolean))];
+  const need = unique.filter((id) => !memory.has(id));
+  if (need.length > 0) {
+    const batch = await getPlayerAvatarsBatch(need, { signal });
+    for (const [id, url] of Object.entries(batch)) {
+      memory.set(id, typeof url === 'string' ? url : '');
+    }
+    persist();
+  }
+  const out: Record<string, string> = {};
+  for (const id of unique) {
+    out[id] = memory.get(id) ?? '';
+  }
+  return out;
 }

@@ -15,14 +15,15 @@ import {
 import { getPlayers } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueSeasonPlayerItem, Player } from '@/types';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
-function avatarUrl(p: Pick<Player, 'avatar' | 'nickname'>) {
+function avatarUrlFromPlayer(p: Pick<Player, 'avatar' | 'nickname'>) {
     if (p.avatar) return p.avatar;
     return null;
 }
 
-function Avatar({ player, size = 36 }: { player: Pick<Player, 'avatar' | 'nickname'>; size?: number }) {
-    const url = avatarUrl(player);
+function Avatar({ player, size = 36, avatarUrl: avatarUrlProp }: { player: Pick<Player, 'avatar' | 'nickname'>; size?: number; avatarUrl?: string }) {
+    const url = avatarUrlProp !== undefined ? avatarUrlProp : avatarUrlFromPlayer(player);
     if (url) {
         return (
             <img
@@ -57,6 +58,7 @@ export default function LeagueSeasonPlayersAdminPage() {
 
     const [season, setSeason] = useState<LeagueSeason | null>(null);
     const [players, setPlayers] = useState<Player[]>([]);
+    const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
     const [seasonPlayers, setSeasonPlayers] = useState<LeagueSeasonPlayerItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -97,6 +99,26 @@ export default function LeagueSeasonPlayersAdminPage() {
             cancelled = true;
         };
     }, [seasonId, t, showToast]);
+
+    const avatarPlayerIds = useMemo(() => {
+        const ids: string[] = [];
+        for (const sp of seasonPlayers) {
+            if (sp.player?.id) ids.push(sp.player.id);
+        }
+        for (const p of players) {
+            if (p.id) ids.push(p.id);
+        }
+        return [...new Set(ids)];
+    }, [seasonPlayers, players]);
+
+    useEffect(() => {
+        if (avatarPlayerIds.length === 0) return;
+        let cancelled = false;
+        loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
+            if (!cancelled) setPlayerAvatars(map);
+        });
+        return () => { cancelled = true; };
+    }, [avatarPlayerIds]);
 
     const registeredIds = useMemo(
         () => new Set(seasonPlayers.map(sp => sp.player.id)),
@@ -242,7 +264,7 @@ export default function LeagueSeasonPlayersAdminPage() {
                                     </span>
                                 )}
                                 <div className="flex items-center gap-2.5 mb-2">
-                                    <Avatar player={sp.player} size={36} />
+                                    <Avatar player={sp.player} size={36} avatarUrl={playerAvatars[sp.player.id]} />
                                     <div className="min-w-0 flex-1 pr-6">
                                         <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                                             {sp.player.nickname}
@@ -375,7 +397,7 @@ export default function LeagueSeasonPlayersAdminPage() {
                                                 )}
                                             </span>
                                             <div className="flex items-center gap-2.5 mb-2">
-                                                <Avatar player={p} size={36} />
+                                                <Avatar player={p} size={36} avatarUrl={playerAvatars[p.id]} />
                                                 <div className="min-w-0 flex-1 pr-6">
                                                     <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
                                                         {p.nickname}

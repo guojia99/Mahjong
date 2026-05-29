@@ -1,7 +1,30 @@
 {
     "database": {
-        "sqlite_path": "db.sqlite3"
+        "sqlite_path": "marjong.db"
     },
     "majsoul_account": "",
-    "majsoul_password": ""
+    "majsoul_password": "",
+    "majsoul_access_token": "",
+    "majsoul_oauth2_type": 1,
+    "majsoul_login_request_b64": "",
+    "mortal_base_url": "http://127.0.0.1:9996",
+    "ai_grade_tiers": [
+        { "grade": "AI", "min": 99 },
+        { "grade": "S+", "min": 95 },
+        { "grade": "S", "min": 92.5 },
+        { "grade": "S-", "min": 90 },
+        { "grade": "A+", "min": 86.5 },
+        { "grade": "A", "min": 82 },
+        { "grade": "A-", "min": 79 },
+        { "grade": "B+", "min": 75 },
+        { "grade": "B", "min": 70 },
+        { "grade": "B-", "min": 65 },
+        { "grade": "C+", "min": 60 },
+        { "grade": "C", "min": 55 },
+        { "grade": "C-", "min": 50 },
+        { "grade": "D", "min": 40 },
+        { "grade": "E", "min": 35 },
+        { "grade": "F", "min": 10 },
+        { "grade": "不正打", "min": -999999 }
+    ]
 }

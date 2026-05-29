@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import { getPlayers, createPlayer, deletePlayer, updatePlayer, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
@@ -6,6 +8,7 @@ import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
 import type { Player, MajsoulAccount } from '@/types';
 import { Plus, Edit2, Trash2, Link as LinkIcon } from 'lucide-react';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -19,6 +22,7 @@ function fileToBase64(file: File): Promise<string> {
 export default function PlayersPage() {
   const { t } = useTranslation();
   const [players, setPlayers] = useState<Player[]>([]);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -26,18 +30,30 @@ export default function PlayersPage() {
   const [loading, setLoading] = useState(false);
   const { showToast, ToastComponent } = useToast();
 
-  const loadPlayers = useCallback(async () => {
+  const loadPlayers = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await getPlayers(query);
+      const data = await getPlayers(query, signal ? { signal } : undefined);
       setPlayers(data);
-    } catch {
+    } catch (e) {
+      if (isAbortError(e)) return;
       showToast(t('players.loadFailed'));
     }
-  }, [query, showToast]);
+  }, [query, showToast, t]);
 
-  useEffect(() => {
-    void Promise.resolve().then(() => loadPlayers());
+  useAbortableEffect((signal) => {
+    void loadPlayers(signal);
   }, [loadPlayers]);
+
+  const playerIds = useMemo(() => {
+    return [...new Set(players.map((p) => p.id))];
+  }, [players]);
+
+  useAbortableEffect((signal) => {
+    if (playerIds.length === 0) return;
+    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [playerIds]);
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -126,8 +142,8 @@ export default function PlayersPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {players.map((player) => (
             <div key={player.id} className="card flex items-center gap-3">
-              {player.avatar ? (
-                <img src={player.avatar} alt={player.nickname} className="avatar" />
+              {(playerAvatars[player.id] || player.avatar) ? (
+                <img src={playerAvatars[player.id] || player.avatar} alt={player.nickname} className="avatar" />
               ) : (
                 <div className="avatar-placeholder">{player.nickname.charAt(0)}</div>
               )}
@@ -207,8 +223,8 @@ export default function PlayersPage() {
             <div className="form-group">
               <label className="form-label">{t('players.avatarLabel')}</label>
               <input name="avatar_file" type="file" accept="image/*" className="form-input" />
-              {editingPlayer.avatar && (
-                <img src={editingPlayer.avatar} alt={t('players.currentAvatar')} className="avatar mt-2" />
+              {(playerAvatars[editingPlayer.id] || editingPlayer.avatar) && (
+                <img src={playerAvatars[editingPlayer.id] || editingPlayer.avatar} alt={t('players.currentAvatar')} className="avatar mt-2" />
               )}
             </div>
             <div className="flex gap-3 justify-end">

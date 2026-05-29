@@ -10,6 +10,7 @@ interface Props {
   onClick?: () => void;
   removable?: boolean;
   onRemove?: () => void;
+  avatarUrl?: string;
 }
 
 export default function PlayerCard({
@@ -21,6 +22,7 @@ export default function PlayerCard({
   onClick,
   removable,
   onRemove,
+  avatarUrl,
 }: Props) {
   const { t } = useTranslation();
   const isSmall = size === 'sm';
@@ -37,8 +39,8 @@ export default function PlayerCard({
       }}
       onClick={onClick}
     >
-      {player.avatar ? (
-        <img src={player.avatar} alt={player.nickname} className={isSmall ? 'avatar' : 'avatar'} style={isSmall ? { width: '2rem', height: '2rem' } : {}} />
+      {(avatarUrl || player.avatar) ? (
+        <img src={avatarUrl || player.avatar} alt={player.nickname} className={isSmall ? 'avatar' : 'avatar'} style={isSmall ? { width: '2rem', height: '2rem' } : {}} />
       ) : (
         <div className={isSmall ? 'avatar-placeholder' : 'avatar-placeholder'} style={isSmall ? { width: '2rem', height: '2rem', fontSize: '0.75rem' } : {}}>
           {player.nickname.charAt(0)}

@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -28,37 +31,60 @@ export default function LeagueSeasonDetailPage() {
     const { showToast } = useToast();
     const [season, setSeason] = useState<LeagueSeason | null>(null);
     const [rankingMap, setRankingMap] = useState<Record<string, LeagueStagePlayer[]>>({});
+    const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'stages' | 'ranking'>('stages');
 
     const admin = isAdmin();
 
-    useEffect(() => {
+    useAbortableEffect((signal) => {
         if (!seasonId) return;
         (async () => {
             try {
-                const data = await getLeagueSeason(seasonId);
+                const data = await getLeagueSeason(seasonId, { signal });
+                if (signal.aborted) return;
                 setSeason(data);
                 if (data.stages) {
                     const map: Record<string, LeagueStagePlayer[]> = {};
                     for (const stage of data.stages) {
                         if (stage.status !== 'pending') {
                             try {
-                                map[stage.id] = await getStageRanking(stage.id);
-                            } catch { map[stage.id] = []; }
+                                map[stage.id] = await getStageRanking(stage.id, { signal });
+                            } catch (e) {
+                                if (isAbortError(e)) return;
+                                map[stage.id] = [];
+                            }
                         }
                     }
-                    setRankingMap(map);
+                    if (!signal.aborted) setRankingMap(map);
                 }
-            } catch {
+            } catch (e) {
+                if (isAbortError(e)) return;
                 showToast(t('league.loadFailed'));
             } finally {
-                setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         })();
     }, [seasonId, t, showToast]);
 
+    const seasonPlayerIds = useMemo(
+        () => (season?.season_players ?? []).map(sp => sp.player?.id).filter(Boolean) as string[],
+        [season?.season_players],
+    );
+
+    useAbortableEffect((signal) => {
+        if (seasonPlayerIds.length === 0) {
+            setPlayerAvatars({});
+            return;
+        }
+        loadPlayerAvatarsForList(seasonPlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+            if (!isAbortError(e)) throw e;
+        });
+    }, [seasonPlayerIds]);
+
     const stages = season?.stages ?? [];
+    const playerCount = season?.player_count ?? season?.season_players?.length ?? 0;
+    const stageCount = season?.stage_count ?? stages.length;
 
     const currentStage = useMemo(() => pickCurrentStage(stages), [stages]);
 
@@ -142,8 +168,8 @@ export default function LeagueSeasonDetailPage() {
                                 {season.series_name} · {t('league.seasonNumber', { n: season.season_number })}
                             </p>
                             <div className="flex items-center gap-4 text-sm" style={{ color: 'var(--color-text-light)' }}>
-                                <span className="flex items-center gap-1"><Users size={14} /> {season.player_count}{t('common.peopleUnit')}</span>
-                                <span className="flex items-center gap-1"><Calendar size={14} /> {season.stage_count}{t('league.stageUnit')}</span>
+                                <span className="flex items-center gap-1"><Users size={14} /> {playerCount}{t('common.peopleUnit')}</span>
+                                <span className="flex items-center gap-1"><Calendar size={14} /> {stageCount}{t('league.stageUnit')}</span>
                                 {season.start_time && <span className="flex items-center gap-1"><Clock size={14} /> {season.start_time.slice(0, 10)}</span>}
                             </div>
                         </div>
@@ -295,8 +321,8 @@ export default function LeagueSeasonDetailPage() {
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {[
-                            { icon: Users, label: t('league.registeredPlayers'), value: season.player_count },
-                            { icon: Calendar, label: t('league.stageCount'), value: season.stage_count },
+                            { icon: Users, label: t('league.registeredPlayers'), value: playerCount },
+                            { icon: Calendar, label: t('league.stageCount'), value: stageCount },
                             { icon: Trophy, label: t('league.onlineEnabled'), value: season.allow_online ? '✓' : '✗' },
                             { icon: Trophy, label: t('league.offlineEnabled'), value: season.allow_offline ? '✓' : '✗' },
                         ].map((item, i) => (
@@ -308,6 +334,51 @@ export default function LeagueSeasonDetailPage() {
                         ))}
                     </div>
                 </div>
+
+                {(season.season_players?.length ?? 0) > 0 && (
+                    <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                        <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--color-text)' }}>
+                            {t('league.registeredPlayers')}
+                        </h3>
+                        <div className="flex flex-wrap gap-3">
+                            {season.season_players!.map(sp => {
+                                const p = sp.player;
+                                const avatar = playerAvatars[p.id] || p.avatar;
+                                return (
+                                    <div
+                                        key={sp.id}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-xl border bg-gray-50"
+                                        style={{ borderColor: 'var(--color-border)' }}
+                                    >
+                                        {avatar ? (
+                                            <img src={avatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                        ) : (
+                                            <div
+                                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                                style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-dark))' }}
+                                            >
+                                                {(p.nickname || '?').slice(0, 1).toUpperCase()}
+                                            </div>
+                                        )}
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                                                {sp.seed_label && (
+                                                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 mr-1">
+                                                        {sp.seed_label}
+                                                    </span>
+                                                )}
+                                                {p.nickname}
+                                            </div>
+                                            {p.real_name && (
+                                                <div className="text-xs truncate" style={{ color: 'var(--color-text-light)' }}>{p.real_name}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 <div className="border-b flex" style={{ borderColor: 'var(--color-border)' }}>
                     {(['stages', 'ranking'] as const).map(tab => (

@@ -1,0 +1,8 @@
+[control]
+state_file = '/Users/guojia/worker/code/guojia/Mahjong/mortal-server/mortal_model.pth'
+
+[resnet]
+conv_channels = 192
+num_blocks = 40
+enable_bn = true
+bn_momentum = 0.99

@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGame, submitGameScores, updateGamePlayers, shuffleGameSeats, createNextGame, createHandRecord, deleteHandRecord, deleteGame, updateGame } from '@/api/games';
 import { getPlayers } from '@/api/players';
@@ -11,10 +13,13 @@ import type { Game, Player, GameScore, GamePlayerInfo, MeldInfo } from '@/types'
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, SEAT_WIND_LABELS, HAND_RECORD_TYPE_LABELS, WIN_TYPE_LABELS } from '@/types';
 import { ArrowLeft, Save, RefreshCw, Shuffle, Copy, Sparkles, Trash2, ExternalLink, Pencil, Trophy } from 'lucide-react';
 import { PaipuDetailPanel, canShowPaipuDetailPanel } from '@/components/PaipuDetailPanel';
+import { PaipuReplayPanel, canShowPaipuReplay } from '@/components/PaipuReplayPanel';
+import { PaipuAiOverviewPanel, canShowPaipuAiOverview } from '@/components/PaipuAiOverviewPanel';
 import { useTranslation } from 'react-i18next';
+import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 
-function gpToSortable(gp: GamePlayerInfo): SortableItem {
-  return { id: gp.player.id, nickname: gp.player.nickname, avatar: gp.player.avatar };
+function gpToSortable(gp: GamePlayerInfo, avatarUrl?: string): SortableItem {
+  return { id: gp.player.id, nickname: gp.player.nickname, avatar: avatarUrl ?? gp.player.avatar ?? null };
 }
 
 function toDatetimeLocal(iso: string | null | undefined): string {
@@ -38,6 +43,7 @@ export default function GameDetailPage() {
   const navigateBackTarget =
     backToFromState || (roomId ? `/rooms/${roomId}` : '/games');
   const [game, setGame] = useState<Game | null>(null);
+  const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [showScoreInput, setShowScoreInput] = useState(false);
   const [showChangePlayers, setShowChangePlayers] = useState(false);
@@ -61,13 +67,14 @@ export default function GameDetailPage() {
   const [scoreData, setScoreData] = useState<Record<string, { score: string; is_dealer_start: boolean }>>({});
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [paipuConfirmUrl, setPaipuConfirmUrl] = useState<string | null>(null);
+  const [paipuTab, setPaipuTab] = useState<'replay' | 'ai' | 'summary'>('replay');
 
-  const loadGame = useCallback(async () => {
+  const loadGame = useCallback(async (signal?: AbortSignal) => {
     if (!gameId) return;
     try {
-      const data = await getGame(gameId);
+      const data = await getGame(gameId, signal ? { signal } : undefined);
       setGame(data);
-      setScoreItems(data.players.map(gpToSortable));
+      setScoreItems(data.players.map((gp) => gpToSortable(gp)));
       const sd: Record<string, { score: string; is_dealer_start: boolean }> = {};
       data.players.forEach((gp) => {
         sd[gp.player.id] = {
@@ -77,15 +84,33 @@ export default function GameDetailPage() {
       });
       setScoreData(sd);
       setSelectedPlayerIds(data.players.map((gp) => gp.player.id));
-    } catch {
+    } catch (e) {
+      if (isAbortError(e)) return;
       showToast(t('gameDetail.loadFailed'));
     }
-  }, [gameId, showToast]);
+  }, [gameId, showToast, t]);
 
-  useEffect(() => {
-    void Promise.resolve().then(() => loadGame());
-    void getPlayers().then(setAllPlayers);
+  useAbortableEffect((signal) => {
+    void loadGame(signal);
+    getPlayers('', { signal }).then(setAllPlayers).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
   }, [loadGame]);
+
+  const gamePlayerIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const gp of game?.players ?? []) {
+      if (gp.player?.id) ids.push(gp.player.id);
+    }
+    return [...new Set(ids)];
+  }, [game?.players]);
+
+  useAbortableEffect((signal) => {
+    if (gamePlayerIds.length === 0) return;
+    loadPlayerAvatarsForList(gamePlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+      if (!isAbortError(e)) throw e;
+    });
+  }, [gamePlayerIds]);
 
   const handleScoreChange = (playerId: string, value: string) => {
     setScoreData((prev) => ({ ...prev, [playerId]: { ...prev[playerId], score: value } }));
@@ -165,7 +190,7 @@ export default function GameDetailPage() {
     try {
       const updated = await shuffleGameSeats(gameId);
       setGame(updated);
-      setScoreItems(updated.players.map(gpToSortable));
+      setScoreItems(updated.players.map((gp) => gpToSortable(gp)));
       showToast(t('gameDetail.seatsShuffled'), 'success');
     } catch {
       showToast(t('gameDetail.shuffleFailed'));
@@ -398,8 +423,8 @@ export default function GameDetailPage() {
                     {SEAT_WIND_LABELS[gp.seat_number] || gp.seat_number + 1}
                   </span>
                 </div>
-                {gp.player.avatar ? (
-                  <img src={gp.player.avatar} alt={gp.player.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
+                {(playerAvatars[gp.player.id] || gp.player.avatar) ? (
+                  <img src={playerAvatars[gp.player.id] || gp.player.avatar} alt={gp.player.nickname} className="avatar" style={{ width: '2rem', height: '2rem' }} />
                 ) : (
                   <div className="avatar-placeholder" style={{ width: '2rem', height: '2rem', fontSize: '0.75rem' }}>
                     {gp.player.nickname.charAt(0)}
@@ -580,10 +605,60 @@ export default function GameDetailPage() {
               </div>
             </>
           )}
-          {canShowPaipuDetailPanel(game) && (
+          {(canShowPaipuDetailPanel(game) || canShowPaipuReplay(game) || canShowPaipuAiOverview(game)) && (
             <div className={game.source_url ? 'mt-6 pt-4 border-t' : ''} style={game.source_url ? { borderColor: 'var(--color-border)' } : undefined}>
-              <h3 className="font-bold mb-3">{t('paipuDetail.modalTitle')}</h3>
-              <PaipuDetailPanel game={game} />
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h3 className="font-bold">{t('paipuDetail.modalTitle')}</h3>
+                <div className="flex gap-1 rounded-lg overflow-hidden" style={{ border: '1.5px solid var(--color-border)' }}>
+                  {canShowPaipuReplay(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('replay')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'replay' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'replay' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                      }}
+                    >
+                      {t('paipuReplay.tabReplay')}
+                    </button>
+                  )}
+                  {canShowPaipuAiOverview(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('ai')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'ai' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'ai' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                        borderLeft: canShowPaipuReplay(game) ? '1px solid var(--color-border)' : undefined,
+                      }}
+                    >
+                      {t('paipuReplay.tabAi')}
+                    </button>
+                  )}
+                  {canShowPaipuDetailPanel(game) && (
+                    <button
+                      type="button"
+                      onClick={() => setPaipuTab('summary')}
+                      className="px-3 py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        background: paipuTab === 'summary' ? 'var(--color-primary-light)' : 'white',
+                        color: paipuTab === 'summary' ? 'var(--color-primary-dark)' : 'var(--color-text-light)',
+                        borderLeft:
+                          canShowPaipuReplay(game) || canShowPaipuAiOverview(game)
+                            ? '1px solid var(--color-border)'
+                            : undefined,
+                      }}
+                    >
+                      {t('paipuReplay.tabSummary')}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {paipuTab === 'replay' && canShowPaipuReplay(game) && <PaipuReplayPanel game={game} />}
+              {paipuTab === 'ai' && canShowPaipuAiOverview(game) && <PaipuAiOverviewPanel game={game} />}
+              {paipuTab === 'summary' && canShowPaipuDetailPanel(game) && <PaipuDetailPanel game={game} />}
             </div>
           )}
         </div>
@@ -631,8 +706,8 @@ export default function GameDetailPage() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  {item.avatar ? (
-                    <img src={item.avatar} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
+                  {(playerAvatars[item.id] || item.avatar) ? (
+                    <img src={playerAvatars[item.id] || item.avatar || undefined} alt={item.nickname} className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem', borderRadius: '50%', objectFit: 'cover' }} />
                   ) : (
                     <div className="avatar-placeholder" style={{ width: '1.5rem', height: '1.5rem', fontSize: '0.625rem' }}>
                       {item.nickname.charAt(0)}
