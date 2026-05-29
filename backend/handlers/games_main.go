@@ -9,6 +9,7 @@ import (
 
 	"mahjong-backend/config"
 	"mahjong-backend/models"
+	"mahjong-backend/mortal"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -76,6 +77,7 @@ func serializeGameList(game *models.Game) gin.H {
 		"source_url":        game.SourceURL,
 		"has_paipu_data":    hasPaipuData,
 		"paipu_has_actions": paipuHasActions,
+		"ai_analysis":       aiSummaryForGame(game),
 		"players":           players,
 		"is_scored":         game.IsScored(),
 		"created_at":        formatTime(game.CreatedAt),
@@ -124,6 +126,8 @@ func serializeGameDetail(game *models.Game) gin.H {
 	}
 	data["players"] = players
 	data["paipu_data"] = game.PaipuData
+	data["ai_analysis"] = aiSummaryForGame(game)
+	data["ai_analysis_detail"] = mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData)
 
 	roomInfo := gin.H{"id": nil, "name": nil}
 	if game.Room != nil {

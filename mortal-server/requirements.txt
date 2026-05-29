@@ -1,3 +1,5 @@
 torch
 toml
 numpy
+tensorboard
+tqdm

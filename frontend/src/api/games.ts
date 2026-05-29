@@ -313,6 +313,35 @@ export type PaipuStatRankType =
   | 'avg_riichi_tsumo_after_turn'
   | 'avg_riichi_hu_after_turn';
 
+export async function getGameAiAnalysis(gameId: string, opts?: ApiRequestOptions): Promise<{
+  status: string;
+  has_ai_analysis: boolean;
+  analyzed_at?: string | null;
+  analysis?: import('@/paipu/aiAnalysis').AiAnalysisFull;
+  grade_tiers?: import('@/paipu/aiAnalysis').AiGradeTier[];
+  error?: string;
+}> {
+  const { data } = await api.get(`/games/${gameId}/ai-analysis/`, mergeApiOptions(opts));
+  return data;
+}
+
+export async function getAiGradeTiers(opts?: ApiRequestOptions): Promise<{ tiers: import('@/paipu/aiAnalysis').AiGradeTier[] }> {
+  const { data } = await api.get('/games/ai-grade-tiers/', mergeApiOptions(opts));
+  return data;
+}
+
+export interface AiPaipuStatsItem {
+  player_id: string;
+  nickname: string;
+  avg: number;
+  games: number;
+}
+
+export async function getAiPaipuStatsRanking(params?: { min_games?: number }, opts?: ApiRequestOptions): Promise<AiPaipuStatsItem[]> {
+  const { data } = await api.get('/games/ai-paipu-stats/', { params, ...mergeApiOptions(opts) });
+  return data;
+}
+
 export async function getPaipuStatsRanking(params?: {
   rank_type?: PaipuStatRankType;
   player_count?: number;

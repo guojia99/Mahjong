@@ -87,8 +87,12 @@ type Game struct {
 	StartTime   time.Time `gorm:"column:start_time" json:"start_time"`
 	EndTime     *time.Time `gorm:"column:end_time" json:"end_time"`
 	SourceURL   string    `gorm:"column:source_url;size:500;default:''" json:"source_url"`
-	PaipuData   JSONField `gorm:"column:paipu_data;type:text;default:'{}'" json:"paipu_data"`
-	CreatedByID *uint64   `gorm:"column:created_by_id" json:"-"`
+	PaipuData        JSONField  `gorm:"column:paipu_data;type:text;default:'{}'" json:"paipu_data"`
+	AiAnalysisData   JSONField  `gorm:"column:ai_analysis_data;type:text;default:'{}'" json:"ai_analysis_data"`
+	AiAnalyzedAt     *time.Time `gorm:"column:ai_analyzed_at" json:"ai_analyzed_at"`
+	AiAnalysisStatus string     `gorm:"column:ai_analysis_status;size:20;default:''" json:"ai_analysis_status"`
+	AiAnalysisError  string     `gorm:"column:ai_analysis_error;size:500;default:''" json:"ai_analysis_error"`
+	CreatedByID      *uint64    `gorm:"column:created_by_id" json:"-"`
 	CreatedBy   *User     `gorm:"foreignKey:CreatedByID" json:"-"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 
@@ -101,6 +105,7 @@ func (Game) TableName() string { return "games" }
 
 func (g *Game) BeforeCreate(tx *gorm.DB) error {
 	defaultJSONField(&g.PaipuData)
+	defaultJSONField(&g.AiAnalysisData)
 	return nil
 }
 

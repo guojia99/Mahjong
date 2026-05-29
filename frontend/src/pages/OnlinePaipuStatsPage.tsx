@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
 import { Link } from 'react-router-dom';
-import { getPaipuStatsRanking } from '@/api/games';
+import { getPaipuStatsRanking, getAiPaipuStatsRanking, type AiPaipuStatsItem } from '@/api/games';
 import type { FunRankingItem } from '@/api/games';
 import { useToast } from '@/hooks/useToast';
 import { BarChart3 } from 'lucide-react';
@@ -130,6 +130,8 @@ function subtitleForStat(rankType: PaipuStatRankType, item: FunRankingItem, t: (
 }
 
 export default function OnlinePaipuStatsPage() {
+  const [pageMode, setPageMode] = useState<'stats' | 'ai'>('stats');
+  const [aiRankings, setAiRankings] = useState<AiPaipuStatsItem[]>([]);
   const [rankings, setRankings] = useState<FunRankingItem[]>([]);
   const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
   const [rankType, setRankType] = useState<PaipuStatRankType>('win_rate');
@@ -206,6 +208,7 @@ export default function OnlinePaipuStatsPage() {
   const currentTab = flatTabs.find(tab => tab.value === rankType) || tabGroups[0].tabs[0];
 
   useAbortableEffect((signal) => {
+    if (pageMode !== 'stats') return;
     const params: Record<string, string> = { rank_type: rankType };
     if (playerCount) params.player_count = playerCount;
     if (gameMode) params.game_mode = gameMode;
@@ -217,15 +220,28 @@ export default function OnlinePaipuStatsPage() {
         if (isAbortError(e)) return;
         showToast(t('paipuStats.loadFailed'));
       });
-  }, [rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
+  }, [pageMode, rankType, playerCount, gameMode, gameType, minGames, showToast, t]);
+
+  useAbortableEffect((signal) => {
+    if (pageMode !== 'ai') return;
+    getAiPaipuStatsRanking({ min_games: parseInt(minGames, 10) || 1 }, { signal })
+      .then(setAiRankings)
+      .catch((e) => {
+        if (isAbortError(e)) return;
+        showToast(t('paipuStats.loadFailed'));
+      });
+  }, [pageMode, minGames, showToast, t]);
 
   const playerIds = useMemo(() => {
     const ids: string[] = [];
     for (const item of rankings) {
       if (item.player?.id) ids.push(item.player.id);
     }
+    for (const item of aiRankings) {
+      if (item.player_id) ids.push(item.player_id);
+    }
     return [...new Set(ids)];
-  }, [rankings]);
+  }, [rankings, aiRankings]);
 
   useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
@@ -295,6 +311,48 @@ export default function OnlinePaipuStatsPage() {
         </Link>
       </div>
 
+      <div className="flex gap-2 mb-4">
+        <button
+          type="button"
+          className={`btn btn-sm ${pageMode === 'stats' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setPageMode('stats')}
+        >
+          {t('paipuStats.modeStats')}
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${pageMode === 'ai' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setPageMode('ai')}
+        >
+          {t('paipuStats.modeAi')}
+        </button>
+      </div>
+
+      {pageMode === 'ai' ? (
+        <div className="card">
+          <p className="text-sm mb-4" style={{ color: 'var(--color-text-light)' }}>{t('paipuStats.aiIntro')}</p>
+          {aiRankings.length === 0 ? (
+            <p className="text-sm empty-state">{t('paipuStats.noData')}</p>
+          ) : (
+            <ol className="space-y-2">
+              {aiRankings.map((item, idx) => (
+                <li key={item.player_id} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: idx < 3 ? 'rgba(79,70,229,0.06)' : undefined }}>
+                  <span className="text-sm font-bold w-6" style={{ color: MEDAL_COLORS[idx] ?? 'var(--color-text-light)' }}>{idx + 1}</span>
+                  {playerAvatars[item.player_id] ? (
+                    <img src={playerAvatars[item.player_id]} alt="" className="w-8 h-8 rounded-full object-cover" />
+                  ) : null}
+                  <Link to={`/player-list/${item.player_id}`} className="text-sm font-medium flex-1 truncate" style={{ color: 'inherit', textDecoration: 'none' }}>
+                    {item.nickname}
+                  </Link>
+                  <span className="text-sm font-bold" style={{ color: '#4338ca' }}>{item.avg}</span>
+                  <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>{t('paipuStats.aiKyokuCount', { n: item.games })}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      ) : (
+        <>
       <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--color-text-light)' }}>
         {t('paipuStats.intro')}
       </p>
@@ -419,6 +477,8 @@ export default function OnlinePaipuStatsPage() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -1,6 +1,14 @@
-.PHONY: dev prod prod-stop prod\:stop build-prod free-prod-ports
+.PHONY: dev prod prod-stop prod\:stop build-prod free-dev-ports free-prod-ports venv mortal mortal-stop mortal\:stop
+
+ROOT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+VENV := $(ROOT_DIR)/.venv
+VENV_PYTHON := $(VENV)/bin/python
+MORTAL_DIR := mortal-server
+MORTAL_PID := /tmp/mahjong_mortal.pid
+MORTAL_LOG := /tmp/mahjong_mortal.log
 
 BACKEND_PORT := 9997
+FRONTEND_PORT := 9998
 GATEWAY_PORT := 9999
 LOG_FILE := /tmp/mahjong_dev.log
 PID_FILE := /tmp/mahjong_prod.pid
@@ -16,13 +24,31 @@ PROD_SUPERVISOR_FLAGS := \
 	--pidfile $(PID_FILE) \
 	--quiet
 
-dev:
+# Python venv for mortal-server (Tsinghua pip mirror). Idempotent.
+venv:
+	@bash "$(ROOT_DIR)/scripts/ensure-venv.sh"
+
+# Kill orphaned backend / vite from a previous `make dev`.
+free-dev-ports:
+	@for port in $(BACKEND_PORT) $(FRONTEND_PORT); do \
+		pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null); \
+		if [ -n "$$pids" ]; then \
+			echo "Releasing dev port $$port (pid $$pids)"; \
+			kill -TERM $$pids 2>/dev/null || true; \
+			sleep 1; \
+			pids=$$(lsof -tiTCP:$$port -sTCP:LISTEN 2>/dev/null); \
+			[ -n "$$pids" ] && kill -KILL $$pids 2>/dev/null || true; \
+		fi; \
+	done
+
+dev: venv free-dev-ports
 	@trap 'kill 0 2>/dev/null; exit 0' INT TERM EXIT; \
 	cd backend && go build -o mahjong-backend . && ./mahjong-backend --config db_config.json --port $(BACKEND_PORT) & \
 	cd frontend && npm install --silent && npm run dev & \
 	echo ""; \
-	echo "  Frontend: http://localhost:9998"; \
+	echo "  Frontend: http://localhost:$(FRONTEND_PORT)"; \
 	echo "  Backend:  http://localhost:$(BACKEND_PORT)"; \
+	echo "  Python:   $(VENV_PYTHON) (mortal: make mortal)"; \
 	echo ""; \
 	wait
 
@@ -100,4 +126,40 @@ prod-stop:
 
 # `make prod:stop` — colon must be escaped in the Makefile target name.
 prod\:stop: prod-stop
+	@:
+
+# Mortal AI inference server (http://127.0.0.1:9996)
+mortal: venv
+	@if [ -f $(MORTAL_PID) ] && kill -0 $$(cat $(MORTAL_PID)) 2>/dev/null; then \
+		echo "mortal already running (pid $$(cat $(MORTAL_PID)))"; \
+		echo "  Health: curl http://127.0.0.1:9996/health"; \
+		echo "  Stop: make mortal-stop"; \
+		exit 0; \
+	fi
+	@cd $(MORTAL_DIR) && nohup env PYTHON="$(VENV_PYTHON)" ./start.sh >> $(MORTAL_LOG) 2>&1 </dev/null & echo $$! > $(MORTAL_PID); \
+	sleep 2; \
+	if kill -0 $$(cat $(MORTAL_PID)) 2>/dev/null; then \
+		echo "Mortal started (pid $$(cat $(MORTAL_PID)))"; \
+		echo "  Python: $(VENV_PYTHON)"; \
+		echo "  Health: curl http://127.0.0.1:9996/health"; \
+		echo "  Log:  $(MORTAL_LOG)"; \
+		echo "  Stop: make mortal-stop"; \
+	else \
+		echo "Failed to start mortal, see $(MORTAL_LOG)"; \
+		rm -f $(MORTAL_PID); \
+		exit 1; \
+	fi
+
+mortal-stop:
+	@if [ -f $(MORTAL_PID) ]; then \
+		PID=$$(cat $(MORTAL_PID)); \
+		if kill -0 $$PID 2>/dev/null; then kill -TERM $$PID 2>/dev/null; sleep 1; fi; \
+		if kill -0 $$PID 2>/dev/null; then kill -KILL $$PID 2>/dev/null; fi; \
+		rm -f $(MORTAL_PID); \
+	fi
+	@pids=$$(lsof -tiTCP:9996 -sTCP:LISTEN 2>/dev/null); \
+	if [ -n "$$pids" ]; then echo "Releasing port 9996 (pid $$pids)"; kill -TERM $$pids 2>/dev/null || true; fi
+	@echo "Mortal stopped."
+
+mortal\:stop: mortal-stop
 	@:

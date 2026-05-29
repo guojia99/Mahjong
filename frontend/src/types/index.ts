@@ -47,6 +47,19 @@ export interface RoomPlayer {
     joined_at: string;
 }
 
+export interface AiAnalysisSummary {
+    status: string;
+    has_ai_analysis: boolean;
+    analyzed_at?: string | null;
+    model_tag?: string;
+    players?: {
+        seat: number;
+        match_avg: number;
+        match_grade: string;
+        kyoku: { kyoku_index: number; avg: number; grade: string }[];
+    }[];
+}
+
 export interface Game {
     id: string;
     room?: { id: string; name: string } | null;
@@ -69,6 +82,8 @@ export interface Game {
     has_paipu_data?: boolean;
     /** 列表接口：牌谱 JSON 是否含可解析的 actions（顶层或 majsoul_record_detail 内） */
     paipu_has_actions?: boolean;
+    /** AI 分析摘要（列表/详情） */
+    ai_analysis?: AiAnalysisSummary;
     players: GamePlayerInfo[];
     is_scored: boolean;
     created_at: string;
