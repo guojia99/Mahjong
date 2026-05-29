@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"mahjong-backend/models"
+
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,6 +23,14 @@ type DBConfig struct {
 	MajsoulAccessToken     string `json:"majsoul_access_token"`
 	MajsoulOAuth2Type      int    `json:"majsoul_oauth2_type"`
 	MajsoulLoginRequestB64 string `json:"majsoul_login_request_b64"`
+	MortalBaseURL          string           `json:"mortal_base_url"`
+	AiGradeTiers           []AiGradeTierCfg `json:"ai_grade_tiers"`
+}
+
+// AiGradeTierCfg is the minimum score (inclusive) for a letter grade label.
+type AiGradeTierCfg struct {
+	Grade string  `json:"grade"`
+	Min   float64 `json:"min"`
 }
 
 var (
@@ -99,5 +109,8 @@ func InitDB(configPath string) *gorm.DB {
 	time.Local = time.FixedZone("CST", 8*3600)
 
 	DB = db
+	if err := db.AutoMigrate(&models.Game{}); err != nil {
+		panic("failed to migrate database: " + err.Error())
+	}
 	return db
 }

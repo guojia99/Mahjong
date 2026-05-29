@@ -37,6 +37,7 @@ func main() {
 	rootCmd.AddCommand(newPaipuCmd())
 	rootCmd.AddCommand(newPaipuLoginTestCmd())
 	rootCmd.AddCommand(newPaipuAuthHelpCmd())
+	rootCmd.AddCommand(newPaipuAiAnalyzeCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -197,8 +198,27 @@ func newPaipuCmd() *cobra.Command {
 	return cmd
 }
 
+func newPaipuAiAnalyzeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "paipu-ai-analyze <game-id>",
+		Short: "Run Mortal AI analysis on one online game (requires mortal server)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			config.InitDB(configPath)
+			if err := handlers.RunAiAnalysisForGameID(args[0]); err != nil {
+				return err
+			}
+			fmt.Fprintln(os.Stdout, "AI analysis completed.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	return cmd
+}
+
 func run(cmd *cobra.Command, args []string) error {
 	config.InitDB(configPath)
+	handlers.StartAiAnalysisWorker()
 
 	mediaPath := config.ProjectRoot + "/media"
 
@@ -271,6 +291,10 @@ func run(cmd *cobra.Command, args []string) error {
 			games.GET("/pt-ranking/", handlers.PtRanking)
 			games.GET("/fun-ranking/", handlers.FunRanking)
 			games.GET("/paipu-stats/", handlers.PaipuStatsRanking)
+			games.GET("/ai-paipu-stats/", handlers.AiPaipuStatsRanking)
+			games.GET("/ai-grade-tiers/", handlers.AiGradeTiers)
+			games.GET("/:pk/ai-analysis/", handlers.GameAiAnalysisDetail)
+			games.POST("/:pk/ai-analysis/trigger/", handlers.GameAiAnalysisTrigger)
 			games.GET("/starting-hands/", handlers.StartingHands)
 			games.GET("/starting-hands/player-averages/", handlers.StartingHandsPlayerAverages)
 			games.GET("/yakumans/", handlers.YakumanList)

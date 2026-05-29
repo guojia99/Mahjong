@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.0.0 — 2026-05-28
+
+- Mortal AI integration: auto-review online paipu with per-move scores (0–100) and letter grades
+- Replay panel AI mode: per-move score, π weights, and full score tables for the selected seat
+- Game list and player profile show AI ratings; paipu stats page adds an AI leaderboard
+- `make mortal` starts the inference server; `mahjong-backend paipu-ai-analyze` for single-game tests
+
 ## v2.4.0 — 2026-05-28
 
 - Online game detail adds a "Replay" tab: switch between rounds and step through actions to visualise hands, melds, river and riichi sticks

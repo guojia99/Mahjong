@@ -224,17 +224,22 @@ func OnlineGameImport(c *gin.Context) {
 	if user != nil {
 		createdByID = &user.ID
 	}
+	aiStatus := ""
+	if len(paipuActionsFromGameData(paipuField)) > 0 {
+		aiStatus = "pending"
+	}
 	game := models.Game{
-		ID:          newUUID(),
-		RoomID:      &room.ID,
-		GameType:    "online",
-		GameMode:    gameMode,
-		PlayerCount: playerCount,
-		StartTime:   *startTime,
-		EndTime:     endTime,
-		SourceURL:   sourceURL,
-		PaipuData:   paipuField,
-		CreatedByID: createdByID,
+		ID:               newUUID(),
+		RoomID:           &room.ID,
+		GameType:         "online",
+		GameMode:         gameMode,
+		PlayerCount:      playerCount,
+		StartTime:        *startTime,
+		EndTime:          endTime,
+		SourceURL:        sourceURL,
+		PaipuData:        paipuField,
+		AiAnalysisStatus: aiStatus,
+		CreatedByID:      createdByID,
 	}
 	if err := config.DB.Create(&game).Error; err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())

@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward, Eye, EyeOff, Layers } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, Pause, SkipBack, SkipForward, Eye, EyeOff, Layers, Brain } from 'lucide-react';
+import { PaipuAiPanel } from '@/components/PaipuAiPanel';
 import type { Game } from '@/types';
 import {
   buildMajsoulAccountBindings,
@@ -35,6 +36,23 @@ const SIDE_TILE_H = 30;
 const SIDE_STACK_PULL = -6; // 第二张起向上叠 0.5px（等同 gap: -0.5 效果）
 const DRAW_TILE_GAP = 14; // 摸牌与手牌间距
 const DORA_SLOT_COUNT = 5; // 表宝牌 / 里宝牌各 5 枚槽位
+
+/** 牌河最多 3 行 × 6 列；为中央格预留固定空间，避免被场风盘挤压 */
+const RIVER_MAX_COLS = 6;
+const RIVER_MAX_ROWS = 3;
+const RIVER_TILE_GAP = 1;
+const RIVER_ROW_GAP = 2;
+/** width:auto @ h=30/20 的保守宽度（雀魂比例约 3:4） */
+const TILE_W_UPRIGHT = 24;
+const TILE_W_SIDEWAYS = 28;
+const H_RIVER_BAND_MIN = RIVER_MAX_ROWS * TILE_H_UPRIGHT + (RIVER_MAX_ROWS - 1) * RIVER_TILE_GAP;
+const W_RIVER_BAND_MIN = RIVER_MAX_COLS * TILE_W_UPRIGHT + (RIVER_MAX_COLS - 1) * RIVER_TILE_GAP;
+const W_SIDE_RIVER_MIN = RIVER_MAX_ROWS * TILE_W_SIDEWAYS + (RIVER_MAX_ROWS - 1) * RIVER_ROW_GAP;
+const H_SIDE_RIVER_MIN = RIVER_MAX_COLS * TILE_H_SIDEWAYS + (RIVER_MAX_COLS - 1) * RIVER_TILE_GAP;
+const CENTER_INFO_MIN_W = 118;
+const CENTER_INFO_MIN_H = 108;
+const CENTER_PLATE_MIN_W = W_SIDE_RIVER_MIN * 2 + CENTER_INFO_MIN_W + 16;
+const CENTER_PLATE_MIN_H = H_RIVER_BAND_MIN * 2 + CENTER_INFO_MIN_H + 16;
 
 type TableSide = 'bottom' | 'right' | 'top' | 'left';
 
@@ -80,6 +98,7 @@ function Tile({
       style={{
         height: `${h}px`,
         width: 'auto',
+        flexShrink: 0,
         borderRadius: 3,
         opacity: dim ? 0.45 : 1,
         boxShadow: highlight ? '0 0 0 2px rgba(245, 158, 11, 0.85)' : '0 1px 1px rgba(0,0,0,0.12)',
@@ -199,7 +218,7 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
     const sideways = horizontalRiver ? true : d.sideways;
     const height = sideways ? TILE_H_SIDEWAYS : TILE_H_UPRIGHT;
     return (
-    <span key={key} style={{ position: 'relative', display: 'inline-flex' }}>
+    <span key={key} style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
       <Tile
         tile={d.tile}
         sideways={sideways}
@@ -232,9 +251,10 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
       key={`row-${ri}`}
       style={{
         display: 'flex',
-        gap: 1,
+        gap: RIVER_TILE_GAP,
         flexDirection: side === 'left' || side === 'right' ? 'column' : 'row',
         justifyContent: 'center',
+        flexShrink: 0,
       }}
     >
       {row.map((d, di) => tileInRiver(d, `${ri}-${di}`))}
@@ -243,11 +263,13 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
 
   const outer: CSSProperties = {
     display: 'flex',
-    gap: 2,
-    minWidth: 0,
-    minHeight: 0,
+    gap: RIVER_ROW_GAP,
+    flexShrink: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    ...(side === 'left' || side === 'right'
+      ? { minWidth: W_SIDE_RIVER_MIN, minHeight: H_SIDE_RIVER_MIN }
+      : { minWidth: W_RIVER_BAND_MIN, minHeight: H_RIVER_BAND_MIN }),
   };
 
   if (side === 'bottom') {
@@ -266,9 +288,17 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
   }
   if (side === 'left') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'row-reverse', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        style={{
+          ...outer,
+          flexDirection: 'row-reverse',
+        }}
+      >
         {rows.map((row, ri) => (
-          <div key={`col-${ri}`} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div
+            key={`col-${ri}`}
+            style={{ display: 'flex', flexDirection: 'column', gap: RIVER_TILE_GAP, flexShrink: 0 }}
+          >
             {row.map((d, di) => tileInRiver(d, `${ri}-${di}`))}
           </div>
         ))}
@@ -276,9 +306,12 @@ function CenterDiscardRiver({ seat, side }: { seat: SeatState; side: TableSide }
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ ...outer, flexDirection: 'row' }}>
       {rows.map((row, ri) => (
-        <div key={`col-${ri}`} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div
+          key={`col-${ri}`}
+          style={{ display: 'flex', flexDirection: 'column', gap: RIVER_TILE_GAP, flexShrink: 0 }}
+        >
           {row.map((d, di) => tileInRiver(d, `${ri}-${di}`))}
         </div>
       ))}
@@ -697,6 +730,7 @@ export function PaipuReplayPanel({ game }: Props) {
   const [showOthers, setShowOthers] = useState(true);
   const [showTingpai, setShowTingpai] = useState(true);
   const [showWall, setShowWall] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(700); // ms per step
   const playRef = useRef<number | null>(null);
@@ -950,32 +984,59 @@ export function PaipuReplayPanel({ game }: Props) {
           <Layers size={14} />
           {showWall ? t('paipuReplay.hideWall') : t('paipuReplay.showWall')}
         </button>
+        <button
+          type="button"
+          className={`btn btn-sm ${aiMode ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setAiMode((v) => !v)}
+        >
+          <Brain size={14} />
+          {aiMode ? t('paipuReplay.aiModeOn') : t('paipuReplay.aiModeOff')}
+        </button>
       </div>
 
-      {/* 牌桌主体 */}
-      <ReplayTable
-        round={round}
-        frame={frame}
-        layout={layout}
-        seatPlayers={seatPlayers}
-        viewSeat={viewSeat}
-        showTingpai={showTingpai}
-        showOthers={showOthers}
-      />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: aiMode ? 'row' : 'column',
+          alignItems: 'flex-start',
+          gap: 12,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <ReplayTable
+            round={round}
+            frame={frame}
+            layout={layout}
+            seatPlayers={seatPlayers}
+            viewSeat={viewSeat}
+            showTingpai={showTingpai}
+            showOthers={showOthers}
+          />
 
-      {/* 局末摘要：和牌 / 流局 / 荒牌 */}
-      {frame.kind === 'hule' && frame.hules && (
-        <HuleSummary frame={frame} seatPlayers={seatPlayers} />
-      )}
-      {frame.kind === 'notile' && frame.noTileInfo && (
-        <NoTileSummary frame={frame} seatPlayers={seatPlayers} />
-      )}
-      {frame.kind === 'liuju' && (
-        <LiuJuSummary frame={frame} />
-      )}
+          {frame.kind === 'hule' && frame.hules && (
+            <HuleSummary frame={frame} seatPlayers={seatPlayers} />
+          )}
+          {frame.kind === 'notile' && frame.noTileInfo && (
+            <NoTileSummary frame={frame} seatPlayers={seatPlayers} />
+          )}
+          {frame.kind === 'liuju' && <LiuJuSummary frame={frame} />}
 
-      {/* 牌山 */}
-      {showWall && <PaishanView round={round} doraIndicators={frame.doraIndicators} uraDora={frame.uraDoraIndicators} />}
+          {showWall && (
+            <PaishanView round={round} doraIndicators={frame.doraIndicators} uraDora={frame.uraDoraIndicators} />
+          )}
+        </div>
+
+        {aiMode && (
+          <PaipuAiPanel
+            gameId={game.id}
+            viewSeat={viewSeat}
+            round={round}
+            frameIdx={frameIdx}
+            roundIndex={roundIdx}
+            seatPlayers={seatPlayers}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -1061,7 +1122,8 @@ function ReplayTable({
 
   const boardStyle: CSSProperties = {
     width: '100%',
-    maxWidth: 640,
+    maxWidth: 720,
+    minWidth: CENTER_PLATE_MIN_W + 96,
     margin: '0 auto',
     aspectRatio: '1',
     background: 'linear-gradient(165deg, #0e7a5a 0%, #064a36 48%, #053625 100%)',
@@ -1079,15 +1141,68 @@ function ReplayTable({
 
   const centerPlate: CSSProperties = {
     display: 'grid',
-    gridTemplateRows: '1fr auto 1fr',
-    gridTemplateColumns: '1fr auto 1fr',
+    gridTemplateRows: `minmax(${H_RIVER_BAND_MIN}px, auto) auto minmax(${H_RIVER_BAND_MIN}px, auto)`,
+    gridTemplateColumns: `minmax(${W_SIDE_RIVER_MIN}px, auto) auto minmax(${W_SIDE_RIVER_MIN}px, auto)`,
     gap: 4,
-    minHeight: 0,
-    minWidth: 0,
+    minWidth: CENTER_PLATE_MIN_W,
+    minHeight: CENTER_PLATE_MIN_H,
+    width: 'max-content',
+    maxWidth: '100%',
+    margin: '0 auto',
     background: 'rgba(0,0,0,0.22)',
     borderRadius: 10,
     border: '1px solid rgba(255,255,255,0.1)',
     padding: 4,
+  };
+
+  const riverSlot = (side: TableSide): CSSProperties => {
+    const base: CSSProperties = {
+      display: 'flex',
+      overflow: 'visible',
+      flexShrink: 0,
+    };
+    if (side === 'top') {
+      return {
+        ...base,
+        gridColumn: 2,
+        gridRow: 1,
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        minWidth: W_RIVER_BAND_MIN,
+        minHeight: H_RIVER_BAND_MIN,
+      };
+    }
+    if (side === 'bottom') {
+      return {
+        ...base,
+        gridColumn: 2,
+        gridRow: 3,
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        minWidth: W_RIVER_BAND_MIN,
+        minHeight: H_RIVER_BAND_MIN,
+      };
+    }
+    if (side === 'left') {
+      return {
+        ...base,
+        gridColumn: 1,
+        gridRow: 2,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        minWidth: W_SIDE_RIVER_MIN,
+        minHeight: H_SIDE_RIVER_MIN,
+      };
+    }
+    return {
+      ...base,
+      gridColumn: 3,
+      gridRow: 2,
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      minWidth: W_SIDE_RIVER_MIN,
+      minHeight: H_SIDE_RIVER_MIN,
+    };
   };
 
   const renderEdge = (side: TableSide) => {
@@ -1136,11 +1251,22 @@ function ReplayTable({
       </div>
 
       {/* 中央：四家牌河 + 场风盘（宝牌五枚 / 里宝五枚） */}
-      <div style={{ gridColumn: 2, gridRow: 2, ...centerPlate }}>
-        <div style={{ gridColumn: 2, gridRow: 1, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden' }}>
+      <div
+        style={{
+          gridColumn: 2,
+          gridRow: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 0,
+          overflow: 'visible',
+        }}
+      >
+        <div style={centerPlate}>
+        <div style={riverSlot('top')}>
           <CenterDiscardRiver seat={frame.seats[layout.top]} side="top" />
         </div>
-        <div style={{ gridColumn: 1, gridRow: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
+        <div style={riverSlot('left')}>
           <CenterDiscardRiver seat={frame.seats[layout.left]} side="left" />
         </div>
         <div
@@ -1153,6 +1279,9 @@ function ReplayTable({
             justifyContent: 'center',
             gap: 6,
             padding: '4px 6px',
+            flexShrink: 0,
+            minWidth: CENTER_INFO_MIN_W,
+            minHeight: CENTER_INFO_MIN_H,
             background: 'rgba(0,0,0,0.35)',
             borderRadius: 8,
             border: '1px solid rgba(255,255,255,0.12)',
@@ -1170,11 +1299,12 @@ function ReplayTable({
             t={t}
           />
         </div>
-        <div style={{ gridColumn: 3, gridRow: 2, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', overflow: 'hidden' }}>
+        <div style={riverSlot('right')}>
           <CenterDiscardRiver seat={frame.seats[layout.right]} side="right" />
         </div>
-        <div style={{ gridColumn: 2, gridRow: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflow: 'hidden' }}>
+        <div style={riverSlot('bottom')}>
           <CenterDiscardRiver seat={frame.seats[layout.bottom]} side="bottom" />
+        </div>
         </div>
       </div>
 

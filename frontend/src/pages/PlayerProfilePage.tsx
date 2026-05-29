@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getPlayer, getPlayerGames } from '@/api/players';
+import { aiMatchForPlayer } from '@/paipu/aiAnalysis';
 import { getPlayerStats } from '@/api/games';
 import { getPlayerYakumans } from '@/api/players';
 import { getPlayerRanking, getPlayerGameRankingResults } from '@/api/ranking';
@@ -550,6 +551,18 @@ export default function PlayerProfilePage() {
                           {t('playerProfile.rankN', { n: myRank })}
                         </span>
                         <ScoreTag score={myGp?.score || null} />
+                        {(() => {
+                          const ai = id ? aiMatchForPlayer(game, id) : null;
+                          if (!ai) return null;
+                          return (
+                            <span
+                              className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                              style={{ background: 'rgba(79, 70, 229, 0.12)', color: '#4338ca' }}
+                            >
+                              AI {ai.match_avg} ({ai.match_grade})
+                            </span>
+                          );
+                        })()}
                         <span style={{
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           padding: '0.125rem 0.5rem', borderRadius: '0.375rem',

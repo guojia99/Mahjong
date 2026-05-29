@@ -1,5 +1,5 @@
 [control]
-state_file = '/path/to/mortal.pth'
+state_file = '/Users/guojia/worker/code/guojia/Mahjong/mortal-server/mortal_model.pth'
 
 [resnet]
 conv_channels = 192

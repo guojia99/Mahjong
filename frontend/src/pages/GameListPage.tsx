@@ -9,6 +9,7 @@ import Modal from '@/components/Modal';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import type { Game } from '@/types';
 import { GAME_MODE_LABELS, GAME_TYPE_LABELS, PLAYER_COUNT_LABELS } from '@/types';
+import { aiMatchForPlayer } from '@/paipu/aiAnalysis';
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 function ScoreTag({ score }: { score: number | null }) {
@@ -110,6 +111,19 @@ function GamePlayerCell({
         <div className="flex items-center gap-2 flex-wrap">
           <ScoreTag score={score} />
           <PtTag pt={game.pt?.[playerId]} />
+          {(() => {
+            const ai = aiMatchForPlayer(game, playerId);
+            if (!ai) return null;
+            return (
+              <span
+                className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                style={{ background: 'rgba(79, 70, 229, 0.12)', color: '#4338ca' }}
+                title={t('gameList.aiScoreTitle')}
+              >
+                AI {ai.match_avg} ({ai.match_grade})
+              </span>
+            );
+          })()}
         </div>
       </div>
     </div>
