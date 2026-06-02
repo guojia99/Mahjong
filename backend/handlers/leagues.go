@@ -631,16 +631,23 @@ func LeagueBatchRegister(c *gin.Context) {
 			continue
 		}
 		sp := models.LeagueSeasonPlayer{ID: newUUID(), SeasonID: pk, PlayerID: pid}
-		config.DB.Create(&sp)
-		count++
+		if err := config.DB.Create(&sp).Error; err == nil {
+			count++
+		}
 	}
 	respondOK(c, gin.H{"registered": count})
 }
 
 func LeagueUnregisterPlayer(c *gin.Context) {
 	pk := c.Param("pk")
-	playerPK := c.Param("player_pk")
-	config.DB.Where("season_id = ? AND player_id = ?", pk, playerPK).Delete(&models.LeagueSeasonPlayer{})
+	var req struct {
+		PlayerID string `json:"player_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	config.DB.Where("season_id = ? AND player_id = ?", pk, req.PlayerID).Delete(&models.LeagueSeasonPlayer{})
 	respondNoContent(c)
 }
 
@@ -908,27 +915,45 @@ func LeagueAddStagePlayers(c *gin.Context) {
 }
 
 func LeagueUpdateStagePlayer(c *gin.Context) {
-	spPK := c.Param("sp_pk")
-	var req map[string]interface{}
+	var req struct {
+		StagePlayerID string  `json:"stage_player_id"`
+		GroupType     *string `json:"group_type"`
+		IsEliminated  *bool   `json:"is_eliminated"`
+		IsPromoted    *bool   `json:"is_promoted"`
+	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request")
 		return
 	}
+	if req.StagePlayerID == "" {
+		respondError(c, http.StatusBadRequest, "Missing stage_player_id")
+		return
+	}
 	updates := map[string]interface{}{}
-	for _, key := range []string{"group_type", "is_eliminated", "is_promoted"} {
-		if v, ok := req[key]; ok {
-			updates[key] = v
-		}
+	if req.GroupType != nil {
+		updates["group_type"] = *req.GroupType
+	}
+	if req.IsEliminated != nil {
+		updates["is_eliminated"] = *req.IsEliminated
+	}
+	if req.IsPromoted != nil {
+		updates["is_promoted"] = *req.IsPromoted
 	}
 	if len(updates) > 0 {
-		config.DB.Model(&models.LeagueStagePlayer{}).Where("id = ?", spPK).Updates(updates)
+		config.DB.Model(&models.LeagueStagePlayer{}).Where("id = ?", req.StagePlayerID).Updates(updates)
 	}
 	respondOK(c, gin.H{"message": "Updated"})
 }
 
 func LeagueRemoveStagePlayer(c *gin.Context) {
-	spPK := c.Param("sp_pk")
-	config.DB.Where("id = ?", spPK).Delete(&models.LeagueStagePlayer{})
+	var req struct {
+		StagePlayerID string `json:"stage_player_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	config.DB.Where("id = ?", req.StagePlayerID).Delete(&models.LeagueStagePlayer{})
 	respondNoContent(c)
 }
 
