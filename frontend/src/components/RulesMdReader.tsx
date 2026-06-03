@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import remarkGfmCompat from '@/lib/remarkGfmCompat';
 import { List, X } from 'lucide-react';
 
 interface RulesMdReaderProps {
@@ -121,7 +121,7 @@ export default function RulesMdReader({ content }: RulesMdReaderProps) {
     <div className="rules-md-reader">
       <div className="rules-content rules-md-content" ref={contentRef}>
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
+          remarkPlugins={[remarkGfmCompat]}
           components={{
             h1: ({ children, ...props }) => {
               const text = String(children).replace(/[*_`]/g, '');

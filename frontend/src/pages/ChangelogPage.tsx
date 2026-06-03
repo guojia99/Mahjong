@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import remarkGfmCompat from '@/lib/remarkGfmCompat';
 import { Sparkles } from 'lucide-react';
 import '@/pages/changelog.css';
 
@@ -191,7 +191,7 @@ export default function ChangelogPage() {
               {section.items.map((item, i) => (
                 <li key={i} className="changelog-card__item">
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
+                    remarkPlugins={[remarkGfmCompat]}
                     components={inlineMarkdownComponents}
                   >
                     {item}

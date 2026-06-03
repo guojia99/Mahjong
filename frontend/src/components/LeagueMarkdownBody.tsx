@@ -1,5 +1,5 @@
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import remarkGfmCompat from '@/lib/remarkGfmCompat';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import type { Components } from 'react-markdown';
@@ -48,7 +48,7 @@ export default function LeagueMarkdownBody({ source, className }: LeagueMarkdown
     return (
         <div className={`league-md-content ${className ?? ''}`}>
             <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfmCompat]}
                 rehypePlugins={[rehypeRaw, rehypeSanitize]}
                 components={components}
             >

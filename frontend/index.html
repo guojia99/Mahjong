@@ -135,6 +135,9 @@
             runtimeDesc: '应用遇到未捕获的错误，详情如下。您可以重试或返回首页。',
             timeoutTitle: '应用加载超时',
             timeoutDesc: '核心脚本长时间未完成加载，可能是网络较慢或资源被拦截。请刷新后重试。',
+            browserCompatTitle: '浏览器版本过旧',
+            browserCompatDesc:
+              '当前 Safari/iOS 版本不支持本站使用的部分 JavaScript 特性（常见于 iOS 16.3 及更早）。请升级到 iOS 16.4 / Safari 16.4 或更新，或改用 Chrome / Firefox 访问。',
             errorMessage: '错误信息',
             retry: '重试',
             backHome: '返回首页',
@@ -150,6 +153,9 @@
             runtimeDesc: '應用遇到未捕獲的錯誤，詳情如下。您可以重試或返回首頁。',
             timeoutTitle: '應用載入逾時',
             timeoutDesc: '核心腳本長時間未完成載入，可能是網路較慢或資源被攔截。請重新整理後重試。',
+            browserCompatTitle: '瀏覽器版本過舊',
+            browserCompatDesc:
+              '目前的 Safari/iOS 版本不支援本站使用的部分 JavaScript 特性（常見於 iOS 16.3 及更早）。請升級到 iOS 16.4 / Safari 16.4 或更新，或改用 Chrome / Firefox。',
             errorMessage: '錯誤資訊',
             retry: '重試',
             backHome: '返回首頁',
@@ -168,6 +174,9 @@
             timeoutTitle: '読み込みがタイムアウトしました',
             timeoutDesc:
               'コアスクリプトの読み込みが完了しませんでした。ネットワークが遅いか、リソースがブロックされている可能性があります。',
+            browserCompatTitle: 'ブラウザのバージョンが古いです',
+            browserCompatDesc:
+              'お使いの Safari/iOS は本サイトの JavaScript 機能に対応していません（iOS 16.3 以前でよく発生します）。iOS 16.4 / Safari 16.4 以降へ更新するか、Chrome / Firefox をお試しください。',
             errorMessage: 'エラーメッセージ',
             retry: '再試行',
             backHome: 'ホームに戻る',
@@ -186,6 +195,9 @@
             timeoutTitle: 'App load timed out',
             timeoutDesc:
               'Core scripts did not finish loading in time. This may be a slow network or blocked resources. Please reload.',
+            browserCompatTitle: 'Browser too old',
+            browserCompatDesc:
+              'Your Safari/iOS version does not support some JavaScript features this site uses (common on iOS 16.3 and earlier). Please update to iOS 16.4 / Safari 16.4+ or try Chrome / Firefox.',
             errorMessage: 'Message',
             retry: 'Retry',
             backHome: 'Back to home',
@@ -208,10 +220,21 @@
           return pack[key] || MESSAGES.en[key] || key;
         }
 
+        function isBrowserCompatError(message, detail) {
+          var text = (message || '') + '\n' + (detail || '');
+          return /invalid regular expression|invalid group specifier name|unicode property escape/i.test(text);
+        }
+
+        function resolveKind(kind, message, detail) {
+          return isBrowserCompatError(message, detail) ? 'browser-compat' : kind;
+        }
+
         function kindMeta(kind) {
           switch (kind) {
             case 'js-disabled':
               return { title: t('jsDisabledTitle'), desc: t('jsDisabledDesc') };
+            case 'browser-compat':
+              return { title: t('browserCompatTitle'), desc: t('browserCompatDesc') };
             case 'asset-load':
               return { title: t('assetLoadTitle'), desc: t('assetLoadDesc') };
             case 'bootstrap':
@@ -228,6 +251,7 @@
 
         function renderError(kind, message, detail) {
           if (shown) return;
+          kind = resolveKind(kind, message, detail);
           shown = true;
           if (loadTimeoutId) {
             clearTimeout(loadTimeoutId);
@@ -362,7 +386,7 @@
           err && err.message ? err.message : err != null ? String(err) : 'Failed to load application';
         var detail = err && err.stack ? err.stack : undefined;
         if (window.__mahjongBootstrap) {
-          window.__mahjongBootstrap.showError('asset-load', message, detail);
+          window.__mahjongBootstrap.showError('bootstrap', message, detail);
         }
       });
     </script>

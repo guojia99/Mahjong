@@ -3,7 +3,24 @@ export type BootstrapErrorKind =
   | 'asset-load'
   | 'bootstrap'
   | 'runtime'
-  | 'timeout';
+  | 'timeout'
+  | 'browser-compat';
+
+/** Safari <16.4 chokes on `\p{…}` / lookbehind in bundled RegExp literals. */
+export function isBrowserCompatError(message: string, detail?: string): boolean {
+  const text = `${message}\n${detail ?? ''}`;
+  return /invalid regular expression|invalid group specifier name|unicode property escape/i.test(
+    text,
+  );
+}
+
+export function classifyBootstrapKind(
+  kind: BootstrapErrorKind,
+  message: string,
+  detail?: string,
+): BootstrapErrorKind {
+  return isBrowserCompatError(message, detail) ? 'browser-compat' : kind;
+}
 
 export interface MahjongBootstrap {
   showError(kind: BootstrapErrorKind, message: string, detail?: string): void;
@@ -21,7 +38,11 @@ export function markAppReady(): void {
 }
 
 export function reportBootstrapError(message: string, detail?: string): void {
-  window.__mahjongBootstrap?.showError('bootstrap', message, detail);
+  window.__mahjongBootstrap?.showError(
+    classifyBootstrapKind('bootstrap', message, detail),
+    message,
+    detail,
+  );
 }
 
 /** Chunk / dynamic-import failures after the app has mounted. */
@@ -46,9 +67,10 @@ export function installRuntimeErrorHandlers(): void {
         target instanceof HTMLScriptElement
           ? target.src || target.getAttribute('src') || ''
           : target.href || target.getAttribute('href') || '';
+      const message = event.message || 'Failed to load resource';
       window.__mahjongBootstrap?.showError(
-        'asset-load',
-        event.message || 'Failed to load resource',
+        classifyBootstrapKind('asset-load', message, src || undefined),
+        message,
         src || undefined,
       );
       return;
@@ -59,10 +81,11 @@ export function installRuntimeErrorHandlers(): void {
       return;
     }
 
+    const message = event.message || 'Uncaught error';
     const detail = event.error instanceof Error ? event.error.stack : undefined;
     window.__mahjongBootstrap?.showError(
-      'runtime',
-      event.message || 'Uncaught error',
+      classifyBootstrapKind('runtime', message, detail),
+      message,
       detail,
     );
   });
@@ -80,18 +103,19 @@ export function installRuntimeErrorHandlers(): void {
     const appReady = Boolean(document.documentElement.dataset.appReady);
     const chunkFailure = isLikelyChunkLoadFailure(reason);
 
+    const kind = classifyBootstrapKind(
+      chunkFailure ? 'asset-load' : 'runtime',
+      message,
+      detail,
+    );
+
     if (!appReady) {
-      if (chunkFailure) {
-        window.__mahjongBootstrap?.showError('asset-load', message, detail);
+      if (chunkFailure || kind === 'browser-compat') {
+        window.__mahjongBootstrap?.showError(kind, message, detail);
       }
       return;
     }
 
-    if (chunkFailure) {
-      window.__mahjongBootstrap?.showError('asset-load', message, detail);
-      return;
-    }
-
-    window.__mahjongBootstrap?.showError('runtime', message, detail);
+    window.__mahjongBootstrap?.showError(kind, message, detail);
   });
 }

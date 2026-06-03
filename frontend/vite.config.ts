@@ -30,6 +30,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Safari <16.4: `\p{…}` in the dependency breaks module parse.
+      'estree-util-is-identifier-name': path.resolve(
+        __dirname,
+        './src/lib/estreeIdentifierCompat.ts',
+      ),
     },
   },
   server: {
