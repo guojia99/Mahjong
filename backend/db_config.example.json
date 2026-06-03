@@ -10,12 +10,13 @@
     "mortal_base_url": "http://127.0.0.1:9996",
     "mortal_backends": [
         {
-            "name": "mortal_v4",
+            "name": "v4_2603",
             "version": "1",
+            "best": true,
             "url": "http://127.0.0.1:9996"
         },
         {
-            "name": "mortal_v5",
+            "name": "v4_2401",
             "version": "1",
             "url": "http://127.0.0.1:9995"
         }

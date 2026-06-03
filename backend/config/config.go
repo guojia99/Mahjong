@@ -32,6 +32,7 @@ type DBConfig struct {
 type MortalBackendCfg struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	Best    bool   `json:"best,omitempty"`
 	URL     string `json:"url"`
 }
 
@@ -69,6 +70,20 @@ func Load(configPath string) {
 		panic("cannot parse config " + absConfig + ": " + err.Error())
 	}
 	normalizeMortalBackends()
+}
+
+// BestMortalBackend returns the backend marked best, or the first configured entry.
+func BestMortalBackend() (MortalBackendCfg, bool) {
+	backends := MortalBackends()
+	for _, b := range backends {
+		if b.Best {
+			return b, true
+		}
+	}
+	if len(backends) > 0 {
+		return backends[0], true
+	}
+	return MortalBackendCfg{}, false
 }
 
 // MortalBackends returns configured Mortal endpoints (multi-model or legacy single URL).

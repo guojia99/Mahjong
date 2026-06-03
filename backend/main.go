@@ -382,6 +382,11 @@ func run(cmd *cobra.Command, args []string) error {
 			leagues.POST("/stages/:pk/matches/offline/", handlers.LeagueCreateOfflineMatch)
 			leagues.POST("/stages/:pk/matches/online/", handlers.LeagueCreateOnlineMatch)
 		}
+
+		tools := api.Group("/tools")
+		{
+			tools.POST("/discard-advise/", handlers.DiscardAdvise)
+		}
 	}
 
 	addr := fmt.Sprintf(":%d", port)

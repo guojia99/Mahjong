@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.2.0 — 2026-06-03
+
+- New Discard Advisor: enter hand, melds, draw, and dora; Mortal AI ranks discard options
+- Mortal config adds `best` flag to mark the preferred default model
+
 ## v3.1.0 — 2026-05-29
 
 - Mortal multi-model: configure multiple inference servers (ports 9996/9995/9994); `make mortal-9995` starts extra instances

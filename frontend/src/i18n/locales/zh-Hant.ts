@@ -51,6 +51,7 @@ const zhHant: Record<string, string> = {
   'nav.ranking': '天梯排位',
   'nav.yakumans': '役満列表',
   'nav.calculator': '點數計算',
+  'nav.discardAdvise': '何切',
   'nav.practice': '點數練習',
   'nav.playerManagement': '雀士管理',
   'nav.rankingAdmin': '排位配置',
@@ -743,6 +744,20 @@ const zhHant: Record<string, string> = {
   'yakumanList.typeConfirmed': '役満確定',
   'yakumanList.typeChance': '役満機會',
   'yakumanList.recordLabel': '記錄',
+
+  // ===== DiscardAdvisePage =====
+  'discardAdvise.title': '何切',
+  'discardAdvise.intro': '輸入手牌、副露、摸牌與寶牌指示牌，由 Mortal AI 推薦打牌及評分。',
+  'discardAdvise.handLabel': '手牌',
+  'discardAdvise.drawnLabel': '摸牌',
+  'discardAdvise.analyze': '分析',
+  'discardAdvise.failed': '分析失敗，請檢查牌面或 Mortal 服務是否可用',
+  'discardAdvise.option': '候選牌',
+  'discardAdvise.pi': 'π',
+  'discardAdvise.score': '評分',
+  'discardAdvise.model': '模型',
+  'discardAdvise.shanten': '向聽',
+  'discardAdvise.riichi': '立直',
 
   // ===== CalculatorPage =====
   'calculator.fieldWind': '場風',

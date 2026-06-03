@@ -51,6 +51,7 @@ const en: Record<string, string> = {
   'nav.ranking': 'Leaderboard',
   'nav.yakumans': 'Yakumans',
   'nav.calculator': 'Calculator',
+  'nav.discardAdvise': 'Discard',
   'nav.practice': 'Practice',
   'nav.playerManagement': 'Player Management',
   'nav.rankingAdmin': 'Ranking Config',
@@ -744,6 +745,20 @@ const en: Record<string, string> = {
   'yakumanList.typeConfirmed': 'Confirmed Yakuman',
   'yakumanList.typeChance': 'Yakuman Chance',
   'yakumanList.recordLabel': 'Records',
+
+  // ===== DiscardAdvisePage =====
+  'discardAdvise.title': 'Discard Advisor',
+  'discardAdvise.intro': 'Enter hand, melds, drawn tile, and dora indicators; Mortal AI ranks discard options.',
+  'discardAdvise.handLabel': 'Hand',
+  'discardAdvise.drawnLabel': 'Draw',
+  'discardAdvise.analyze': 'Analyze',
+  'discardAdvise.failed': 'Analysis failed — check tiles or Mortal server availability',
+  'discardAdvise.option': 'Option',
+  'discardAdvise.pi': 'π',
+  'discardAdvise.score': 'Score',
+  'discardAdvise.model': 'Model',
+  'discardAdvise.shanten': 'Shanten',
+  'discardAdvise.riichi': 'Riichi',
 
   // ===== CalculatorPage =====
   'calculator.fieldWind': 'Round Wind',

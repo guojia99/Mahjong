@@ -14,6 +14,7 @@ import FunRankingPage from '@/pages/FunRankingPage';
 import OnlinePaipuStatsPage from '@/pages/OnlinePaipuStatsPage';
 import StartingHandsPage from '@/pages/StartingHandsPage';
 import YakumanListPage from '@/pages/YakumanListPage';
+import DiscardAdvisePage from '@/pages/DiscardAdvisePage';
 import CalculatorPage from '@/pages/CalculatorPage';
 import PracticePage from '@/pages/PracticePage';
 import OnlineGamePage from '@/pages/OnlineGamePage';
@@ -63,6 +64,7 @@ function App() {
           <Route path="ranking-admin" element={<AdminRoute><RankingAdminPage /></AdminRoute>} />
           <Route path="yakumans" element={<YakumanListPage />} />
           <Route path="calculator" element={<CalculatorPage />} />
+          <Route path="discard-advise" element={<DiscardAdvisePage />} />
           <Route path="practice" element={<PracticePage />} />
           <Route path="rules" element={<RulesPage />} />
           <Route path="changelog" element={<ChangelogPage />} />

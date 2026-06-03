@@ -213,6 +213,7 @@ func AiMortalBackends(c *gin.Context) {
 		out = append(out, gin.H{
 			"name":    b.Name,
 			"version": b.Version,
+			"best":    b.Best,
 			"url":     b.URL,
 			"key":     mortal.ModelKey(b.Name, b.Version),
 		})

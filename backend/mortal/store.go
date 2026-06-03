@@ -246,6 +246,15 @@ func PickAnalysis(store *AnalysisStore, modelKey string) (*AnalysisResult, strin
 		return nil, modelKey, false
 	}
 	for _, b := range config.MortalBackends() {
+		if !b.Best {
+			continue
+		}
+		key := ModelKey(b.Name, b.Version)
+		if e := store.Models[key]; IsModelCurrent(e) {
+			return e.Analysis, key, true
+		}
+	}
+	for _, b := range config.MortalBackends() {
 		key := ModelKey(b.Name, b.Version)
 		if e := store.Models[key]; IsModelCurrent(e) {
 			return e.Analysis, key, true

@@ -51,6 +51,7 @@ const ja: Record<string, string> = {
   'nav.ranking': 'ランク戦',
   'nav.yakumans': '役満一覧',
   'nav.calculator': '点数計算',
+  'nav.discardAdvise': '何切',
   'nav.practice': '点数練習',
   'nav.playerManagement': '雀士管理',
   'nav.rankingAdmin': 'ランク設定',
@@ -743,6 +744,20 @@ const ja: Record<string, string> = {
   'yakumanList.typeConfirmed': '役満確定',
   'yakumanList.typeChance': '役満チャンス',
   'yakumanList.recordLabel': '記録',
+
+  // ===== DiscardAdvisePage =====
+  'discardAdvise.title': '何切',
+  'discardAdvise.intro': '手牌・副露・ツモ牌・ドラ表示牌を入力すると、Mortal AI が打牌候補をスコア付きで表示します。',
+  'discardAdvise.handLabel': '手牌',
+  'discardAdvise.drawnLabel': 'ツモ',
+  'discardAdvise.analyze': '分析',
+  'discardAdvise.failed': '分析に失敗しました。牌面または Mortal サーバーを確認してください',
+  'discardAdvise.option': '候補',
+  'discardAdvise.pi': 'π',
+  'discardAdvise.score': 'スコア',
+  'discardAdvise.model': 'モデル',
+  'discardAdvise.shanten': '向聴',
+  'discardAdvise.riichi': 'リーチ',
 
   // ===== CalculatorPage =====
   'calculator.fieldWind': '場風',

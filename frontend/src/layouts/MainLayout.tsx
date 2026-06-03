@@ -24,6 +24,7 @@ import {
   PanelLeftOpen,
   BarChart2,
   BookOpen,
+  Brain,
   History,
   Wrench,
   Layers,
@@ -109,6 +110,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     children: [
       { type: 'item', path: '/rules', labelKey: 'nav.rules', icon: BookOpen },
       { type: 'item', path: '/calculator', labelKey: 'nav.calculator', icon: Calculator },
+      { type: 'item', path: '/discard-advise', labelKey: 'nav.discardAdvise', icon: Brain },
       { type: 'item', path: '/practice', labelKey: 'nav.practice', icon: GraduationCap },
     ],
   },
