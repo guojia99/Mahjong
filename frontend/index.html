@@ -5,9 +5,366 @@
     <link rel="icon" href="https://www.majsoul.tw/homepage/character/1/yiji_0.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>嘉の雀桩</title>
+    <style>
+      .mahjong-bootstrap-error {
+        box-sizing: border-box;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: #fafafa;
+        color: #1a1a1a;
+      }
+      .mahjong-bootstrap-error * {
+        box-sizing: border-box;
+      }
+      .mahjong-bootstrap-error__card {
+        width: 100%;
+        max-width: 36rem;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1rem;
+        box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.08);
+        overflow: hidden;
+      }
+      .mahjong-bootstrap-error__header {
+        display: flex;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        background: #fffbeb;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .mahjong-bootstrap-error__icon {
+        flex-shrink: 0;
+        width: 1.5rem;
+        height: 1.5rem;
+        margin-top: 0.125rem;
+        color: #d97706;
+      }
+      .mahjong-bootstrap-error__title {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #78350f;
+      }
+      .mahjong-bootstrap-error__desc {
+        margin: 0.25rem 0 0;
+        font-size: 0.875rem;
+        color: #92400e;
+        line-height: 1.5;
+      }
+      .mahjong-bootstrap-error__body {
+        padding: 1.25rem 1.5rem;
+        font-size: 0.875rem;
+      }
+      .mahjong-bootstrap-error__label {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+      .mahjong-bootstrap-error__message {
+        margin: 0;
+        color: #b91c1c;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.75rem;
+        word-break: break-word;
+      }
+      .mahjong-bootstrap-error__detail {
+        margin: 0.75rem 0 0;
+        padding: 0.75rem;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.75rem;
+        color: #6b7280;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 10rem;
+        overflow: auto;
+      }
+      .mahjong-bootstrap-error__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #e5e7eb;
+      }
+      .mahjong-bootstrap-error__btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        border-radius: 0.75rem;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .mahjong-bootstrap-error__btn--primary {
+        background: #f59e0b;
+        color: #fff;
+      }
+      .mahjong-bootstrap-error__btn--primary:hover {
+        background: #d97706;
+      }
+      .mahjong-bootstrap-error__btn--secondary {
+        background: #fff;
+        color: #1a1a1a;
+        border: 1px solid #e5e7eb;
+      }
+      html.mahjong-bootstrap-error-active body > #root {
+        display: none !important;
+      }
+    </style>
+    <script>
+      (function () {
+        var BOOTSTRAP_TIMEOUT_MS = 25000;
+
+        var MESSAGES = {
+          'zh-Hans': {
+            jsDisabledTitle: '需要启用 JavaScript',
+            jsDisabledDesc: '本应用依赖 JavaScript 才能运行。请在浏览器设置中启用 JavaScript，或将本站加入允许列表后刷新页面。',
+            assetLoadTitle: '资源加载失败',
+            assetLoadDesc: '核心脚本或样式无法加载，可能是网络问题、部署不完整或浏览器扩展拦截。请检查网络后重试。',
+            bootstrapTitle: '应用启动失败',
+            bootstrapDesc: '页面脚本在初始化时出错，详情如下。',
+            runtimeTitle: '页面运行出错',
+            runtimeDesc: '应用遇到未捕获的错误，详情如下。您可以重试或返回首页。',
+            timeoutTitle: '应用加载超时',
+            timeoutDesc: '核心脚本长时间未完成加载，可能是网络较慢或资源被拦截。请刷新后重试。',
+            errorMessage: '错误信息',
+            retry: '重试',
+            backHome: '返回首页',
+          },
+          'zh-Hant': {
+            jsDisabledTitle: '需要啟用 JavaScript',
+            jsDisabledDesc: '本應用依賴 JavaScript 才能運行。請在瀏覽器設定中啟用 JavaScript，或將本站加入允許清單後重新整理頁面。',
+            assetLoadTitle: '資源載入失敗',
+            assetLoadDesc: '核心腳本或樣式無法載入，可能是網路問題、部署不完整或瀏覽器擴充功能攔截。請檢查網路後重試。',
+            bootstrapTitle: '應用啟動失敗',
+            bootstrapDesc: '頁面腳本在初始化時出錯，詳情如下。',
+            runtimeTitle: '頁面執行出錯',
+            runtimeDesc: '應用遇到未捕獲的錯誤，詳情如下。您可以重試或返回首頁。',
+            timeoutTitle: '應用載入逾時',
+            timeoutDesc: '核心腳本長時間未完成載入，可能是網路較慢或資源被攔截。請重新整理後重試。',
+            errorMessage: '錯誤資訊',
+            retry: '重試',
+            backHome: '返回首頁',
+          },
+          ja: {
+            jsDisabledTitle: 'JavaScript が必要です',
+            jsDisabledDesc:
+              'このアプリを動かすには JavaScript が必要です。ブラウザ設定で JavaScript を有効にするか、このサイトを許可リストに追加してから再読み込みしてください。',
+            assetLoadTitle: 'リソースの読み込みに失敗しました',
+            assetLoadDesc:
+              'コアのスクリプトまたはスタイルを読み込めませんでした。ネットワーク、デプロイ、拡張機能によるブロックを確認してください。',
+            bootstrapTitle: 'アプリの起動に失敗しました',
+            bootstrapDesc: '初期化中にエラーが発生しました。詳細は以下のとおりです。',
+            runtimeTitle: '実行時エラー',
+            runtimeDesc: '未処理のエラーが発生しました。詳細は以下のとおりです。再試行するかホームに戻ってください。',
+            timeoutTitle: '読み込みがタイムアウトしました',
+            timeoutDesc:
+              'コアスクリプトの読み込みが完了しませんでした。ネットワークが遅いか、リソースがブロックされている可能性があります。',
+            errorMessage: 'エラーメッセージ',
+            retry: '再試行',
+            backHome: 'ホームに戻る',
+          },
+          en: {
+            jsDisabledTitle: 'JavaScript required',
+            jsDisabledDesc:
+              'This app needs JavaScript to run. Enable JavaScript in your browser settings or allowlist this site, then reload.',
+            assetLoadTitle: 'Failed to load resources',
+            assetLoadDesc:
+              'Core scripts or styles could not be loaded. Check your network, deployment, or browser extensions that may block assets.',
+            bootstrapTitle: 'Failed to start the app',
+            bootstrapDesc: 'An error occurred while initializing the page. Details are shown below.',
+            runtimeTitle: 'Runtime error',
+            runtimeDesc: 'The app hit an uncaught error. Details are shown below. You can retry or go home.',
+            timeoutTitle: 'App load timed out',
+            timeoutDesc:
+              'Core scripts did not finish loading in time. This may be a slow network or blocked resources. Please reload.',
+            errorMessage: 'Message',
+            retry: 'Retry',
+            backHome: 'Back to home',
+          },
+        };
+
+        function pickLang() {
+          var raw = (document.documentElement.lang || navigator.language || 'zh-CN').toLowerCase();
+          if (raw.indexOf('zh-tw') === 0 || raw.indexOf('zh-hk') === 0 || raw.indexOf('zh-hant') === 0) {
+            return 'zh-Hant';
+          }
+          if (raw.indexOf('zh') === 0) return 'zh-Hans';
+          if (raw.indexOf('ja') === 0) return 'ja';
+          return 'en';
+        }
+
+        function t(key) {
+          var lang = pickLang();
+          var pack = MESSAGES[lang] || MESSAGES.en;
+          return pack[key] || MESSAGES.en[key] || key;
+        }
+
+        function kindMeta(kind) {
+          switch (kind) {
+            case 'js-disabled':
+              return { title: t('jsDisabledTitle'), desc: t('jsDisabledDesc') };
+            case 'asset-load':
+              return { title: t('assetLoadTitle'), desc: t('assetLoadDesc') };
+            case 'bootstrap':
+              return { title: t('bootstrapTitle'), desc: t('bootstrapDesc') };
+            case 'timeout':
+              return { title: t('timeoutTitle'), desc: t('timeoutDesc') };
+            default:
+              return { title: t('runtimeTitle'), desc: t('runtimeDesc') };
+          }
+        }
+
+        var loadTimeoutId = null;
+        var shown = false;
+
+        function renderError(kind, message, detail) {
+          if (shown) return;
+          shown = true;
+          if (loadTimeoutId) {
+            clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
+          }
+
+          var meta = kindMeta(kind);
+          var panel = document.getElementById('mahjong-bootstrap-error');
+          if (!panel) return;
+
+          panel.innerHTML =
+            '<div class="mahjong-bootstrap-error__card">' +
+            '<div class="mahjong-bootstrap-error__header">' +
+            '<svg class="mahjong-bootstrap-error__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+            '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>' +
+            '<line x1="12" y1="9" x2="12" y2="13"></line>' +
+            '<line x1="12" y1="17" x2="12.01" y2="17"></line>' +
+            '</svg>' +
+            '<div><h1 class="mahjong-bootstrap-error__title"></h1><p class="mahjong-bootstrap-error__desc"></p></div>' +
+            '</div>' +
+            '<div class="mahjong-bootstrap-error__body">' +
+            '<div class="mahjong-bootstrap-error__label"></div>' +
+            '<p class="mahjong-bootstrap-error__message"></p>' +
+            (detail ? '<pre class="mahjong-bootstrap-error__detail"></pre>' : '') +
+            '</div>' +
+            '<div class="mahjong-bootstrap-error__actions">' +
+            '<button type="button" class="mahjong-bootstrap-error__btn mahjong-bootstrap-error__btn--primary" data-action="retry"></button>' +
+            '<a class="mahjong-bootstrap-error__btn mahjong-bootstrap-error__btn--secondary" data-action="home" href="/"></a>' +
+            '</div>' +
+            '</div>';
+
+          panel.querySelector('.mahjong-bootstrap-error__title').textContent = meta.title;
+          panel.querySelector('.mahjong-bootstrap-error__desc').textContent = meta.desc;
+          panel.querySelector('.mahjong-bootstrap-error__label').textContent = t('errorMessage');
+          panel.querySelector('.mahjong-bootstrap-error__message').textContent = message || 'Unknown error';
+          if (detail) {
+            panel.querySelector('.mahjong-bootstrap-error__detail').textContent = detail;
+          }
+          panel.querySelector('[data-action="retry"]').textContent = t('retry');
+          panel.querySelector('[data-action="home"]').textContent = t('backHome');
+          panel.querySelector('[data-action="retry"]').addEventListener('click', function () {
+            location.reload();
+          });
+
+          panel.hidden = false;
+          document.documentElement.classList.add('mahjong-bootstrap-error-active');
+        }
+
+        function markReady() {
+          if (loadTimeoutId) {
+            clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
+          }
+          document.documentElement.dataset.appReady = 'true';
+        }
+
+        window.__mahjongBootstrap = {
+          showError: renderError,
+          markReady: markReady,
+        };
+
+        loadTimeoutId = setTimeout(function () {
+          if (document.documentElement.dataset.appReady) return;
+          renderError('timeout', t('timeoutDesc'));
+        }, BOOTSTRAP_TIMEOUT_MS);
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            if (document.documentElement.dataset.appReady) return;
+            var target = event.target;
+            if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+              var src =
+                target.src ||
+                target.href ||
+                target.getAttribute('src') ||
+                target.getAttribute('href') ||
+                '';
+              renderError('asset-load', event.message || 'Failed to load resource', src);
+              return;
+            }
+            if (event.message) {
+              var stack = event.error && event.error.stack ? event.error.stack : undefined;
+              renderError('bootstrap', event.message, stack);
+            }
+          },
+          true,
+        );
+
+        window.addEventListener('unhandledrejection', function (event) {
+          if (document.documentElement.dataset.appReady) return;
+          var reason = event.reason;
+          var message =
+            reason && reason.message
+              ? reason.message
+              : typeof reason === 'string'
+                ? reason
+                : 'Unhandled promise rejection';
+          var detail = reason && reason.stack ? reason.stack : String(reason != null ? reason : '');
+          renderError('bootstrap', message, detail);
+        });
+      })();
+    </script>
   </head>
   <body>
+    <noscript>
+      <div class="mahjong-bootstrap-error" role="alert">
+        <div class="mahjong-bootstrap-error__card">
+          <div class="mahjong-bootstrap-error__header">
+            <svg class="mahjong-bootstrap-error__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <div>
+              <h1 class="mahjong-bootstrap-error__title">需要启用 JavaScript</h1>
+              <p class="mahjong-bootstrap-error__desc">
+                本应用依赖 JavaScript 才能运行。请在浏览器设置中启用 JavaScript，或将本站加入允许列表后刷新页面。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </noscript>
+
+    <div id="mahjong-bootstrap-error" class="mahjong-bootstrap-error" hidden role="alert" aria-live="assertive"></div>
+
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      import('/src/main.tsx').catch(function (err) {
+        var message =
+          err && err.message ? err.message : err != null ? String(err) : 'Failed to load application';
+        var detail = err && err.stack ? err.stack : undefined;
+        if (window.__mahjongBootstrap) {
+          window.__mahjongBootstrap.showError('asset-load', message, detail);
+        }
+      });
+    </script>
   </body>
 </html>
