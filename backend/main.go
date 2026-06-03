@@ -247,7 +247,7 @@ func run(cmd *cobra.Command, args []string) error {
 			auth.GET("/me/", handlers.Me)
 		}
 
-		players := api.Group("/players")
+		players := api.Group("/players", middleware.InvalidateQueryCacheAfterGameWrite())
 		{
 			players.GET("/batch-avatars/", handlers.PlayerAvatarBatch)
 			players.POST("/batch-avatars/", handlers.PlayerAvatarBatch)

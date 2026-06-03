@@ -34,15 +34,23 @@ var cacheablePostPaths = map[string]struct{}{
 
 // gameWritePaths invalidate the query cache after a successful response.
 var gameWritePaths = map[string]struct{}{
-	"/api/v1/games/online/":                        {},
-	"/api/v1/games/online/retry/:pk/":              {},
-	"/api/v1/games/:pk/":                           {},
-	"/api/v1/games/:pk/scores/":                    {},
-	"/api/v1/games/:pk/players/":                     {},
-	"/api/v1/games/:pk/shuffle-seats/":             {},
-	"/api/v1/games/:pk/hand-records/":               {},
-	"/api/v1/games/:pk/hand-records/:record_pk/":   {},
-	"/api/v1/rooms/:pk/games/":                     {},
+	"/api/v1/games/online/":                      {},
+	"/api/v1/games/online/retry/:pk/":            {},
+	"/api/v1/games/:pk/":                         {},
+	"/api/v1/games/:pk/scores/":                  {},
+	"/api/v1/games/:pk/players/":                 {},
+	"/api/v1/games/:pk/shuffle-seats/":           {},
+	"/api/v1/games/:pk/hand-records/":            {},
+	"/api/v1/games/:pk/hand-records/:record_pk/": {},
+	"/api/v1/rooms/:pk/games/":                   {},
+}
+
+// playerWritePaths invalidate cached player lists and related reads.
+var playerWritePaths = map[string]struct{}{
+	"/api/v1/players":                                  {},
+	"/api/v1/players/:pk/":                             {},
+	"/api/v1/players/:pk/majsoul-accounts/":            {},
+	"/api/v1/players/majsoul-accounts/:account_pk/":    {},
 }
 
 func buildQueryCacheKey(method, path, rawQuery string, body []byte, authToken, xToken string) string {
@@ -107,8 +115,11 @@ func isCacheableMethod(c *gin.Context) bool {
 	}
 }
 
-func isGameWriteRoute(fullPath string) bool {
-	_, ok := gameWritePaths[fullPath]
+func invalidatesQueryCache(fullPath string) bool {
+	if _, ok := gameWritePaths[fullPath]; ok {
+		return true
+	}
+	_, ok := playerWritePaths[fullPath]
 	return ok
 }
 
@@ -204,7 +215,7 @@ func InvalidateQueryCacheAfterGameWrite() gin.HandlerFunc {
 		default:
 			return
 		}
-		if isGameWriteRoute(c.FullPath()) {
+		if invalidatesQueryCache(c.FullPath()) {
 			InvalidateQueryCache()
 		}
 	}

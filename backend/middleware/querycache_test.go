@@ -115,3 +115,45 @@ func TestInvalidateQueryCacheAfterGameWrite(t *testing.T) {
 		t.Fatalf("expected cache miss after game write: hits=%d body=%s", readHits, second)
 	}
 }
+
+func TestInvalidateQueryCacheAfterPlayerWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	InvalidateQueryCache()
+
+	var readHits int
+	r := gin.New()
+	api := r.Group("/api/v1")
+	players := api.Group("/players", InvalidateQueryCacheAfterGameWrite())
+	players.POST("", func(c *gin.Context) {
+		c.Status(http.StatusCreated)
+	})
+	r.GET("/api/v1/players", QueryCache(), func(c *gin.Context) {
+		readHits++
+		c.JSON(http.StatusOK, gin.H{"n": readHits})
+	})
+
+	readBody := func() string {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/players", nil))
+		return w.Body.String()
+	}
+
+	first := readBody()
+	if readHits != 1 || !strings.Contains(first, `"n":1`) {
+		t.Fatalf("unexpected first read: hits=%d body=%s", readHits, first)
+	}
+	if readBody() != first {
+		t.Fatal("expected cached read response")
+	}
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/players", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create player status=%d", w.Code)
+	}
+
+	second := readBody()
+	if readHits != 2 || !strings.Contains(second, `"n":2`) {
+		t.Fatalf("expected cache miss after player write: hits=%d body=%s", readHits, second)
+	}
+}
