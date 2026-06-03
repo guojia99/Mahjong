@@ -50,7 +50,7 @@ export default function PlayersPage() {
 
   useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+    loadPlayerAvatarsForList(playerIds, { signal, skipCache: true }).then(setPlayerAvatars).catch((e) => {
       if (!isAbortError(e)) throw e;
     });
   }, [playerIds]);

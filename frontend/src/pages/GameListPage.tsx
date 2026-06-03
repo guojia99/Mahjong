@@ -205,7 +205,7 @@ export default function GameListPage() {
       setPlayerAvatars({});
       return;
     }
-    loadPlayerAvatarsForList(playerIds, signal).then(setPlayerAvatars).catch((e) => {
+    loadPlayerAvatarsForList(playerIds, { signal }).then(setPlayerAvatars).catch((e) => {
       if (!isAbortError(e)) throw e;
     });
   }, [playerIds]);

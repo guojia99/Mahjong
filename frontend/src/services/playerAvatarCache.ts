@@ -58,9 +58,29 @@ export async function loadPlayerAvatar(id: string): Promise<string> {
   return url;
 }
 
-export async function loadPlayerAvatarsForList(ids: string[], signal?: AbortSignal): Promise<Record<string, string>> {
-  hydrate();
+export type LoadPlayerAvatarsOptions = {
+  signal?: AbortSignal;
+  /** Skip in-memory/localStorage cache (for admin pages that edit players). */
+  skipCache?: boolean;
+};
+
+export async function loadPlayerAvatarsForList(
+  ids: string[],
+  opts?: LoadPlayerAvatarsOptions,
+): Promise<Record<string, string>> {
+  const signal = opts?.signal;
   const unique = [...new Set(ids.filter(Boolean))];
+  if (opts?.skipCache) {
+    if (unique.length === 0) return {};
+    const batch = await getPlayerAvatarsBatch(unique, { signal });
+    const out: Record<string, string> = {};
+    for (const id of unique) {
+      out[id] = typeof batch[id] === 'string' ? batch[id] : '';
+    }
+    return out;
+  }
+
+  hydrate();
   const need = unique.filter((id) => !memory.has(id));
   if (need.length > 0) {
     const batch = await getPlayerAvatarsBatch(need, { signal });

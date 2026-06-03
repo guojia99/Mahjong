@@ -311,7 +311,7 @@ export default function StartingHandsPage() {
 
   useAbortableEffect((signal) => {
     if (avatarPlayerIds.length === 0) return;
-    loadPlayerAvatarsForList(avatarPlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+    loadPlayerAvatarsForList(avatarPlayerIds, { signal }).then(setPlayerAvatars).catch((e) => {
       if (!isAbortError(e)) throw e;
     });
   }, [avatarPlayerIds]);

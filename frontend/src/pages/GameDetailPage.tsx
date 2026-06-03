@@ -107,7 +107,7 @@ export default function GameDetailPage() {
 
   useAbortableEffect((signal) => {
     if (gamePlayerIds.length === 0) return;
-    loadPlayerAvatarsForList(gamePlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+    loadPlayerAvatarsForList(gamePlayerIds, { signal }).then(setPlayerAvatars).catch((e) => {
       if (!isAbortError(e)) throw e;
     });
   }, [gamePlayerIds]);

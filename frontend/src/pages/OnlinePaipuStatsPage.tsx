@@ -269,7 +269,7 @@ export default function OnlinePaipuStatsPage() {
 
   useAbortableEffect((signal) => {
     if (playerIds.length === 0) return;
-    loadPlayerAvatarsForList(playerIds, signal).then((map) => {
+    loadPlayerAvatarsForList(playerIds, { signal }).then((map) => {
       setPlayerAvatars(map);
     }).catch((e) => {
       if (!isAbortError(e)) throw e;

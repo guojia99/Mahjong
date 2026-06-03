@@ -77,7 +77,7 @@ export default function LeagueSeasonDetailPage() {
             setPlayerAvatars({});
             return;
         }
-        loadPlayerAvatarsForList(seasonPlayerIds, signal).then(setPlayerAvatars).catch((e) => {
+        loadPlayerAvatarsForList(seasonPlayerIds, { signal }).then(setPlayerAvatars).catch((e) => {
             if (!isAbortError(e)) throw e;
         });
     }, [seasonPlayerIds]);

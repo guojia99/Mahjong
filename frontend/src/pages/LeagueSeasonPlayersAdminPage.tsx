@@ -114,7 +114,7 @@ export default function LeagueSeasonPlayersAdminPage() {
     useEffect(() => {
         if (avatarPlayerIds.length === 0) return;
         let cancelled = false;
-        loadPlayerAvatarsForList(avatarPlayerIds).then((map) => {
+        loadPlayerAvatarsForList(avatarPlayerIds, { skipCache: true }).then((map) => {
             if (!cancelled) setPlayerAvatars(map);
         });
         return () => { cancelled = true; };

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +29,24 @@ var (
 
 // cacheablePostPaths are POST handlers that only read data (not mutations).
 var cacheablePostPaths = map[string]struct{}{
-	"/api/v1/players/batch-avatars/":      {},
 	"/api/v1/games/online/parse-batch/": {},
+}
+
+// queryCacheExcludedPrefixes are API prefixes that must not use query cache (admin / management).
+var queryCacheExcludedPrefixes = []string{
+	"/api/v1/players",
+	"/api/v1/leagues",
+	"/api/v1/ranking",
+	"/api/v1/rooms",
+}
+
+func isQueryCacheExcluded(path string) bool {
+	for _, prefix := range queryCacheExcludedPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // gameWritePaths invalidate the query cache after a successful response.
@@ -139,6 +156,10 @@ func (w *cacheCaptureWriter) Write(b []byte) (int, error) {
 // Cache keys are derived from method, URL path, query string, request body, and auth headers.
 func QueryCache() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if isQueryCacheExcluded(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
 		if !isCacheableMethod(c) {
 			c.Next()
 			return
