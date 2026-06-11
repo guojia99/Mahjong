@@ -27,6 +27,7 @@ import {
   Brain,
   History,
   Wrench,
+  Puzzle,
   Layers,
   Award,
   PieChart,
@@ -78,6 +79,15 @@ const NAV_STRUCTURE: NavEntry[] = [
     children: [
       { type: 'item', path: '/games', labelKey: 'nav.gameList', icon: List },
       { type: 'item', path: '/rooms', labelKey: 'nav.rooms', icon: Layers },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'play',
+    labelKey: 'nav.playGroup',
+    icon: Puzzle,
+    children: [
+      { type: 'item', path: '/que-mi', labelKey: 'nav.queMi', icon: Puzzle },
     ],
   },
   {

@@ -37,6 +37,7 @@ const YakumanListPage = lazy(() => import('@/pages/YakumanListPage'));
 const DiscardAdvisePage = lazy(() => import('@/pages/DiscardAdvisePage'));
 const CalculatorPage = lazy(() => import('@/pages/CalculatorPage'));
 const PracticePage = lazy(() => import('@/pages/PracticePage'));
+const QueMiPage = lazy(() => import('@/pages/QueMiPage'));
 const OnlineGamePage = lazy(() => import('@/pages/OnlineGamePage'));
 const RankingLeaderboardPage = lazy(() => import('@/pages/RankingLeaderboardPage'));
 const RankingAdminPage = lazy(() => import('@/pages/RankingAdminPage'));
@@ -243,6 +244,14 @@ function App() {
             element={
               <LazyPage>
                 <PracticePage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi"
+            element={
+              <LazyPage>
+                <QueMiPage />
               </LazyPage>
             }
           />

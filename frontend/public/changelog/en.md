@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.0 — 2026-06-11
+
+- New "QueMi" puzzle game: guess a closed hand from round/seat winds and dora; winnable vs non-winnable types, five difficulty levels
+- Click or drag input, fullscreen, tutorial, and local history
+
 ## v3.3.0 — 2026-06-11
 
 - User accounts (players are users): email binding, system-password login, verification reset, login rate limiting and audit logs
