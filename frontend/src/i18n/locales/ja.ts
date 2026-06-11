@@ -992,7 +992,7 @@ const ja: Record<string, string> = {
   'queMi.guideStep1': 'タイプと難易度を選ぶ（試行回数が決まる）。',
   'queMi.guideStep2': '場風・自風・ドラなどから手牌13枚＋ツモ1枚を入力。',
   'queMi.guideStep3': '和了形：役ありの和了。不和形：和了不可の手。',
-  'queMi.guideStep4': '緑=位置・牌面一致、黄=牌面のみ一致、その他はハイライトなし。',
+  'queMi.guideStep4': '緑=位置・牌面一致、黄=牌面のみ一致、灰=余分・なし。',
   'queMi.guideStep5': '各牌最大4枚；ドラ表示分は1枚減。クリックまたはドラッグ入力。',
   'queMi.guideOk': '了解',
   'queMi.fullscreen': '全画面',

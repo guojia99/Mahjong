@@ -993,7 +993,7 @@ const en: Record<string, string> = {
   'queMi.guideStep1': 'Choose puzzle type and difficulty (sets number of tries).',
   'queMi.guideStep2': 'Enter 13 hand tiles + 1 draw from winds and dora hints.',
   'queMi.guideStep3': 'Winnable: must be a winning hand with yaku. Not winnable: must not win.',
-  'queMi.guideStep4': 'Green = correct tile & slot; yellow = right tile wrong slot; other tiles have no highlight.',
+  'queMi.guideStep4': 'Green = correct tile & slot; yellow = right tile wrong slot; gray = extra/missing.',
   'queMi.guideStep5': 'Max 4 per tile; dora indicator uses one. Click or drag to input.',
   'queMi.guideOk': 'Got it',
   'queMi.fullscreen': 'Fullscreen',

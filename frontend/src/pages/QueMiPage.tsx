@@ -151,6 +151,12 @@ function feedbackStyle(fb: TileFeedback | undefined, frozen: boolean): CSSProper
       boxShadow: '0 0 0 2px rgba(234, 179, 8, 0.45)',
     };
   }
+  if (frozen && fb === 'black') {
+    return {
+      background: '#f1f5f9',
+      borderColor: '#cbd5e1',
+    };
+  }
   return { background: 'rgba(255,255,255,0.9)', borderColor: 'var(--color-border, #e5e7eb)' };
 }
 
@@ -158,6 +164,7 @@ function feedbackTileOverlay(fb: TileFeedback | undefined, frozen: boolean): str
   if (!frozen) return null;
   if (fb === 'green') return 'rgba(34, 197, 94, 0.15)';
   if (fb === 'yellow') return 'rgba(249, 115, 22, 0.15)';
+  if (fb === 'black') return 'rgba(100, 116, 139, 0.15)';
   return null;
 }
 
@@ -224,7 +231,10 @@ function TileSlot({
         aria-label={`slot-${index}`}
       >
         {tile ? (
-          <span className="relative inline-flex leading-none">
+          <span
+            className="relative inline-flex leading-none"
+            style={frozen && feedback === 'black' ? { opacity: 0.72 } : undefined}
+          >
             <MahjongTile tile={tile} height={tileHeight} />
             {tileOverlay && (
               <span
