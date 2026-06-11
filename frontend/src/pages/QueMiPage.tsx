@@ -15,6 +15,7 @@ import {
   Minimize2,
   HelpCircle,
   Trash2,
+  Delete,
   MousePointerClick,
   GripVertical,
   History,
@@ -81,11 +82,7 @@ function ContextTag({
   );
 }
 
-function useHandTileHeight(
-  ref: RefObject<HTMLElement | null>,
-  slotCount: number,
-  hasLeading: boolean,
-) {
+function useHandTileHeight(ref: RefObject<HTMLElement | null>, slotCount: number) {
   const [tileHeight, setTileHeight] = useState(40);
 
   useEffect(() => {
@@ -93,9 +90,8 @@ function useHandTileHeight(
     if (!el) return;
 
     const update = () => {
-      const leading = hasLeading ? 64 : 0;
       const handGaps = Math.max(0, DRAW_SLOT_INDEX) * 2;
-      const slotW = (el.clientWidth - leading - handGaps - HAND_DRAW_GAP_PX) / slotCount;
+      const slotW = (el.clientWidth - handGaps - HAND_DRAW_GAP_PX) / slotCount;
       setTileHeight(Math.min(48, Math.max(18, slotW * 1.18)));
     };
 
@@ -103,9 +99,25 @@ function useHandTileHeight(
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref, slotCount, hasLeading]);
+  }, [ref, slotCount]);
 
   return tileHeight;
+}
+
+function SubmitAttemptBadge({ attempt, label }: { attempt: number; label: string }) {
+  return (
+    <span
+      className="absolute top-0 left-2 z-10 -translate-y-1/2 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold tabular-nums leading-none"
+      style={{
+        background: 'var(--color-card)',
+        border: '1.5px solid var(--color-border)',
+        color: 'var(--color-text-light)',
+      }}
+      aria-label={label}
+    >
+      {attempt}
+    </span>
+  );
 }
 
 function loadHistory(): QueMiHistoryEntry[] {
@@ -125,12 +137,28 @@ function emptySlots(): (string | null)[] {
 }
 
 function feedbackStyle(fb: TileFeedback | undefined, frozen: boolean): CSSProperties {
-  if (frozen) {
-    if (fb === 'green') return { background: 'rgba(34, 197, 94, 0.25)', borderColor: '#16a34a' };
-    if (fb === 'yellow') return { background: 'rgba(234, 179, 8, 0.25)', borderColor: '#ca8a04' };
-    if (fb === 'black') return { background: 'rgba(0, 0, 0, 0.12)', borderColor: '#525252' };
+  if (frozen && fb === 'green') {
+    return {
+      background: '#4ade80',
+      borderColor: '#14532d',
+      boxShadow: '0 0 0 2px rgba(34, 197, 94, 0.45)',
+    };
+  }
+  if (frozen && fb === 'yellow') {
+    return {
+      background: '#facc15',
+      borderColor: '#92400e',
+      boxShadow: '0 0 0 2px rgba(234, 179, 8, 0.45)',
+    };
   }
   return { background: 'rgba(255,255,255,0.9)', borderColor: 'var(--color-border, #e5e7eb)' };
+}
+
+function feedbackTileOverlay(fb: TileFeedback | undefined, frozen: boolean): string | null {
+  if (!frozen) return null;
+  if (fb === 'green') return 'rgba(34, 197, 94, 0.15)';
+  if (fb === 'yellow') return 'rgba(249, 115, 22, 0.15)';
+  return null;
 }
 
 function TileSlot({
@@ -160,6 +188,8 @@ function TileSlot({
   onDragOver?: (e: DragEvent) => void;
   onDrop?: (e: DragEvent) => void;
 }) {
+  const tileOverlay = feedbackTileOverlay(feedback, frozen);
+
   return (
     <div
       className="flex-1 min-w-0 flex flex-col items-center gap-0.5"
@@ -189,11 +219,22 @@ function TileSlot({
           justifyContent: 'center',
           cursor: frozen ? 'default' : 'pointer',
           padding: 0,
-          ...feedbackStyle(feedback, frozen && !!feedback && feedback !== 'none'),
+          ...feedbackStyle(feedback, frozen),
         }}
         aria-label={`slot-${index}`}
       >
-        {tile ? <MahjongTile tile={tile} height={tileHeight} /> : null}
+        {tile ? (
+          <span className="relative inline-flex leading-none">
+            <MahjongTile tile={tile} height={tileHeight} />
+            {tileOverlay && (
+              <span
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: tileOverlay, borderRadius: 3 }}
+                aria-hidden
+              />
+            )}
+          </span>
+        ) : null}
       </button>
       </div>
     </div>
@@ -209,7 +250,6 @@ type HandRowSlotHandlers = {
 };
 
 function HandRow({
-  leadingLabel,
   tiles,
   feedback,
   frozen,
@@ -217,7 +257,6 @@ function HandRow({
   handlers,
   getSlotLabel,
 }: {
-  leadingLabel?: string;
   tiles: (string | null)[];
   feedback?: TileFeedback[];
   frozen: boolean;
@@ -226,18 +265,10 @@ function HandRow({
   getSlotLabel?: (index: number) => string | undefined;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const tileHeight = useHandTileHeight(rowRef, tiles.length, !!leadingLabel);
+  const tileHeight = useHandTileHeight(rowRef, tiles.length);
 
   return (
     <div ref={rowRef} className="flex flex-nowrap items-end gap-0.5 w-full">
-      {leadingLabel && (
-        <span
-          className="shrink-0 self-center text-[10px] sm:text-xs font-medium leading-tight whitespace-nowrap pr-1"
-          style={{ color: 'var(--color-text-light)' }}
-        >
-          {leadingLabel}
-        </span>
-      )}
       <div className="flex flex-nowrap items-end flex-1 min-w-0">
         <div className="flex flex-nowrap items-end gap-0.5 flex-[13] min-w-0">
           {tiles.slice(0, DRAW_SLOT_INDEX).map((tile, i) => (
@@ -320,6 +351,7 @@ export default function QueMiPage() {
   );
 
   const firstEmptyIndex = guess.findIndex((t) => !t);
+  const hasAnyTile = guess.some(Boolean);
   const draggingFromHand =
     inputMode === 'drag' && dragTile !== null && typeof dragTile.source === 'number';
 
@@ -440,6 +472,21 @@ export default function QueMiPage() {
     setGuess(next);
   };
 
+  const removeLastTile = useCallback(() => {
+    if (phase !== 'playing') return;
+    setGuess((prev) => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i]) {
+          const next = [...prev];
+          next[i] = null;
+          return next;
+        }
+      }
+      return prev;
+    });
+    setErrorKey(null);
+  }, [phase]);
+
   const dropHandTileOnPalette = useCallback(
     (e: DragEvent) => {
       if (phase !== 'playing' || inputMode !== 'drag') return;
@@ -498,6 +545,19 @@ export default function QueMiPage() {
     document.addEventListener('fullscreenchange', onFs);
     return () => document.removeEventListener('fullscreenchange', onFs);
   }, []);
+
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      e.preventDefault();
+      removeLastTile();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [phase, removeLastTile]);
 
   const dismissGuide = () => {
     localStorage.setItem(GUIDE_KEY, '1');
@@ -700,11 +760,14 @@ export default function QueMiPage() {
               {submitRecords.map((rec) => (
                 <div
                   key={rec.attempt}
-                  className="p-3 rounded-xl border"
+                  className="relative p-3 rounded-xl border"
                   style={{ borderColor: 'var(--color-border)', background: 'rgba(255,255,255,0.4)' }}
                 >
+                  <SubmitAttemptBadge
+                    attempt={rec.attempt}
+                    label={t('queMi.submitRecord', { n: rec.attempt })}
+                  />
                   <HandRow
-                    leadingLabel={t('queMi.submitRecord', { n: rec.attempt })}
                     tiles={rec.guess}
                     feedback={rec.feedback}
                     frozen
@@ -791,6 +854,16 @@ export default function QueMiPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     <button type="button" onClick={submitGuess} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">
                       {t('queMi.submit')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removeLastTile}
+                      disabled={!hasAnyTile}
+                      className="btn-secondary px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={t('queMi.deleteLast')}
+                    >
+                      <Delete size={14} />
+                      {t('queMi.deleteLast')}
                     </button>
                     <button type="button" onClick={clearGuess} className="btn-secondary px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1">
                       <Trash2 size={14} />
