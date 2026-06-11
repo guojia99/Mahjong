@@ -1,7 +1,7 @@
 import api from './client';
 import type { ApiRequestOptions } from './types';
 import { mergeApiOptions } from './types';
-import type { Player, MajsoulAccount, Game, HandRecord, PlayerAiMatchScoreSeries } from '@/types';
+import type { Player, PlayerAccount, MajsoulAccount, Game, HandRecord, PlayerAiMatchScoreSeries } from '@/types';
 
 export async function getPlayers(query = '', opts?: ApiRequestOptions): Promise<Player[]> {
   const params = query ? { q: query } : {};
@@ -32,6 +32,10 @@ export async function createPlayer(payload: {
   real_name?: string;
   avatar?: string;
   extra_info?: Record<string, unknown>;
+  enable_account?: boolean;
+  email?: string;
+  password?: string;
+  is_admin?: boolean;
 }): Promise<Player> {
   const { data } = await api.post('/players/', payload);
   return data;
@@ -52,6 +56,32 @@ export async function updatePlayer(
 
 export async function deletePlayer(id: string): Promise<void> {
   await api.delete(`/players/${id}/`);
+}
+
+export async function bindPlayerAccount(playerId: string, userId: number): Promise<PlayerAccount> {
+  const { data } = await api.post<PlayerAccount>(`/players/${playerId}/bind-account/`, { user_id: userId });
+  return data;
+}
+
+export async function enablePlayerAccount(
+  playerId: string,
+  payload: { email?: string; password?: string; is_admin?: boolean; username?: string },
+): Promise<PlayerAccount> {
+  const { data } = await api.post(`/players/${playerId}/enable-account/`, payload);
+  return data;
+}
+
+export async function updatePlayerAccount(
+  playerId: string,
+  payload: { email?: string; is_admin?: boolean; is_active?: boolean; username?: string },
+): Promise<PlayerAccount> {
+  const { data } = await api.put(`/players/${playerId}/account/`, payload);
+  return data;
+}
+
+export async function resetPlayerSystemPassword(playerId: string): Promise<PlayerAccount> {
+  const { data } = await api.post<PlayerAccount>(`/players/${playerId}/reset-system-password/`);
+  return data;
 }
 
 export async function getMajsoulAccounts(playerId: string): Promise<MajsoulAccount[]> {

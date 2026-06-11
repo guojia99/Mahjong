@@ -1,8 +1,21 @@
 import api from './client';
 import type { User } from '@/types';
 
-export async function login(username: string, password: string) {
-  const { data } = await api.post('/auth/login/', { username, password });
+export interface LoginResponse {
+  token: string;
+  user: User;
+  requires_password_reset?: boolean;
+}
+
+export async function login(
+  username: string,
+  password?: string,
+  systemPassword?: string,
+): Promise<LoginResponse> {
+  const body: Record<string, string> = { username };
+  if (password) body.password = password;
+  if (systemPassword) body.system_password = systemPassword;
+  const { data } = await api.post<LoginResponse>('/auth/login/', body);
   localStorage.setItem('token', data.token);
   localStorage.setItem('user', JSON.stringify(data.user));
   return data;
@@ -19,6 +32,23 @@ export async function logout() {
 
 export async function getMe(): Promise<User> {
   const { data } = await api.get('/auth/me/');
+  localStorage.setItem('user', JSON.stringify(data));
+  return data;
+}
+
+export async function sendVerificationCode(username: string, email: string, purpose: string) {
+  const { data } = await api.post('/auth/verification/send/', { username, email, purpose });
+  return data;
+}
+
+export async function confirmResetPassword(payload: {
+  username: string;
+  email: string;
+  code: string;
+  new_password: string;
+  system_password?: string;
+}) {
+  const { data } = await api.post('/auth/reset-password/confirm/', payload);
   return data;
 }
 

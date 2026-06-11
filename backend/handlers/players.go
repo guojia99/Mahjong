@@ -74,9 +74,14 @@ func PlayerList(c *gin.Context) {
 	}
 	qs.Preload("MajsoulAccounts").Find(&players)
 
+	admin := middleware.GetUser(c) != nil && middleware.GetUser(c).IsStaff
 	result := make([]gin.H, 0, len(players))
 	for i := range players {
-		result = append(result, getPlayerListData(&players[i]))
+		data := getPlayerListData(&players[i])
+		if admin {
+			attachPlayerAccountForAdmin(data, players[i].ID)
+		}
+		result = append(result, data)
 	}
 	respondOK(c, result)
 }
@@ -88,10 +93,14 @@ func PlayerCreate(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Nickname  string                 `json:"nickname"`
-		RealName  string                 `json:"real_name"`
-		Avatar    string                 `json:"avatar"`
-		ExtraInfo map[string]interface{} `json:"extra_info"`
+		Nickname      string                 `json:"nickname"`
+		RealName      string                 `json:"real_name"`
+		Avatar        string                 `json:"avatar"`
+		ExtraInfo     map[string]interface{} `json:"extra_info"`
+		EnableAccount bool                   `json:"enable_account"`
+		Email         string                 `json:"email"`
+		Password      string                 `json:"password"`
+		IsAdmin       bool                   `json:"is_admin"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request")
@@ -118,8 +127,16 @@ func PlayerCreate(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
+	if req.EnableAccount {
+		if _, err := createUserForPlayer(&player, req.Email, req.Password, req.IsAdmin); err != nil {
+			respondError(c, http.StatusBadRequest, "Player created but account failed: "+err.Error())
+			return
+		}
+	}
 	config.DB.Preload("MajsoulAccounts").First(&player, "id = ?", player.ID)
-	respondCreated(c, getPlayerDetailData(&player))
+	data := getPlayerDetailData(&player)
+	attachPlayerAccountForAdmin(data, player.ID)
+	respondCreated(c, data)
 }
 
 func PlayerDetail(c *gin.Context) {
@@ -129,7 +146,11 @@ func PlayerDetail(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
-	respondOK(c, getPlayerDetailData(&player))
+	data := getPlayerDetailData(&player)
+	if middleware.GetUser(c) != nil && middleware.GetUser(c).IsStaff {
+		attachPlayerAccountForAdmin(data, player.ID)
+	}
+	respondOK(c, data)
 }
 
 func PlayerUpdate(c *gin.Context) {
@@ -169,11 +190,16 @@ func PlayerUpdate(c *gin.Context) {
 		config.DB.Model(&player).Updates(updates)
 	}
 	config.DB.Preload("MajsoulAccounts").First(&player, "id = ?", pk)
-	respondOK(c, getPlayerDetailData(&player))
+	data := getPlayerDetailData(&player)
+	if middleware.GetUser(c) != nil && middleware.GetUser(c).IsStaff {
+		attachPlayerAccountForAdmin(data, player.ID)
+	}
+	respondOK(c, data)
 }
 
 func PlayerDelete(c *gin.Context) {
 	pk := c.Param("pk")
+	config.DB.Where("player_id = ?", pk).Delete(&models.User{})
 	config.DB.Where("id = ?", pk).Delete(&models.Player{})
 	respondNoContent(c)
 }

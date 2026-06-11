@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.3.0 — 2026-06-11
+
+- User accounts (players are users): email binding, system-password login, verification reset, login rate limiting and audit logs
+- Player management: enable accounts, reset system passwords; login with player nickname
+- Admin lists support card/table view toggle (users, players, league registration)
+
 ## v3.2.0 — 2026-06-03
 
 - New Discard Advisor: enter hand, melds, draw, and dora; Mortal AI ranks discard options

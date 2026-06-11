@@ -16,6 +16,7 @@ import { getPlayers } from '@/api/players';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueSeasonPlayerItem, Player } from '@/types';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
+import ViewModeToggle, { useViewMode } from '@/components/ViewModeToggle';
 
 function avatarUrlFromPlayer(p: Pick<Player, 'avatar' | 'nickname'>) {
     if (p.avatar) return p.avatar;
@@ -64,6 +65,7 @@ export default function LeagueSeasonPlayersAdminPage() {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState<Set<string>>(new Set());
     const [requireMajsoul, setRequireMajsoul] = useState(true);
+    const [viewMode, setViewMode] = useViewMode('league-season-players-view', 'card');
 
     useEffect(() => {
         if (!seasonId) return;
@@ -232,9 +234,10 @@ export default function LeagueSeasonPlayersAdminPage() {
                         <Lock size={12} /> {t('league.registrationLocked')}
                     </span>
                 )}
+                <ViewModeToggle mode={viewMode} onChange={setViewMode} />
             </div>
 
-            {/* Registered players (card mode) */}
+            {/* Registered players */}
             <section className="rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
                 <header className="px-5 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
                     <h3 className="font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
@@ -249,6 +252,43 @@ export default function LeagueSeasonPlayersAdminPage() {
                     <div className="text-center py-12 text-sm" style={{ color: 'var(--color-text-light)' }}>
                         <Users size={32} className="mx-auto mb-3 text-gray-300" />
                         {t('league.noPlayers')}
+                    </div>
+                ) : viewMode === 'table' ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b text-left" style={{ borderColor: 'var(--color-border)' }}>
+                                    <th className="p-3">{t('players.nicknameLabel')}</th>
+                                    <th className="p-3">{t('players.realNameLabel')}</th>
+                                    <th className="p-3">UID</th>
+                                    <th className="p-3">{t('common.actions')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {seasonPlayers.map(sp => (
+                                    <tr key={sp.id} className="border-b" style={{ borderColor: 'var(--color-border)' }}>
+                                        <td className="p-3">
+                                            <div className="flex items-center gap-2">
+                                                <Avatar player={sp.player} size={28} avatarUrl={playerAvatars[sp.player.id]} />
+                                                <span>{sp.player.nickname}</span>
+                                                {sp.seed_label && (
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">{sp.seed_label}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-3">{sp.player.real_name || '—'}</td>
+                                        <td className="p-3 font-mono text-xs">{sp.player.majsoul_uids?.join(' / ') || '—'}</td>
+                                        <td className="p-3">
+                                            {!isLocked && (
+                                                <button onClick={() => handleUnregister(sp.player.id)} className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                                                    <UserMinus size={12} /> {t('league.unregister')}
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 ) : (
                     <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

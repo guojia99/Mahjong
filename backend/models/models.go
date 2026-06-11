@@ -8,18 +8,70 @@ import (
 )
 
 type User struct {
-	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
-	Username  string    `gorm:"size:150;uniqueIndex;not null" json:"username"`
-	Password  string    `gorm:"size:128;not null" json:"-"`
-	IsStaff   bool      `gorm:"column:is_staff;default:false" json:"is_admin"`
-	IsActive  bool      `gorm:"column:is_active;default:true" json:"-"`
-	Superuser bool      `gorm:"column:is_superuser;default:false" json:"-"`
-	Email     string    `gorm:"column:email;size:254" json:"-"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt time.Time `gorm:"-" json:"-"`
+	ID                 uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username           string     `gorm:"size:150;uniqueIndex;not null" json:"username"`
+	FirstName          string     `gorm:"column:first_name;size:150;not null;default:''" json:"-"`
+	LastName           string     `gorm:"column:last_name;size:150;not null;default:''" json:"-"`
+	DateJoined         time.Time  `gorm:"column:date_joined;not null;autoCreateTime" json:"-"`
+	Password           string     `gorm:"size:128;not null;default:''" json:"-"`
+	SystemPassword     string     `gorm:"column:system_password;size:36;default:''" json:"-"`
+	IsStaff            bool       `gorm:"column:is_staff;default:false" json:"is_admin"`
+	IsActive           bool       `gorm:"column:is_active;default:true" json:"is_active"`
+	Superuser          bool       `gorm:"column:is_superuser;default:false" json:"-"`
+	Email              string     `gorm:"column:email;size:254;default:''" json:"email"`
+	PlayerID           *string    `gorm:"column:player_id;size:36;uniqueIndex" json:"player_id,omitempty"`
+	LoginFailCount     int        `gorm:"column:login_fail_count;default:0" json:"login_fail_count"`
+	LastLoginAttemptAt *time.Time `gorm:"column:last_login_attempt_at" json:"last_login_attempt_at,omitempty"`
+	LastLoginIP        string     `gorm:"column:last_login_ip;size:45;default:''" json:"last_login_ip"`
+	LockedUntil        *time.Time `gorm:"column:locked_until" json:"locked_until,omitempty"`
+	CreatedAt          time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt          time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"-"`
 }
 
 func (User) TableName() string { return "users" }
+
+// HasPassword reports whether the user has a regular password set.
+func (u *User) HasPassword() bool {
+	return u.Password != ""
+}
+
+const (
+	VerificationPurposeBindEmail    = "bind_email"
+	VerificationPurposeChangeEmail  = "change_email"
+	VerificationPurposeResetPassword = "reset_password"
+)
+
+type VerificationCode struct {
+	ID        uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    uint64     `gorm:"column:user_id;not null;index" json:"user_id"`
+	Purpose   string     `gorm:"size:30;not null;index" json:"purpose"`
+	Code      string     `gorm:"size:6;not null" json:"-"`
+	ExpiresAt time.Time  `gorm:"column:expires_at;not null" json:"expires_at"`
+	UsedAt    *time.Time `gorm:"column:used_at" json:"used_at,omitempty"`
+	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (VerificationCode) TableName() string { return "verification_codes" }
+
+const (
+	LoginActionSuccess       = "login_success"
+	LoginActionFail          = "login_fail"
+	LoginActionLogout        = "logout"
+	LoginActionPasswordReset = "password_reset"
+)
+
+type LoginLog struct {
+	ID        uint64    `gorm:"primaryKey;autoIncrement" json:"id"`
+	UserID    *uint64   `gorm:"column:user_id;index" json:"user_id,omitempty"`
+	PlayerID  *string   `gorm:"column:player_id;size:36;index" json:"player_id,omitempty"`
+	Username  string    `gorm:"size:150;not null;index" json:"username"`
+	IP        string    `gorm:"size:45;default:''" json:"ip"`
+	Action    string    `gorm:"size:30;not null;index" json:"action"`
+	Detail    string    `gorm:"size:500;default:''" json:"detail"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+}
+
+func (LoginLog) TableName() string { return "login_logs" }
 
 type Player struct {
 	ID         string    `gorm:"primaryKey;size:36" json:"id"`

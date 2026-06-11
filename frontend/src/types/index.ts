@@ -1,8 +1,56 @@
 export interface User {
     id: number;
     username: string;
+    player_id?: string;
+    email?: string;
     created_at: string;
     is_admin: boolean;
+    is_active?: boolean;
+    requires_password_reset?: boolean;
+    login_fail_count?: number;
+    last_login_ip?: string;
+    last_login_attempt_at?: string;
+    locked_until?: string;
+}
+
+export interface UnboundUser {
+    id: number;
+    username: string;
+    email: string;
+    is_admin: boolean;
+}
+
+export interface PlayerAccount {
+    has_account: boolean;
+    user_id?: number;
+    username?: string;
+    email?: string;
+    system_password?: string;
+    has_system_password?: boolean;
+    is_admin?: boolean;
+    is_active?: boolean;
+    login_fail_count?: number;
+    last_login_ip?: string;
+    last_login_attempt_at?: string;
+    locked_until?: string;
+    requires_password_reset?: boolean;
+}
+
+export interface LoginLog {
+    id: number;
+    user_id?: number;
+    username: string;
+    ip: string;
+    action: string;
+    detail: string;
+    created_at: string;
+}
+
+export interface LoginLogPage {
+    items: LoginLog[];
+    total: number;
+    page: number;
+    page_size: number;
 }
 
 export interface Player {
@@ -13,6 +61,7 @@ export interface Player {
     extra_info: Record<string, unknown>;
     majsoul_uids?: number[];
     majsoul_accounts?: MajsoulAccount[];
+    account?: PlayerAccount;
     created_at: string;
     updated_at?: string;
 }

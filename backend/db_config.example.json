@@ -21,6 +21,13 @@
             "url": "http://127.0.0.1:9995"
         }
     ],
+    "emailConfig": {
+        "smtpHost": "smtp.qq.com",
+        "smtpPort": 587,
+        "from": "cubingpro@foxmail.com",
+        "fromName": "cubingPro",
+        "password": "xxxxx"
+    },
     "ai_grade_tiers": [
         { "grade": "AI", "min": 99 },
         { "grade": "S+", "min": 95 },

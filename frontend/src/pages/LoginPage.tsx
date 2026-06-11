@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { login } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
@@ -8,6 +8,7 @@ export default function LoginPage() {
   const { t } = useTranslation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [useSystemPassword, setUseSystemPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { showToast, ToastComponent } = useToast();
@@ -16,7 +17,19 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(username, password);
+      const data = await login(
+        username,
+        useSystemPassword ? undefined : password,
+        useSystemPassword ? password : undefined,
+      );
+      if (data.requires_password_reset) {
+        const params = new URLSearchParams({
+          username,
+          system_password: password,
+        });
+        navigate(`/reset-password?${params.toString()}`);
+        return;
+      }
       navigate('/');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || t('login.failed');
@@ -46,6 +59,9 @@ export default function LoginPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-light)' }}>
             {t('login.title')}
           </p>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>
+            {t('login.nicknameHint')}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -61,15 +77,19 @@ export default function LoginPage() {
             />
           </div>
           <div className="form-group">
-            <label className="form-label">{t('login.password')}</label>
+            <label className="form-label">
+              {useSystemPassword ? t('login.systemPassword') : t('login.password')}
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="form-input"
-              placeholder={t('login.passwordPlaceholder')}
+              placeholder={
+                useSystemPassword ? t('login.systemPasswordPlaceholder') : t('login.passwordPlaceholder')
+              }
               required
-              minLength={6}
+              minLength={useSystemPassword ? 1 : 6}
             />
           </div>
           <button
@@ -81,6 +101,24 @@ export default function LoginPage() {
             {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
+
+        <div className="mt-4 flex flex-col gap-2 text-center text-xs" style={{ color: 'var(--color-text-light)' }}>
+          <button
+            type="button"
+            className="hover:underline"
+            onClick={() => {
+              setUseSystemPassword((v) => !v);
+              setPassword('');
+            }}
+          >
+            {useSystemPassword ? t('login.useRegularPassword') : t('login.useSystemPassword')}
+          </button>
+          {!useSystemPassword && (
+            <Link to="/reset-password" className="hover:underline">
+              {t('login.forgotPassword')}
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

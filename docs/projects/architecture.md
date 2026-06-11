@@ -39,10 +39,34 @@ backend/go/
 |------|------|------|
 | id | uint64 (PK, auto increment) | 主键 |
 | username | string(150) | 用户名 (唯一) |
-| password | string(128) | 密码哈希 |
+| password | string(128) | 密码哈希（空表示无密码） |
+| system_password | string(36) | 系统密码 UUID，仅无密码用户可登录 |
+| email | string(254) | 邮箱（重置/绑定验证码用） |
 | is_staff | bool | 是否管理员 |
 | is_active | bool | 是否激活 |
+| login_fail_count | int | 近期登录失败次数 |
+| last_login_attempt_at | datetime | 最近尝试登录时间 |
+| last_login_ip | string | 最近登录 IP |
+| locked_until | datetime | 锁定截止时间 |
 | created_at | datetime | 创建时间 |
+
+### VerificationCode (验证码)
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| user_id | FK(User) | 所属用户 |
+| purpose | string | bind_email / change_email / reset_password |
+| code | string(6) | 6 位字母数字码 |
+| expires_at | datetime | 过期时间 |
+| used_at | datetime | 使用后标记 |
+
+### LoginLog (登录日志)
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| user_id | FK(User, nullable) | 用户 |
+| username | string | 用户名 |
+| ip | string | IP |
+| action | string | login_success / login_fail / logout / password_reset |
+| created_at | datetime | 时间 |
 
 ### Player (雀士)
 | 字段 | 类型 | 说明 |
@@ -189,17 +213,31 @@ backend/go/
 ## API 接口设计
 
 ### 认证与权限
-- **登录限制**: 仅管理员 (is_staff) 可登录，无注册功能
+- **登录**: 活跃用户可登录；支持常规密码或系统密码（无密码用户）
+- **登录限流**: 5 分钟内失败 5 次锁定 15 分钟；成功登录重置
 - **权限策略**: GET 请求公开访问，写操作 (POST/PUT/DELETE) 需要管理员权限
-- **管理入口**: "雀士管理" 导航仅在管理员登录后显示
+- **管理入口**: 管理导航组仅在管理员登录后显示
 - **公开页面**: 首页、雀士列表、房间、对局、PT排名、役满列表均无需登录
 
 ### 认证 API
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | /api/v1/auth/login/ | 管理员登录 | 公开 |
+| POST | /api/v1/auth/login/ | 登录（密码或系统密码） | 公开 |
 | POST | /api/v1/auth/logout/ | 登出 | 认证 |
 | GET | /api/v1/auth/me/ | 获取当前用户 | 认证 |
+| POST | /api/v1/auth/verification/send/ | 发送验证码邮件 | 公开 |
+| POST | /api/v1/auth/reset-password/confirm/ | 验证码重置密码 | 公开 |
+| POST | /api/v1/auth/bind-email/confirm/ | 绑定邮箱 | 公开 |
+| POST | /api/v1/auth/change-email/confirm/ | 修改邮箱 | 认证 |
+
+雀士与网站用户 1:1 关联（`users.player_id`）。账号管理在雀士 API 中：
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| POST | /api/v1/players/:pk/enable-account/ | 为雀士开通账号 | 管理员 |
+| PUT | /api/v1/players/:pk/account/ | 更新雀士账号 | 管理员 |
+| POST | /api/v1/players/:pk/reset-system-password/ | 重置系统密码 | 管理员 |
+| GET | /api/v1/admin/login-logs/ | 登录日志 | 管理员 |
 
 ### 雀士 API
 | 方法 | 路径 | 说明 | 权限 |
@@ -331,7 +369,8 @@ backend/go/
 ### 页面路由
 | 路径 | 页面 | 说明 | 访问权限 |
 |------|------|------|------|
-| /login | 登录页 | 管理员登录表单 | 公开 |
+| /login | 登录页 | 登录表单 | 公开 |
+| /reset-password | 重置密码 | 邮箱验证码重置 | 公开 |
 | / | 首页/仪表盘 | 统计概览、最近役满列表 | 公开 |
 | /players | 雀士管理 | 雀士增删改 | 管理员 |
 | /player-list | 雀士列表 | 雀士搜索浏览 | 公开 |

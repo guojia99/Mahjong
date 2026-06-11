@@ -245,6 +245,16 @@ func run(cmd *cobra.Command, args []string) error {
 			auth.POST("/login/", handlers.Login)
 			auth.POST("/logout/", handlers.Logout)
 			auth.GET("/me/", handlers.Me)
+			auth.POST("/verification/send/", handlers.VerificationSend)
+			auth.POST("/reset-password/confirm/", handlers.ResetPasswordConfirm)
+			auth.POST("/bind-email/confirm/", handlers.BindEmailConfirm)
+			auth.POST("/change-email/confirm/", handlers.ChangeEmailConfirm)
+		}
+
+		admin := api.Group("/admin", middleware.AdminRequired())
+		{
+			admin.GET("/login-logs/", handlers.LoginLogList)
+			admin.GET("/users/unbound/", handlers.UnboundUserList)
 		}
 
 		players := api.Group("/players", middleware.InvalidateQueryCacheAfterGameWrite())
@@ -264,6 +274,10 @@ func run(cmd *cobra.Command, args []string) error {
 			players.GET("/:pk/majsoul-accounts/", handlers.PlayerMajsoulAccounts)
 			players.POST("/:pk/majsoul-accounts/", handlers.PlayerAddMajsoulAccount)
 			players.DELETE("/majsoul-accounts/:account_pk/", handlers.DeleteMajsoulAccount)
+			players.POST("/:pk/enable-account/", handlers.PlayerEnableAccount)
+			players.POST("/:pk/bind-account/", handlers.PlayerBindAccount)
+			players.PUT("/:pk/account/", handlers.PlayerUpdateAccount)
+			players.POST("/:pk/reset-system-password/", handlers.PlayerResetSystemPassword)
 		}
 
 		rooms := api.Group("/rooms", middleware.InvalidateQueryCacheAfterGameWrite())

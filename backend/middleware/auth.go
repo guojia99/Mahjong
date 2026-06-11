@@ -60,6 +60,23 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
+func AdminRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := loadUserFromToken(c)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+		if !user.IsStaff {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func AdminOrReadOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {

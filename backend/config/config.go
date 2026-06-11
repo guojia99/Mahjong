@@ -14,18 +14,31 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+type EmailConfig struct {
+	SMTPHost string `json:"smtpHost"`
+	SMTPPort int    `json:"smtpPort"`
+	From     string `json:"from"`
+	FromName string `json:"fromName"`
+	Password string `json:"password"`
+}
+
+func (e EmailConfig) Enabled() bool {
+	return e.SMTPHost != "" && e.From != "" && e.Password != ""
+}
+
 type DBConfig struct {
 	Database struct {
 		SQLitePath string `json:"sqlite_path"`
 	} `json:"database"`
-	MajsoulAccount         string `json:"majsoul_account"`
-	MajsoulPassword        string `json:"majsoul_password"`
-	MajsoulAccessToken     string `json:"majsoul_access_token"`
-	MajsoulOAuth2Type      int    `json:"majsoul_oauth2_type"`
-	MajsoulLoginRequestB64 string `json:"majsoul_login_request_b64"`
-	MortalBaseURL          string              `json:"mortal_base_url"`
-	MortalBackends         []MortalBackendCfg  `json:"mortal_backends"`
-	AiGradeTiers           []AiGradeTierCfg    `json:"ai_grade_tiers"`
+	MajsoulAccount         string             `json:"majsoul_account"`
+	MajsoulPassword        string             `json:"majsoul_password"`
+	MajsoulAccessToken     string             `json:"majsoul_access_token"`
+	MajsoulOAuth2Type      int                `json:"majsoul_oauth2_type"`
+	MajsoulLoginRequestB64 string             `json:"majsoul_login_request_b64"`
+	MortalBaseURL          string             `json:"mortal_base_url"`
+	MortalBackends         []MortalBackendCfg `json:"mortal_backends"`
+	AiGradeTiers           []AiGradeTierCfg   `json:"ai_grade_tiers"`
+	EmailConfig            EmailConfig        `json:"emailConfig"`
 }
 
 // MortalBackendCfg is one Mortal inference server endpoint.
@@ -168,7 +181,12 @@ func InitDB(configPath string) *gorm.DB {
 	time.Local = time.FixedZone("CST", 8*3600)
 
 	DB = db
-	if err := db.AutoMigrate(&models.Game{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.Game{},
+		&models.User{},
+		&models.VerificationCode{},
+		&models.LoginLog{},
+	); err != nil {
 		panic("failed to migrate database: " + err.Error())
 	}
 	return db
