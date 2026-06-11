@@ -113,7 +113,7 @@ func main() {
 
 	if !quiet {
 		fmt.Println()
-		fmt.Printf("  App (production): http://127.0.0.1:%d\n", gatewayPort)
+		fmt.Printf("  App (production): http://0.0.0.0:%d\n", gatewayPort)
 		fmt.Printf("  Backend (internal): http://127.0.0.1:%d\n", backendPort)
 		fmt.Printf("  Log: %s\n", logPath)
 		if pidFile != "" {
@@ -121,7 +121,7 @@ func main() {
 		}
 		fmt.Println()
 	}
-	logger.log("ready app=http://127.0.0.1:%d backend=http://127.0.0.1:%d", gatewayPort, backendPort)
+	logger.log("ready app=http://0.0.0.0:%d backend=http://127.0.0.1:%d", gatewayPort, backendPort)
 
 	var shuttingDown atomic.Bool
 	stop := make(chan struct{})

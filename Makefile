@@ -98,7 +98,7 @@ ifeq ($(UNAME_S),Linux)
 else
 	@if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
 		echo "prod already running (pid $$(cat $(PID_FILE)))"; \
-		echo "  App: http://127.0.0.1:$(GATEWAY_PORT)"; \
+		echo "  App: http://0.0.0.0:$(GATEWAY_PORT)"; \
 		echo "  Stop: make prod-stop  (or make prod:stop)"; \
 		exit 1; \
 	fi
@@ -108,7 +108,7 @@ else
 	@sleep 1; \
 	if [ -f $(PID_FILE) ] && kill -0 $$(cat $(PID_FILE)) 2>/dev/null; then \
 		echo "Production started (pid $$(cat $(PID_FILE)))"; \
-		echo "  App: http://127.0.0.1:$(GATEWAY_PORT)"; \
+		echo "  App: http://0.0.0.0:$(GATEWAY_PORT)"; \
 		echo "  Log: $(LOG_FILE)"; \
 		echo "  Stop: make prod-stop  (or make prod:stop)"; \
 	else \

@@ -148,7 +148,7 @@ install_service() {
 	sleep 1
 	if $SUDO systemctl is-active --quiet "${name}.service"; then
 		echo "${name}.service installed and running"
-		echo "  App:  http://127.0.0.1:${GATEWAY_PORT}"
+		echo "  App:  http://0.0.0.0:${GATEWAY_PORT}"
 		echo "  Log:  ${PROD_LOG}"
 		echo "  Stop: make prod-stop"
 		rm -f "$tmp_unit"

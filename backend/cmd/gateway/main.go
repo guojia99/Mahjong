@@ -68,7 +68,7 @@ func main() {
 		http.ServeFile(w, r, indexPath)
 	})
 
-	addr := fmt.Sprintf("127.0.0.1:%d", listenPort)
+	addr := fmt.Sprintf("0.0.0.0:%d", listenPort)
 	log.Printf("[gateway] http://%s static=%s backend=%s", addr, absStatic, backendURL)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
