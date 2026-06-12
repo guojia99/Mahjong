@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next';
 import {
   getPlayers, createPlayer, deletePlayer, updatePlayer,
   bindPlayerAccount, enablePlayerAccount, updatePlayerAccount, resetPlayerSystemPassword,
-  addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts,
+  setPlayerPassword, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts,
 } from '@/api/players';
+import { generateRandomPassword } from '@/utils/randomPassword';
 import { useToast } from '@/hooks/useToast';
 import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
@@ -17,6 +18,44 @@ import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import ViewModeToggle, { useViewMode } from '@/components/ViewModeToggle';
 
 const visiblePasswordClass = 'form-input font-mono select-all';
+
+function PasswordFieldWithGenerate({
+  name,
+  value,
+  onChange,
+  label,
+}: {
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <div className="flex gap-2">
+        <input
+          name={name}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${visiblePasswordClass} flex-1 min-w-0`}
+          minLength={6}
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          className="btn btn-outline btn-sm shrink-0"
+          onClick={() => onChange(generateRandomPassword())}
+        >
+          {t('players.generatePassword')}
+        </button>
+      </div>
+      <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('players.passwordVisibleHint')}</p>
+    </div>
+  );
+}
 
 function PlayerRowActions({
   onAccount,
@@ -72,6 +111,7 @@ export default function PlayersPage() {
   const [accountModal, setAccountModal] = useState<Player | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useViewMode('admin-players-view', 'card');
+  const [createPassword, setCreatePassword] = useState('');
   const { showToast, ToastComponent } = useToast();
 
   const loadPlayers = useCallback(async (signal?: AbortSignal) => {
@@ -107,7 +147,7 @@ export default function PlayersPage() {
     const avatarInput = (form.elements.namedItem('avatar_file') as HTMLInputElement);
     const enable_account = (form.elements.namedItem('enable_account') as HTMLInputElement).checked;
     const email = (form.elements.namedItem('account_email') as HTMLInputElement).value;
-    const password = (form.elements.namedItem('account_password') as HTMLInputElement).value;
+    const password = createPassword;
     const is_admin = (form.elements.namedItem('account_is_admin') as HTMLInputElement).checked;
     if (!nickname.trim()) return;
     setLoading(true);
@@ -271,7 +311,7 @@ export default function PlayersPage() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t('players.addModalTitle')}>
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); setCreatePassword(''); }} title={t('players.addModalTitle')}>
         <form onSubmit={handleCreate}>
           <div className="form-group">
             <label className="form-label">{t('players.nicknameLabel')}</label>
@@ -293,17 +333,18 @@ export default function PlayersPage() {
             <label className="form-label">{t('resetPassword.email')}</label>
             <input name="account_email" type="email" className="form-input" />
           </div>
-          <div className="form-group">
-            <label className="form-label">{t('login.password')}</label>
-            <input name="account_password" type="text" className={visiblePasswordClass} minLength={6} autoComplete="off" />
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('players.passwordVisibleHint')}</p>
-          </div>
+          <PasswordFieldWithGenerate
+            name="account_password"
+            value={createPassword}
+            onChange={setCreatePassword}
+            label={t('login.password')}
+          />
           <label className="flex items-center gap-2 text-sm mb-4">
             <input name="account_is_admin" type="checkbox" />
             {t('users.isAdmin')}
           </label>
           <div className="flex gap-3 justify-end">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowCreate(false)}>{t('common.cancel')}</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => { setShowCreate(false); setCreatePassword(''); }}>{t('common.cancel')}</button>
             <button type="submit" disabled={loading} className="btn btn-primary btn-sm">{t('common.create')}</button>
           </div>
         </form>
@@ -365,6 +406,8 @@ function AccountModalContent({
   const [enableMode, setEnableMode] = useState<'create' | 'bind'>('create');
   const [unboundUsers, setUnboundUsers] = useState<UnboundUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [enablePassword, setEnablePassword] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   useEffect(() => {
     if (enableMode !== 'bind' || account?.has_account) return;
@@ -385,11 +428,10 @@ function AccountModalContent({
     e.preventDefault();
     const form = e.currentTarget;
     const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-    const password = (form.elements.namedItem('password') as HTMLInputElement).value;
     const is_admin = (form.elements.namedItem('is_admin') as HTMLInputElement).checked;
     setLoading(true);
     try {
-      const updated = await enablePlayerAccount(player.id, { email, password: password || undefined, is_admin });
+      const updated = await enablePlayerAccount(player.id, { email, password: enablePassword || undefined, is_admin });
       setAccount(updated);
       showToast(t('players.accountEnabled'), 'success');
       onClose();
@@ -413,6 +455,28 @@ function AccountModalContent({
       showToast(t('players.accountUpdated'), 'success');
     } catch {
       showToast(t('players.accountUpdateFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (adminPassword.length < 6) {
+      showToast(t('players.passwordTooShort'));
+      return;
+    }
+    if (!confirm(t('players.setPasswordConfirm', { name: player.nickname }))) return;
+    setLoading(true);
+    try {
+      const updated = await setPlayerPassword(player.id, adminPassword);
+      setAccount(updated);
+      setAdminPassword('');
+      showToast(t('players.passwordSet'), 'success');
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+        t('players.passwordSetFailed');
+      showToast(msg);
     } finally {
       setLoading(false);
     }
@@ -488,11 +552,12 @@ function AccountModalContent({
               <input name="email" type="email" className="form-input" required />
               <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('players.adminSetEmailHint')}</p>
             </div>
-            <div className="form-group">
-              <label className="form-label">{t('login.password')}</label>
-              <input name="password" type="text" className={visiblePasswordClass} minLength={6} autoComplete="off" />
-              <p className="text-xs mt-1" style={{ color: 'var(--color-text-light)' }}>{t('players.passwordVisibleHint')}</p>
-            </div>
+            <PasswordFieldWithGenerate
+              name="password"
+              value={enablePassword}
+              onChange={setEnablePassword}
+              label={t('login.password')}
+            />
             <label className="flex items-center gap-2 text-sm mb-4">
               <input name="is_admin" type="checkbox" />
               {t('users.isAdmin')}
@@ -568,8 +633,22 @@ function AccountModalContent({
       {!hasEmail && (
         <p className="text-xs mb-3 text-orange-600">{t('players.emailRequiredForReset')}</p>
       )}
+      <PasswordFieldWithGenerate
+        name="admin_password"
+        value={adminPassword}
+        onChange={setAdminPassword}
+        label={t('players.setPassword')}
+      />
       <div className="flex flex-col gap-2">
         <button type="submit" className="btn btn-primary w-full" disabled={loading}>{t('common.save')}</button>
+        <button
+          type="button"
+          className="btn btn-outline w-full"
+          onClick={handleSetPassword}
+          disabled={loading || adminPassword.length < 6}
+        >
+          {t('players.setPassword')}
+        </button>
         <button
           type="button"
           className="btn btn-outline w-full"

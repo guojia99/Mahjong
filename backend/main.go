@@ -249,6 +249,7 @@ func run(cmd *cobra.Command, args []string) error {
 			auth.POST("/reset-password/confirm/", handlers.ResetPasswordConfirm)
 			auth.POST("/bind-email/confirm/", handlers.BindEmailConfirm)
 			auth.POST("/change-email/confirm/", handlers.ChangeEmailConfirm)
+			auth.POST("/change-password/", handlers.ChangePassword)
 		}
 
 		admin := api.Group("/admin", middleware.AdminRequired())
@@ -278,6 +279,7 @@ func run(cmd *cobra.Command, args []string) error {
 			players.POST("/:pk/bind-account/", handlers.PlayerBindAccount)
 			players.PUT("/:pk/account/", handlers.PlayerUpdateAccount)
 			players.POST("/:pk/reset-system-password/", handlers.PlayerResetSystemPassword)
+			players.POST("/:pk/set-password/", handlers.PlayerSetPassword)
 		}
 
 		rooms := api.Group("/rooms", middleware.InvalidateQueryCacheAfterGameWrite())

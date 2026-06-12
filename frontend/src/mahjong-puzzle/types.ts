@@ -67,6 +67,8 @@ export interface QueMiHistoryEntry {
   difficulty: PuzzleDifficulty;
   won: boolean;
   attemptsUsed: number;
+  /** 本局总用时（毫秒） */
+  durationMs?: number;
   timestamp: number;
   puzzle?: QueMiPuzzle;
   submits?: QueMiHistorySubmit[];
@@ -103,6 +105,8 @@ export interface QueMiSession {
   submitRecords: QueMiHistorySubmit[];
   inputMode: QueMiInputMode;
   yakuHintShown: boolean;
+  /** 本局开始时间戳（用于计时） */
+  startedAt: number;
 }
 
 export interface GeneratePuzzleOptions {

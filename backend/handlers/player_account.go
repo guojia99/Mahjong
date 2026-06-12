@@ -251,6 +251,46 @@ func PlayerUpdateAccount(c *gin.Context) {
 	respondOK(c, playerAccountData(user))
 }
 
+func PlayerSetPassword(c *gin.Context) {
+	if middleware.GetUser(c) == nil || !middleware.GetUser(c).IsStaff {
+		respondError(c, http.StatusForbidden, "Admin required")
+		return
+	}
+	pk := c.Param("pk")
+	user, err := findUserByPlayerID(pk)
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to load account")
+		return
+	}
+	if user == nil {
+		respondError(c, http.StatusNotFound, "Account not found, enable account first")
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	req.Password = strings.TrimSpace(req.Password)
+	if len(req.Password) < 6 {
+		respondError(c, http.StatusBadRequest, "Password must be at least 6 characters")
+		return
+	}
+	hashed := auth.HashPassword(req.Password)
+	updates := map[string]interface{}{
+		"password":        hashed,
+		"system_password": "",
+	}
+	if err := config.DB.Model(user).Updates(updates).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to set password")
+		return
+	}
+	config.DB.First(user, user.ID)
+	respondOK(c, playerAccountData(user))
+}
+
 func PlayerResetSystemPassword(c *gin.Context) {
 	if middleware.GetUser(c) == nil || !middleware.GetUser(c).IsStaff {
 		respondError(c, http.StatusForbidden, "Admin required")

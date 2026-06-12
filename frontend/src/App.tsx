@@ -21,6 +21,7 @@ function LazyPage({ children }: { children: ReactNode }) {
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'));
+const ChangePasswordPage = lazy(() => import('@/pages/ChangePasswordPage'));
 const HomePage = lazy(() => import('@/pages/HomePage'));
 const PlayersPage = lazy(() => import('@/pages/PlayersPage'));
 const PlayerListPage = lazy(() => import('@/pages/PlayerListPage'));
@@ -268,6 +269,14 @@ function App() {
             element={
               <LazyPage>
                 <ChangelogPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="change-password"
+            element={
+              <LazyPage>
+                <ChangePasswordPage />
               </LazyPage>
             }
           />

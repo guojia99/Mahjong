@@ -72,6 +72,47 @@ func TestLoginWithSystemPassword(t *testing.T) {
 	}
 }
 
+func TestChangePassword(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupAuthTestDB(t)
+
+	user := models.User{
+		Username: "changepw",
+		Password: auth.HashPassword("oldpass1"),
+		IsActive: true,
+	}
+	if err := config.DB.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	token := middleware.AuthToken{Key: "change-pw-token", UserID: user.ID}
+	if err := config.DB.Create(&token).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"old_password": "oldpass1",
+		"new_password": "newpass2",
+	})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/auth/change-password/", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Request.Header.Set("Authorization", "Token change-pw-token")
+
+	ChangePassword(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var updated models.User
+	if err := config.DB.First(&updated, user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !auth.CheckPassword("newpass2", updated.Password) {
+		t.Fatal("expected password updated")
+	}
+}
+
 func TestLoginLockedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	setupAuthTestDB(t)

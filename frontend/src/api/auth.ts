@@ -41,6 +41,14 @@ export async function sendVerificationCode(username: string, email: string, purp
   return data;
 }
 
+export async function changePassword(oldPassword: string, newPassword: string) {
+  const { data } = await api.post('/auth/change-password/', {
+    old_password: oldPassword,
+    new_password: newPassword,
+  });
+  return data;
+}
+
 export async function confirmResetPassword(payload: {
   username: string;
   email: string;

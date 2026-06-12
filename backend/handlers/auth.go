@@ -49,6 +49,11 @@ type changeEmailConfirmRequest struct {
 	Code     string `json:"code"`
 }
 
+type changePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
 func Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -339,6 +344,52 @@ func BindEmailConfirm(c *gin.Context) {
 	}
 
 	respondOK(c, gin.H{"message": "Email bound successfully"})
+}
+
+func ChangePassword(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		respondError(c, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req changePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "Invalid request")
+		return
+	}
+	req.OldPassword = strings.TrimSpace(req.OldPassword)
+	req.NewPassword = strings.TrimSpace(req.NewPassword)
+
+	if req.OldPassword == "" || req.NewPassword == "" {
+		respondError(c, http.StatusBadRequest, "Old and new password required")
+		return
+	}
+	if len(req.NewPassword) < 6 {
+		respondError(c, http.StatusBadRequest, "Password must be at least 6 characters")
+		return
+	}
+	if !user.HasPassword() {
+		respondError(c, http.StatusBadRequest, "No password set, use forgot password flow")
+		return
+	}
+	if !auth.CheckPassword(req.OldPassword, user.Password) {
+		respondError(c, http.StatusBadRequest, "Incorrect current password")
+		return
+	}
+
+	hashed := auth.HashPassword(req.NewPassword)
+	updates := map[string]interface{}{
+		"password":        hashed,
+		"system_password": "",
+	}
+	if err := config.DB.Model(user).Updates(updates).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to update password")
+		return
+	}
+
+	writeLoginLog(&user.ID, user.PlayerID, user.Username, clientIP(c), models.LoginActionPasswordReset, "change_password")
+	respondOK(c, gin.H{"message": "Password changed successfully"})
 }
 
 func ChangeEmailConfirm(c *gin.Context) {

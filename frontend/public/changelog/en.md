@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.1 — 2026-06-12
+
+- Logged-in users can change password from the sidebar (current password required, no email verification)
+- Player account management: one-click random password when setting or resetting passwords
+
 ## v3.4.0 — 2026-06-11
 
 - New "QueMi" puzzle game: guess a closed hand from round/seat winds and dora; winnable vs non-winnable types, five difficulty levels

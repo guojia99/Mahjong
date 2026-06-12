@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   XCircle,
   Lightbulb,
+  Timer,
 } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
 import { buildTileAvailability, generatePuzzle } from '@/mahjong-puzzle/generator';
@@ -170,7 +171,18 @@ function removeLastOpenTile(og: QueMiOpenGuess, meldCount: number): QueMiOpenGue
   return og;
 }
 
-type ContextTagVariant = 'field' | 'seat' | 'agariTsumo' | 'agariRon' | 'dora' | 'shanten' | 'attempts';
+type ContextTagVariant = 'field' | 'seat' | 'agariTsumo' | 'agariRon' | 'dora' | 'shanten' | 'attempts' | 'timer';
+
+function formatDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
 
 const CONTEXT_TAG_STYLES: Record<ContextTagVariant, { bg: string; border: string; label: string; value: string }> = {
   field: { bg: '#dbeafe', border: '#3b82f6', label: '#1e40af', value: '#1d4ed8' },
@@ -180,6 +192,7 @@ const CONTEXT_TAG_STYLES: Record<ContextTagVariant, { bg: string; border: string
   dora: { bg: '#d1fae5', border: '#10b981', label: '#065f46', value: '#047857' },
   shanten: { bg: '#ede9fe', border: '#8b5cf6', label: '#5b21b6', value: '#6d28d9' },
   attempts: { bg: '#fff5f9', border: '#e8a0bf', label: '#9d3d6b', value: '#d484a8' },
+  timer: { bg: '#f1f5f9', border: '#94a3b8', label: '#475569', value: '#334155' },
 };
 
 function ContextTag({
@@ -325,7 +338,8 @@ function loadSession(): QueMiSession | null {
     } else if (!Array.isArray(s.guess) || s.guess.length !== HAND_TILE_COUNT) {
       return null;
     }
-    return { ...s, handMode: hm };
+    const startedAt = s.startedAt ?? s.puzzle.createdAt ?? Date.now();
+    return { ...s, handMode: hm, startedAt };
   } catch {
     return null;
   }
@@ -714,6 +728,9 @@ export default function QueMiPage() {
   const dragTileRef = useRef(dragTile);
   dragTileRef.current = dragTile;
   const [yakuHintShown, setYakuHintShown] = useState(restored?.yakuHintShown ?? false);
+  const [gameStartedAt, setGameStartedAt] = useState<number | null>(restored?.startedAt ?? null);
+  const [gameDurationMs, setGameDurationMs] = useState<number | null>(null);
+  const [timerTick, setTimerTick] = useState(0);
 
   const tileAvail = useMemo(
     () => (puzzle ? buildTileAvailability(puzzle.dora) : {}),
@@ -734,6 +751,12 @@ export default function QueMiPage() {
     phase === 'playing'
     && puzzle?.type === 'winnable'
     && HINT_DIFFICULTIES.includes(puzzle.difficulty);
+
+  const liveDurationMs =
+    phase === 'playing' && gameStartedAt != null ? Date.now() - gameStartedAt : 0;
+  void timerTick;
+
+  const displayDurationMs = phase === 'playing' ? liveDurationMs : gameDurationMs;
 
   const isOpen = puzzle?.handMode === 'open' && puzzle.openMeldCount != null;
   const meldCount = puzzle?.openMeldCount ?? 0;
@@ -778,6 +801,8 @@ export default function QueMiPage() {
       setWon(false);
       setGaveUp(false);
       setYakuHintShown(false);
+      setGameStartedAt(Date.now());
+      setGameDurationMs(null);
       setErrorKey(null);
       setPhase('playing');
     } catch {
@@ -785,7 +810,13 @@ export default function QueMiPage() {
     }
   };
 
-  const recordResult = (p: QueMiPuzzle, didWin: boolean, used: number, submits: QueMiHistorySubmit[]) => {
+  const recordResult = (
+    p: QueMiPuzzle,
+    didWin: boolean,
+    used: number,
+    submits: QueMiHistorySubmit[],
+    durationMs: number,
+  ) => {
     const entry: QueMiHistoryEntry = {
       id: `${Date.now()}`,
       puzzleId: p.id,
@@ -793,6 +824,7 @@ export default function QueMiPage() {
       difficulty: p.difficulty,
       won: didWin,
       attemptsUsed: used,
+      durationMs,
       timestamp: Date.now(),
       puzzle: p,
       submits,
@@ -809,11 +841,14 @@ export default function QueMiPage() {
     submits: QueMiHistorySubmit[],
     surrendered = false,
   ) => {
+    const durationMs = gameStartedAt != null ? Date.now() - gameStartedAt : 0;
     clearSession();
+    setGameStartedAt(null);
+    setGameDurationMs(durationMs);
     setWon(didWin);
     setGaveUp(surrendered);
     setPhase('finished');
-    recordResult(p, didWin, used, submits);
+    recordResult(p, didWin, used, submits, durationMs);
   };
 
   const giveUp = () => {
@@ -832,6 +867,8 @@ export default function QueMiPage() {
     setSubmitRecords(entry.submits);
     setWon(entry.won);
     setReviewEntryId(entry.id);
+    setGameDurationMs(entry.durationMs ?? null);
+    setGameStartedAt(null);
     setPhase('review');
     setShowHistory(false);
   };
@@ -843,6 +880,8 @@ export default function QueMiPage() {
     setSubmitRecords([]);
     setReviewEntryId(null);
     setGaveUp(false);
+    setGameStartedAt(null);
+    setGameDurationMs(null);
     setErrorKey(null);
   };
 
@@ -851,6 +890,8 @@ export default function QueMiPage() {
     setPhase('setup');
     setPuzzle(null);
     setGaveUp(false);
+    setGameStartedAt(null);
+    setGameDurationMs(null);
   };
 
   const submitGuess = () => {
@@ -1167,8 +1208,15 @@ export default function QueMiPage() {
       submitRecords,
       inputMode,
       yakuHintShown,
+      startedAt: gameStartedAt ?? Date.now(),
     });
-  }, [phase, puzzle, puzzleType, handMode, openMeldCountPref, difficulty, shantenPreference, guess, openGuess, attemptsLeft, submitRecords, inputMode, yakuHintShown]);
+  }, [phase, puzzle, puzzleType, handMode, openMeldCountPref, difficulty, shantenPreference, guess, openGuess, attemptsLeft, submitRecords, inputMode, yakuHintShown, gameStartedAt]);
+
+  useEffect(() => {
+    if (phase !== 'playing' || !gameStartedAt) return;
+    const id = setInterval(() => setTimerTick((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, [phase, gameStartedAt]);
 
   useEffect(() => {
     if (phase !== 'playing') return;
@@ -1282,6 +1330,7 @@ export default function QueMiPage() {
                       <span className="shrink-0">{new Date(h.timestamp).toLocaleString()}</span>
                       <span className="truncate" style={{ color: 'var(--color-text-light)' }}>
                         {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)} · {h.attemptsUsed}/{ATTEMPTS_BY_DIFFICULTY[h.difficulty]}
+                        {h.durationMs != null ? ` · ${formatDuration(h.durationMs)}` : ''}
                       </span>
                     </button>
                   </li>
@@ -1477,6 +1526,12 @@ export default function QueMiPage() {
                     {t('queMi.hint')}
                   </button>
                 )}
+                <ContextTag variant="timer" label={t('queMi.timerTag')}>
+                  <span className="inline-flex items-center gap-1 tabular-nums">
+                    <Timer size={12} aria-hidden />
+                    {formatDuration(liveDurationMs)}
+                  </span>
+                </ContextTag>
                 <ContextTag variant="attempts" label={t('queMi.attemptsTag')}>
                   {t('queMi.attemptsCount', { count: attemptsLeft })}
                 </ContextTag>
@@ -1719,9 +1774,17 @@ export default function QueMiPage() {
 
           {(phase === 'finished' || phase === 'review') && (
             <div className="p-5 rounded-xl border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
-              <p className="text-lg font-bold" style={{ color: won ? '#16a34a' : 'var(--color-text)' }}>
-                {won ? t('queMi.win') : gaveUp ? t('queMi.gaveUp') : t('queMi.lose')}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-lg font-bold" style={{ color: won ? '#16a34a' : 'var(--color-text)' }}>
+                  {won ? t('queMi.win') : gaveUp ? t('queMi.gaveUp') : t('queMi.lose')}
+                </p>
+                {displayDurationMs != null && (
+                  <span className="text-sm tabular-nums inline-flex items-center gap-1" style={{ color: 'var(--color-text-light)' }}>
+                    <Timer size={14} aria-hidden />
+                    {t('queMi.duration', { time: formatDuration(displayDurationMs) })}
+                  </span>
+                )}
+              </div>
               <div>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answer')}</p>
                 {puzzle.handMode === 'open' && puzzle.openAnswer && puzzle.openMeldCount ? (

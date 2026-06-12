@@ -55,6 +55,43 @@ func TestPlayerResetSystemPassword(t *testing.T) {
 	}
 }
 
+func TestPlayerSetPassword(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupAuthTestDB(t)
+
+	pid := "player-set-pw"
+	config.DB.Create(&models.Player{ID: pid, Nickname: "SetPw"})
+	user := models.User{
+		Username:       "setpw",
+		SystemPassword: "sys-old",
+		PlayerID:       &pid,
+		IsActive:       true,
+	}
+	config.DB.Create(&user)
+
+	body, _ := json.Marshal(map[string]string{"password": "newadmin1"})
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/players/"+pid+"/set-password/", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Params = gin.Params{{Key: "pk", Value: pid}}
+	c.Set("user", &models.User{IsStaff: true})
+
+	PlayerSetPassword(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var updated models.User
+	config.DB.First(&updated, user.ID)
+	if !auth.CheckPassword("newadmin1", updated.Password) {
+		t.Fatal("expected password set")
+	}
+	if updated.SystemPassword != "" {
+		t.Fatal("expected system password cleared")
+	}
+}
+
 func TestPlayerResetSystemPasswordRequiresEmail(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	setupAuthTestDB(t)

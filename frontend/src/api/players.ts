@@ -84,6 +84,11 @@ export async function resetPlayerSystemPassword(playerId: string): Promise<Playe
   return data;
 }
 
+export async function setPlayerPassword(playerId: string, password: string): Promise<PlayerAccount> {
+  const { data } = await api.post<PlayerAccount>(`/players/${playerId}/set-password/`, { password });
+  return data;
+}
+
 export async function getMajsoulAccounts(playerId: string): Promise<MajsoulAccount[]> {
   const { data } = await api.get(`/players/${playerId}/majsoul-accounts/`);
   return data;

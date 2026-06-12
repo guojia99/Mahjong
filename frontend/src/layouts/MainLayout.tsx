@@ -5,6 +5,7 @@ import {
   Users,
   Home,
   LogOut,
+  KeyRound,
   Menu,
   X,
   Gamepad2,
@@ -396,6 +397,18 @@ export default function MainLayout() {
                     <span className="text-sm font-medium truncate">{user?.username || 'User'}</span>
                   )}
                 </div>
+                <Link
+                  to="/change-password"
+                  title={sidebarCollapsed ? t('changePassword.title') : undefined}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center rounded-xl text-sm font-medium w-full transition-all duration-150 hover:bg-gray-50 ${
+                    sidebarCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-4 py-3'
+                  }`}
+                  style={{ color: 'var(--color-text-light)' }}
+                >
+                  <KeyRound size={18} />
+                  {!sidebarCollapsed && t('changePassword.title')}
+                </Link>
                 <button
                   onClick={handleLogout}
                   title={sidebarCollapsed ? t('app.logout') : undefined}
