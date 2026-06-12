@@ -50,6 +50,7 @@ import {
   type ShantenPreference,
   type TileFeedback,
 } from '@/mahjong-puzzle/types';
+import { QueMiGuide } from '@/pages/QueMiGuide';
 import {
   compareGuessFeedback,
   compareOpenGuessFeedback,
@@ -72,8 +73,8 @@ type InputMode = 'click' | 'drag';
 const PICKER_TILE_HEIGHT = 50;
 const HAND_TILE_COUNT = 14;
 const DRAW_SLOT_INDEX = 13;
-const HAND_SLOT_GAP_PX = 12;
-const HAND_DRAW_GAP_PX = 12;
+const HAND_SLOT_GAP_PX = 2;
+const HAND_DRAW_GAP_PX = 2;
 const MELD_ROW_GAP_PX = 12;
 const TILE_WIDTH_RATIO = 0.88;
 const TILE_HEIGHT_MAX = 48;
@@ -210,7 +211,7 @@ function meldLayoutMetrics(meldCount: number) {
   const compact = meldCount >= 3;
   return {
     compact,
-    innerGap: compact ? 6 : HAND_SLOT_GAP_PX,
+    innerGap: HAND_SLOT_GAP_PX,
     groupPaddingX: compact ? 8 : 12,
     groupGap: compact ? 6 : MELD_GAP_PX,
     minTileHeight: compact ? 10 : TILE_HEIGHT_MIN,
@@ -1341,9 +1342,6 @@ export default function QueMiPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-text-light)' }}>
-                {t(`queMi.handModeDesc.${handMode}`)}
-              </p>
             </div>
           )}
 
@@ -1796,25 +1794,7 @@ export default function QueMiPage() {
         </div>
       )}
 
-      {showGuide && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <div className="max-w-lg w-full p-6 rounded-2xl shadow-xl space-y-4" style={{ background: 'var(--color-card)' }}>
-            <h2 className="text-lg font-bold">{t('queMi.guideTitle')}</h2>
-            <ol className="text-sm space-y-2 list-decimal list-inside" style={{ color: 'var(--color-text)' }}>
-              <li>{t('queMi.guideStep1')}</li>
-              <li>{t('queMi.guideStep2')}</li>
-              <li>{t('queMi.guideStep3')}</li>
-              <li>{t('queMi.guideStep4')}</li>
-              <li>{t('queMi.guideStep5')}</li>
-              <li>{t('queMi.guideStep6')}</li>
-              <li>{t('queMi.guideStep7')}</li>
-            </ol>
-            <button type="button" onClick={dismissGuide} className="btn-primary w-full py-2.5 rounded-xl text-sm font-semibold">
-              {t('queMi.guideOk')}
-            </button>
-          </div>
-        </div>
-      )}
+      <QueMiGuide open={showGuide} onClose={dismissGuide} />
       </div>
     </div>
   );
