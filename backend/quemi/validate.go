@@ -98,6 +98,37 @@ func IsWinningHand(hand13 []string, draw string, field, seat Wind, agariWay Agar
 	return res.IsYakuman || res.HanRealYaku > 0
 }
 
+func validationAgariWay(puzzle QueMiPuzzle) AgariWay {
+	if puzzle.Type == PuzzleTypeNonWinnable {
+		return AgariWayRon
+	}
+	return puzzle.AgariWay
+}
+
+func validateSubmitAgari(puzzle QueMiPuzzle, hand13 []string, draw string, furu []Block) *ValidateResult {
+	required := validationAgariWay(puzzle)
+	wins := IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, required, puzzle.Dora, furu)
+
+	if puzzle.Type == PuzzleTypeWinnable {
+		if wins {
+			return nil
+		}
+		alt := AgariWayTsumo
+		if required == AgariWayTsumo {
+			alt = AgariWayRon
+		}
+		if IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, alt, puzzle.Dora, furu) {
+			return &ValidateResult{OK: false, Reason: ReasonNoYaku}
+		}
+		return &ValidateResult{OK: false, Reason: ReasonNotWinning}
+	}
+
+	if IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, AgariWayRon, puzzle.Dora, furu) {
+		return &ValidateResult{OK: false, Reason: ReasonIsWinning}
+	}
+	return nil
+}
+
 // IsKokushiWin returns true when the hand is a kokushi yakuman.
 func IsKokushiWin(hand13 []string, draw string, field, seat Wind, agariWay AgariWay, dora []string, furu []Block) bool {
 	res, err := calcResult(hand13, draw, field, seat, agariWay, dora, furu)
@@ -125,16 +156,11 @@ func ValidateGuess(puzzle QueMiPuzzle, guess []string) ValidateResult {
 	}
 	hand13 := guess[:13]
 	draw := guess[13]
-	winning := IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, puzzle.AgariWay, puzzle.Dora, nil)
+	if agariErr := validateSubmitAgari(puzzle, hand13, draw, nil); agariErr != nil {
+		return *agariErr
+	}
 
-	if puzzle.Type == PuzzleTypeWinnable {
-		if !winning {
-			return ValidateResult{OK: false, Reason: ReasonNotWinning}
-		}
-	} else {
-		if winning {
-			return ValidateResult{OK: false, Reason: ReasonIsWinning}
-		}
+	if puzzle.Type == PuzzleTypeNonWinnable {
 		if puzzle.Shanten != nil && ComputeShanten(hand13) != *puzzle.Shanten {
 			return ValidateResult{OK: false, Reason: ReasonShantenMismatch}
 		}
@@ -163,9 +189,14 @@ func ValidateOpenGuess(puzzle QueMiPuzzle, openGuess QueMiOpenGuess) ValidateRes
 	draw := openGuess.Hand[len(openGuess.Hand)-1]
 	hand13 := openGuess.Hand[:len(openGuess.Hand)-1]
 
-	winCheck := IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, puzzle.AgariWay, puzzle.Dora, furu)
-	if puzzle.Type == PuzzleTypeWinnable && !winCheck {
-		return ValidateResult{OK: false, Reason: ReasonNotWinning}
+	if agariErr := validateSubmitAgari(puzzle, hand13, draw, furu); agariErr != nil {
+		return *agariErr
+	}
+
+	if puzzle.Type == PuzzleTypeNonWinnable {
+		if puzzle.Shanten != nil && ComputeShanten(hand13) != *puzzle.Shanten {
+			return ValidateResult{OK: false, Reason: ReasonShantenMismatch}
+		}
 	}
 
 	correct := IsOpenAnswerCorrect(*puzzle.OpenAnswer, openGuess.Melds, openGuess.Hand)
@@ -314,7 +345,7 @@ func ValidatePuzzleDefinition(puzzle QueMiPuzzle) ValidateResult {
 			return ValidateResult{OK: false, Reason: ReasonKokushi}
 		}
 	case PuzzleTypeNonWinnable:
-		if winning {
+		if IsWinningHand(hand13, draw, puzzle.FieldWind, puzzle.SeatWind, AgariWayRon, puzzle.Dora, furu) {
 			return ValidateResult{OK: false, Reason: ReasonIsWinning}
 		}
 		if puzzle.Shanten == nil {

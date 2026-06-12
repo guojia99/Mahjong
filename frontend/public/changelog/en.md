@@ -5,6 +5,7 @@
 - Online QueMi: browse community puzzles, create and share your own (login required), per-puzzle leaderboard
 - Track your attempts; creators can view answers and leaderboard only; admins can disable puzzles and manage creator blacklist
 - New "My puzzles" list; puzzle list filters (unplayed, difficulty, type, hand mode); improved create page layout
+- Fix ron-mode submit validation: hand must have valid ron yaku (tsumo-only yaku shows "no yaku")
 
 ## v3.4.1 — 2026-06-12
 

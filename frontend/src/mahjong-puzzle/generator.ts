@@ -14,9 +14,28 @@ import {
   type Wind,
 } from './types';
 import { computeShanten } from './shanten';
-import { isKokushiWin, isWinningHand } from './validate';
+import { isChiitoitsuShape, isKokushiShape, isKokushiWin, isWinningHand } from './validate';
 
 const WINDS: Wind[] = ['east', 'south', 'west', 'north'];
+
+/**
+ * 门清可胡题 — 和牌形构造概率（调整本块即可）
+ * - GEN_PROB_KOKUSHI：国士无双（13 幺九 + 1 对）
+ * - GEN_PROB_CHIITOITSU：七对子
+ * - GEN_PROB_TANYAO：四面子形倾向断幺（2～8 数牌）
+ * - GEN_PROB_YAKUHAI：四面子形首组面子优先役牌刻
+ * - GEN_PROB_AGARI_TSUMO：和了方式为自摸（否则为荣和）
+ */
+const GEN_PROB_KOKUSHI = 0.01;
+const GEN_PROB_CHIITOITSU = 0.18;
+const GEN_PROB_TANYAO = 0.45;
+const GEN_PROB_YAKUHAI = 0.25;
+const GEN_PROB_AGARI_TSUMO = 0.5;
+
+const KOKUSHI_TILES: readonly [Pai['type'], number][] = [
+  ['m', 1], ['m', 9], ['p', 1], ['p', 9], ['s', 1], ['s', 9],
+  ['z', 1], ['z', 2], ['z', 3], ['z', 4], ['z', 5], ['z', 6], ['z', 7],
+];
 
 class TilePool {
   paiLeft: Record<string, number[]> = {};
@@ -71,10 +90,58 @@ class TilePool {
     return this.genPair(false);
   }
 
-  genWinningHand(): Pai[] | null {
+  /** 国士无双：13 种幺九各 1 枚 + 其中 1 种再 1 枚；役满，门清专用。 */
+  private genKokushi(): Pai[] | null {
+    for (const [tp, n] of KOKUSHI_TILES) {
+      if (!this.canGet(tp, n)) return null;
+    }
     const hand: Pai[] = [];
-    const wantTanyao = Math.random() < 0.45;
-    const wantYakuhai = !wantTanyao && Math.random() < 0.25;
+    for (const [tp, n] of KOKUSHI_TILES) {
+      hand.push(this.getPai(tp, n));
+    }
+    const [dupTp, dupN] = KOKUSHI_TILES[randInt(0, KOKUSHI_TILES.length)]!;
+    if (!this.canGet(dupTp, dupN)) return null;
+    hand.push(this.getPai(dupTp, dupN));
+    return hand.length === 14 ? hand : null;
+  }
+
+  /** 七对子：7 种牌各 2 枚，门清专用；七对子役本身 2 翻，不依赖场风/自风。 */
+  private genChiitoitsu(wantTanyao: boolean): Pai[] | null {
+    const hand: Pai[] = [];
+    const used = new Set<string>();
+    for (let i = 0; i < 7; i++) {
+      let paired = false;
+      for (let tries = 0; tries < 80; tries++) {
+        const tp = (wantTanyao ? 'msp' : 'mspz')[randInt(0, wantTanyao ? 3 : 4)] as Pai['type'];
+        const n = randInt(wantTanyao ? 2 : 1, tp === 'z' ? 8 : 10);
+        if (wantTanyao && tp !== 'z' && (n === 1 || n === 9)) continue;
+        const key = `${tp}${n}`;
+        if (used.has(key)) continue;
+        if (!this.canGet(tp, n, 2)) continue;
+        used.add(key);
+        hand.push(this.getPai(tp, n), this.getPai(tp, n));
+        paired = true;
+        break;
+      }
+      if (!paired) return null;
+    }
+    return hand.length === 14 ? hand : null;
+  }
+
+  genWinningHand(options?: { allowChiitoitsu?: boolean; allowKokushi?: boolean }): Pai[] | null {
+    const allowChiitoitsu = options?.allowChiitoitsu ?? true;
+    const allowKokushi = options?.allowKokushi ?? true;
+    if (allowKokushi && Math.random() < GEN_PROB_KOKUSHI) {
+      const kokushi = this.genKokushi();
+      if (kokushi) return kokushi;
+    }
+    const wantTanyao = Math.random() < GEN_PROB_TANYAO;
+    if (allowChiitoitsu && Math.random() < GEN_PROB_CHIITOITSU) {
+      const chiit = this.genChiitoitsu(wantTanyao);
+      if (chiit) return chiit;
+    }
+    const hand: Pai[] = [];
+    const wantYakuhai = !wantTanyao && Math.random() < GEN_PROB_YAKUHAI;
     for (let i = 0; i < 4; i++) {
       if (wantYakuhai && i === 0) {
         const ys = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
@@ -112,7 +179,7 @@ function pickWind(): Wind {
 }
 
 function pickAgariWay(): AgariWay {
-  return Math.random() < 0.5 ? 'tsumo' : 'ron';
+  return Math.random() < GEN_PROB_AGARI_TSUMO ? 'tsumo' : 'ron';
 }
 
 function resolveOpenMeldCount(pref: OpenMeldCountPref): number {
@@ -137,8 +204,10 @@ function tryGenerateWinnableClosed(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'm
     const agariWay = pickAgariWay();
     const doraTile = paiToTile(pool.getRandomPai());
 
-    if (!isWinningHand(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
-    if (isKokushiWin(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
+    const tiles14 = [...hand13s, draw];
+    const chiitoitsu = isChiitoitsuShape(tiles14);
+    const kokushi = isKokushiShape(tiles14);
+    if (!chiitoitsu && !kokushi && !isWinningHand(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
 
     return {
       handMode: 'closed',
@@ -156,7 +225,7 @@ function tryGenerateWinnableOpen(meldCountPref: OpenMeldCountPref): Omit<QueMiPu
   const meldCount = resolveOpenMeldCount(meldCountPref);
   for (let i = 0; i < 200; i++) {
     const pool = new TilePool();
-    const all = pool.genWinningHand();
+    const all = pool.genWinningHand({ allowChiitoitsu: false, allowKokushi: false });
     if (!all || all.length !== 14) continue;
 
     const allTiles = all.map(paiToTile);
@@ -219,7 +288,7 @@ function tryGenerateNonWinnable(
     const agariWay = pickAgariWay();
     const doraTile = paiToTile(pool.getRandomPai());
 
-    if (isWinningHand(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
+    if (isWinningHand(hand13s, draw, fieldWind, seatWind, 'ron', [doraTile])) continue;
 
     return {
       handMode: 'closed',

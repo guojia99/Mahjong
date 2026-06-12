@@ -16,7 +16,7 @@ import {
   meldsToBlocks,
 } from './meld';
 import { computeShanten } from './shanten';
-import { buildCanonicalAnswer, tileToPai } from './tiles';
+import { buildCanonicalAnswer, tileToPai, tilesToC34 } from './tiles';
 import type { AgariWay, QueMiOpenGuess, QueMiPuzzle, QueMiOpenSubmitFeedback, TileFeedback, Wind } from './types';
 
 const WIND_TO_POS: Record<Wind, PositionType> = {
@@ -56,6 +56,36 @@ function buildCalcState(
   );
 }
 
+const KOKUSHI_INDICES = [0, 8, 9, 17, 18, 26, 27, 28, 29, 30, 31, 32, 33];
+
+/** 14 张均为 7 对（每种 2 枚）。七对子本身 2 翻，荣和/自摸均有役。 */
+export function isChiitoitsuShape(tiles14: string[]): boolean {
+  if (tiles14.length !== 14) return false;
+  let pairs = 0;
+  for (const c of tilesToC34(tiles14)) {
+    if (c !== 0 && c !== 2) return false;
+    if (c === 2) pairs++;
+  }
+  return pairs === 7;
+}
+
+/** 13 种幺九牌各至少 1 枚、其中一种 2 枚，共 14 张。国士无双为役满。 */
+export function isKokushiShape(tiles14: string[]): boolean {
+  if (tiles14.length !== 14) return false;
+  const c34 = tilesToC34(tiles14);
+  let pairCount = 0;
+  for (const i of KOKUSHI_INDICES) {
+    const c = c34[i] ?? 0;
+    if (c === 0) return false;
+    if (c > 2) return false;
+    if (c === 2) pairCount++;
+  }
+  for (let i = 0; i < 34; i++) {
+    if (!KOKUSHI_INDICES.includes(i) && (c34[i] ?? 0) > 0) return false;
+  }
+  return pairCount === 1;
+}
+
 export function isWinningHand(
   hand13: string[],
   draw: string,
@@ -67,6 +97,39 @@ export function isWinningHand(
 ): boolean {
   const res = new Calculator().calculate(buildCalcState(hand13, draw, field, seat, agariWay, dora, furu), new Rule());
   return res.isYakuman || res.hanRealYaku > 0;
+}
+
+export type ValidateResult =
+  | { ok: true; correct: boolean }
+  | { ok: false; reason: 'incomplete' | 'notWinning' | 'noYaku' | 'isWinning' | 'shantenMismatch' };
+
+/** Non-winnable puzzles must not be ron-able; winnable puzzles use the puzzle's agari way. */
+function validationAgariWay(puzzle: QueMiPuzzle): AgariWay {
+  return puzzle.type === 'nonWinnable' ? 'ron' : puzzle.agariWay;
+}
+
+function validateSubmitAgari(
+  puzzle: QueMiPuzzle,
+  hand13: string[],
+  draw: string,
+  furu: Block[] = [],
+): ValidateResult | null {
+  const required = validationAgariWay(puzzle);
+  const wins = isWinningHand(hand13, draw, puzzle.fieldWind, puzzle.seatWind, required, puzzle.dora, furu);
+
+  if (puzzle.type === 'winnable') {
+    if (wins) return null;
+    const alt: AgariWay = required === 'ron' ? 'tsumo' : 'ron';
+    if (isWinningHand(hand13, draw, puzzle.fieldWind, puzzle.seatWind, alt, puzzle.dora, furu)) {
+      return { ok: false, reason: 'noYaku' };
+    }
+    return { ok: false, reason: 'notWinning' };
+  }
+
+  if (isWinningHand(hand13, draw, puzzle.fieldWind, puzzle.seatWind, 'ron', puzzle.dora, furu)) {
+    return { ok: false, reason: 'isWinning' };
+  }
+  return null;
 }
 
 export function getAnswerYaku(puzzle: QueMiPuzzle): string[] {
@@ -106,10 +169,6 @@ export function isKokushiWin(
   return res.isYakuman && res.yaku.some((y) => y.includes('国士'));
 }
 
-export type ValidateResult =
-  | { ok: true; correct: boolean }
-  | { ok: false; reason: 'incomplete' | 'notWinning' | 'noYaku' | 'isWinning' | 'shantenMismatch' };
-
 export function validateGuess(puzzle: QueMiPuzzle, guess: (string | null)[]): ValidateResult {
   if (puzzle.handMode === 'open') {
     return { ok: false, reason: 'incomplete' };
@@ -118,19 +177,10 @@ export function validateGuess(puzzle: QueMiPuzzle, guess: (string | null)[]): Va
 
   const hand13 = guess.slice(0, 13);
   const draw = guess[13]!;
-  const winning = isWinningHand(
-    hand13,
-    draw,
-    puzzle.fieldWind,
-    puzzle.seatWind,
-    puzzle.agariWay,
-    puzzle.dora,
-  );
+  const agariErr = validateSubmitAgari(puzzle, hand13, draw);
+  if (agariErr) return agariErr;
 
-  if (puzzle.type === 'winnable') {
-    if (!winning) return { ok: false, reason: 'notWinning' };
-  } else {
-    if (winning) return { ok: false, reason: 'isWinning' };
+  if (puzzle.type === 'nonWinnable') {
     if (puzzle.shanten != null && computeShanten(hand13) !== puzzle.shanten) {
       return { ok: false, reason: 'shantenMismatch' };
     }
@@ -154,18 +204,13 @@ export function validateOpenGuess(puzzle: QueMiPuzzle, openGuess: QueMiOpenGuess
   const draw = guessHand[guessHand.length - 1]!;
   const hand13 = guessHand.slice(0, -1) as string[];
 
-  const winCheck = isWinningHand(
-    hand13,
-    draw,
-    puzzle.fieldWind,
-    puzzle.seatWind,
-    puzzle.agariWay,
-    puzzle.dora,
-    furu,
-  );
+  const agariErr = validateSubmitAgari(puzzle, hand13, draw, furu);
+  if (agariErr) return agariErr;
 
-  if (puzzle.type === 'winnable' && !winCheck) {
-    return { ok: false, reason: 'notWinning' };
+  if (puzzle.type === 'nonWinnable') {
+    if (puzzle.shanten != null && computeShanten(hand13) !== puzzle.shanten) {
+      return { ok: false, reason: 'shantenMismatch' };
+    }
   }
 
   const correct = isOpenAnswerCorrect(puzzle.openAnswer, openGuess.melds, openGuess.hand);
