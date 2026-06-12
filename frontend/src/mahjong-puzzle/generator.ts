@@ -1,15 +1,20 @@
 import { Pai, comparePai, randInt } from '@/mahjong-calc/types';
-import { buildCanonicalAnswer, paiToTile } from './tiles';
+import { buildCanonicalAnswer, paiToTile, sortTilesCanonical } from './tiles';
+import { peelOpenMelds } from './meld';
 import {
   ATTEMPTS_BY_DIFFICULTY,
   type AgariWay,
+  type GeneratePuzzleOptions,
+  type HandMode,
+  type OpenMeldCountPref,
   type PuzzleDifficulty,
   type PuzzleType,
   type QueMiPuzzle,
+  type ShantenPreference,
   type Wind,
 } from './types';
 import { computeShanten } from './shanten';
-import { isWinningHand } from './validate';
+import { isKokushiWin, isWinningHand } from './validate';
 
 const WINDS: Wind[] = ['east', 'south', 'west', 'north'];
 
@@ -68,36 +73,24 @@ class TilePool {
 
   genWinningHand(): Pai[] | null {
     const hand: Pai[] = [];
-
-    if (Math.random() < 0.05) {
-      for (let tuiCnt = 0; tuiCnt < 7;) {
-        const tp = 'msp'[randInt(0, 3)] as Pai['type'];
-        const num = randInt(2, 9);
-        if (this.canGet(tp, num, 2)) {
-          tuiCnt++;
-          hand.push(this.getPai(tp, num), this.getPai(tp, num));
-        }
-      }
-    } else {
-      const wantTanyao = Math.random() < 0.45;
-      const wantYakuhai = !wantTanyao && Math.random() < 0.25;
-      for (let i = 0; i < 4; i++) {
-        if (wantYakuhai && i === 0) {
-          const ys = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
-          let block: Pai[] | null = null;
-          for (const n of ys) {
-            if (this.canGet('z', n, 3)) {
-              block = [this.getPai('z', n), this.getPai('z', n), this.getPai('z', n)];
-              break;
-            }
+    const wantTanyao = Math.random() < 0.45;
+    const wantYakuhai = !wantTanyao && Math.random() < 0.25;
+    for (let i = 0; i < 4; i++) {
+      if (wantYakuhai && i === 0) {
+        const ys = [1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
+        let block: Pai[] | null = null;
+        for (const n of ys) {
+          if (this.canGet('z', n, 3)) {
+            block = [this.getPai('z', n), this.getPai('z', n), this.getPai('z', n)];
+            break;
           }
-          hand.push(...(block ?? this.genBlock(wantTanyao)));
-        } else {
-          hand.push(...this.genBlock(wantTanyao));
         }
+        hand.push(...(block ?? this.genBlock(wantTanyao)));
+      } else {
+        hand.push(...this.genBlock(wantTanyao));
       }
-      hand.push(...this.genPair(wantTanyao));
     }
+    hand.push(...this.genPair(wantTanyao));
 
     if (hand.length !== 14) return null;
     return hand;
@@ -122,7 +115,12 @@ function pickAgariWay(): AgariWay {
   return Math.random() < 0.5 ? 'tsumo' : 'ron';
 }
 
-function tryGenerateWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null {
+function resolveOpenMeldCount(pref: OpenMeldCountPref): number {
+  if (pref === 'random') return randInt(1, 5);
+  return pref;
+}
+
+function tryGenerateWinnableClosed(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null {
   for (let i = 0; i < 120; i++) {
     const pool = new TilePool();
     const all = pool.genWinningHand();
@@ -140,8 +138,10 @@ function tryGenerateWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAtte
     const doraTile = paiToTile(pool.getRandomPai());
 
     if (!isWinningHand(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
+    if (isKokushiWin(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
 
     return {
+      handMode: 'closed',
       answer: buildCanonicalAnswer(hand13s, draw),
       fieldWind,
       seatWind,
@@ -152,15 +152,67 @@ function tryGenerateWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAtte
   return null;
 }
 
-function tryGenerateNonWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null {
+function tryGenerateWinnableOpen(meldCountPref: OpenMeldCountPref): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null {
+  const meldCount = resolveOpenMeldCount(meldCountPref);
   for (let i = 0; i < 200; i++) {
+    const pool = new TilePool();
+    const all = pool.genWinningHand();
+    if (!all || all.length !== 14) continue;
+
+    const allTiles = all.map(paiToTile);
+    const peeled = peelOpenMelds(allTiles, meldCount);
+    if (!peeled) continue;
+
+    const sorted = sortTilesCanonical(peeled.remaining);
+    if (sorted.length < 2) continue;
+    const agariIdx = randInt(0, sorted.length);
+    const agariPai = sorted[agariIdx]!;
+    const closedHand = sorted.filter((_, idx) => idx !== agariIdx);
+    const draw = agariPai;
+
+    const fieldWind = pickWind();
+    const seatWind = pickWind();
+    const agariWay = pickAgariWay();
+    const doraTile = paiToTile(pool.getRandomPai());
+
+    if (!isWinningHand(closedHand, draw, fieldWind, seatWind, agariWay, [doraTile], peeled.blocks)) continue;
+    if (isKokushiWin(closedHand, draw, fieldWind, seatWind, agariWay, [doraTile], peeled.blocks)) continue;
+
+    return {
+      handMode: 'open',
+      openMeldCount: meldCount,
+      openAnswer: {
+        melds: peeled.melds,
+        closedHand: sortTilesCanonical(closedHand),
+        draw,
+      },
+      answer: buildCanonicalAnswer(closedHand, draw),
+      fieldWind,
+      seatWind,
+      agariWay,
+      dora: [doraTile],
+    };
+  }
+  return null;
+}
+
+function matchesShantenPreference(sh: number, pref: ShantenPreference): boolean {
+  if (pref === 'random') return sh >= 1 && sh <= 5;
+  return sh === pref;
+}
+
+function tryGenerateNonWinnable(
+  shantenPref: ShantenPreference = 'random',
+): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null {
+  const maxTries = shantenPref === 'random' ? 200 : 500;
+  for (let i = 0; i < maxTries; i++) {
     const pool = new TilePool();
     const sorted = [...pool.draw14()].sort(comparePai);
     const drawPai = sorted.pop()!;
     const hand13s = sorted.map(paiToTile);
     const draw = paiToTile(drawPai);
     const sh = computeShanten(hand13s);
-    if (sh < 1) continue;
+    if (!matchesShantenPreference(sh, shantenPref)) continue;
 
     const fieldWind = pickWind();
     const seatWind = pickWind();
@@ -170,6 +222,7 @@ function tryGenerateNonWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxA
     if (isWinningHand(hand13s, draw, fieldWind, seatWind, agariWay, [doraTile])) continue;
 
     return {
+      handMode: 'closed',
       answer: buildCanonicalAnswer(hand13s, draw),
       fieldWind,
       seatWind,
@@ -181,8 +234,22 @@ function tryGenerateNonWinnable(): Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxA
   return null;
 }
 
-export function generatePuzzle(type: PuzzleType, difficulty: PuzzleDifficulty): QueMiPuzzle {
-  const base = type === 'winnable' ? tryGenerateWinnable() : tryGenerateNonWinnable();
+export function generatePuzzle(
+  type: PuzzleType,
+  difficulty: PuzzleDifficulty,
+  options?: GeneratePuzzleOptions,
+): QueMiPuzzle {
+  const handMode: HandMode = options?.handMode ?? 'closed';
+  let base: Omit<QueMiPuzzle, 'id' | 'difficulty' | 'maxAttempts' | 'createdAt' | 'type'> | null = null;
+
+  if (type === 'winnable') {
+    base = handMode === 'open'
+      ? tryGenerateWinnableOpen(options?.openMeldCount ?? 'random')
+      : tryGenerateWinnableClosed();
+  } else {
+    base = tryGenerateNonWinnable(options?.shanten ?? 'random');
+  }
+
   if (!base) {
     throw new Error('failed to generate puzzle');
   }

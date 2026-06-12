@@ -10,7 +10,7 @@ import (
 	"mahjong-backend/mortal"
 )
 
-const aiWorkerInterval = 30 * time.Second
+const aiWorkerInterval = 30 * time.Minute
 
 var aiWorkerBusy atomic.Bool
 

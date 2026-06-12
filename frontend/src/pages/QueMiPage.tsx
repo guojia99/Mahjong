@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -21,21 +21,46 @@ import {
   History,
   CheckCircle2,
   XCircle,
+  Lightbulb,
 } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
 import { buildTileAvailability, generatePuzzle } from '@/mahjong-puzzle/generator';
 import { PUZZLE_TILE_ROWS } from '@/mahjong-puzzle/tiles';
-import type {
-  PuzzleDifficulty,
-  PuzzleType,
-  QueMiHistoryEntry,
-  QueMiHistorySubmit,
-  QueMiPuzzle,
-  TileFeedback,
+import {
+  emptyOpenGuess,
+  MELD_GAP_PX,
+  openDrawSlotIndex,
+  openHandSlotCount,
+} from '@/mahjong-puzzle/meld';
+import {
+  ATTEMPTS_BY_DIFFICULTY,
+  HINT_DIFFICULTIES,
+  OPEN_MELD_COUNT_PREFS,
+  type HandMode,
+  type OpenMeldCountPref,
+  type PuzzleDifficulty,
+  type PuzzleType,
+  type QueMiHistoryEntry,
+  type QueMiHistorySubmit,
+  type QueMiOpenAnswer,
+  type QueMiOpenGuess,
+  SHANTEN_PREFERENCES,
+  type QueMiPuzzle,
+  type QueMiSession,
+  type ShantenPreference,
+  type TileFeedback,
 } from '@/mahjong-puzzle/types';
-import { compareGuessFeedback, validateGuess } from '@/mahjong-puzzle/validate';
+import {
+  compareGuessFeedback,
+  compareOpenGuessFeedback,
+  getAnswerYaku,
+  getAnswerYakuHint,
+  validateGuess,
+  validateOpenGuess,
+} from '@/mahjong-puzzle/validate';
 
 const HISTORY_KEY = 'quemi-history';
+const SESSION_KEY = 'quemi-session';
 const GUIDE_KEY = 'quemi-guide-seen';
 
 const DIFFICULTIES: PuzzleDifficulty[] = ['hard', 'advanced', 'medium', 'normal', 'easy'];
@@ -47,7 +72,102 @@ type InputMode = 'click' | 'drag';
 const PICKER_TILE_HEIGHT = 50;
 const HAND_TILE_COUNT = 14;
 const DRAW_SLOT_INDEX = 13;
-const HAND_DRAW_GAP_PX = 8;
+const HAND_SLOT_GAP_PX = 12;
+const HAND_DRAW_GAP_PX = 12;
+const MELD_ROW_GAP_PX = 12;
+const TILE_WIDTH_RATIO = 0.88;
+const TILE_HEIGHT_MAX = 48;
+const TILE_HEIGHT_MIN = 18;
+/** 副露行预留边距，避免边框/阴影在窄屏右侧被裁切 */
+const OPEN_BOARD_WIDTH_SAFETY_PX = 10;
+const MELD_GROUP_BORDER_PX = 3;
+
+const MELD_GROUP_BG = 'rgba(255, 255, 255, 0.88)';
+const MELD_GROUP_STYLES = [
+  { border: '#60a5fa', label: '#1e40af' },
+  { border: '#fbbf24', label: '#92400e' },
+  { border: '#a78bfa', label: '#5b21b6' },
+  { border: '#34d399', label: '#065f46' },
+] as const;
+
+type SlotRef =
+  | { area: 'closed'; index: number }
+  | { area: 'meld'; meld: number; slot: number }
+  | { area: 'hand'; index: number };
+
+type DragSource = 'palette' | SlotRef;
+
+function slotRefKey(ref: SlotRef): string {
+  if (ref.area === 'closed') return `slot-${ref.index}`;
+  if (ref.area === 'meld') return `meld-${ref.meld}-${ref.slot}`;
+  return `hand-${ref.index}`;
+}
+
+function parseDropId(drop: string): SlotRef | null {
+  const meld = drop.match(/^meld-(\d+)-(\d+)$/);
+  if (meld) return { area: 'meld', meld: +meld[1]!, slot: +meld[2]! };
+  const hand = drop.match(/^hand-(\d+)$/);
+  if (hand) return { area: 'hand', index: +hand[1]! };
+  const closed = drop.match(/^slot-(\d+)$/);
+  if (closed) return { area: 'closed', index: +closed[1]! };
+  return null;
+}
+
+function slotRefsEqual(a: SlotRef, b: SlotRef): boolean {
+  return slotRefKey(a) === slotRefKey(b);
+}
+
+function getOpenTile(og: QueMiOpenGuess, ref: SlotRef): string | null {
+  if (ref.area === 'meld') return og.melds[ref.meld]?.[ref.slot] ?? null;
+  if (ref.area === 'hand') return og.hand[ref.index] ?? null;
+  return null;
+}
+
+function setOpenTile(og: QueMiOpenGuess, ref: SlotRef, tile: string | null): QueMiOpenGuess {
+  const next: QueMiOpenGuess = {
+    melds: og.melds.map((m) => [...m]),
+    hand: [...og.hand],
+  };
+  if (ref.area === 'meld') {
+    next.melds[ref.meld]![ref.slot] = tile;
+  } else if (ref.area === 'hand') {
+    next.hand[ref.index] = tile;
+  }
+  return next;
+}
+
+function iterOpenSlots(meldCount: number): SlotRef[] {
+  const refs: SlotRef[] = [];
+  for (let m = 0; m < meldCount; m++) {
+    for (let s = 0; s < 3; s++) refs.push({ area: 'meld', meld: m, slot: s });
+  }
+  const handLen = openHandSlotCount(meldCount);
+  for (let h = 0; h < handLen; h++) refs.push({ area: 'hand', index: h });
+  return refs;
+}
+
+function findFirstEmptyOpenSlot(og: QueMiOpenGuess, meldCount: number): SlotRef | null {
+  for (const ref of iterOpenSlots(meldCount)) {
+    if (!getOpenTile(og, ref)) return ref;
+  }
+  return null;
+}
+
+function collectOpenTiles(og: QueMiOpenGuess): (string | null)[] {
+  const tiles: (string | null)[] = [];
+  for (const m of og.melds) tiles.push(...m);
+  tiles.push(...og.hand);
+  return tiles;
+}
+
+function removeLastOpenTile(og: QueMiOpenGuess, meldCount: number): QueMiOpenGuess {
+  const refs = iterOpenSlots(meldCount);
+  for (let i = refs.length - 1; i >= 0; i--) {
+    const ref = refs[i]!;
+    if (getOpenTile(og, ref)) return setOpenTile(og, ref, null);
+  }
+  return og;
+}
 
 type ContextTagVariant = 'field' | 'seat' | 'agariTsumo' | 'agariRon' | 'dora' | 'shanten' | 'attempts';
 
@@ -82,7 +202,35 @@ function ContextTag({
   );
 }
 
-function useHandTileHeight(ref: RefObject<HTMLElement | null>, slotCount: number) {
+function tileWidthFromHeight(tileHeight: number): number {
+  return tileHeight * TILE_WIDTH_RATIO;
+}
+
+function meldLayoutMetrics(meldCount: number) {
+  const compact = meldCount >= 3;
+  return {
+    compact,
+    innerGap: compact ? 6 : HAND_SLOT_GAP_PX,
+    groupPaddingX: compact ? 8 : 12,
+    groupGap: compact ? 6 : MELD_GAP_PX,
+    minTileHeight: compact ? 10 : TILE_HEIGHT_MIN,
+  };
+}
+
+function maxTileHeightForMeldRow(width: number, meldCount: number): number {
+  const { innerGap, groupPaddingX, groupGap } = meldLayoutMetrics(meldCount);
+  const betweenGroups = Math.max(0, meldCount - 1) * groupGap;
+  const fixed = meldCount * (groupPaddingX + 2 * innerGap + MELD_GROUP_BORDER_PX);
+  return (width - betweenGroups - fixed) / (meldCount * 3 * TILE_WIDTH_RATIO);
+}
+
+function maxTileHeightForHandRow(width: number, slotCount: number, drawSlotIndex: number): number {
+  const betweenHandGaps = Math.max(0, drawSlotIndex - 1) * HAND_SLOT_GAP_PX;
+  const totalGaps = betweenHandGaps + HAND_DRAW_GAP_PX;
+  return (width - totalGaps) / (slotCount * TILE_WIDTH_RATIO);
+}
+
+function useTileHeight(ref: RefObject<HTMLElement | null>, slotCount: number, drawSlotIndex: number) {
   const [tileHeight, setTileHeight] = useState(40);
 
   useEffect(() => {
@@ -90,16 +238,46 @@ function useHandTileHeight(ref: RefObject<HTMLElement | null>, slotCount: number
     if (!el) return;
 
     const update = () => {
-      const handGaps = Math.max(0, DRAW_SLOT_INDEX) * 2;
-      const slotW = (el.clientWidth - handGaps - HAND_DRAW_GAP_PX) / slotCount;
-      setTileHeight(Math.min(48, Math.max(18, slotW * 1.18)));
+      const maxH = maxTileHeightForHandRow(el.clientWidth, slotCount, drawSlotIndex);
+      setTileHeight(Math.min(TILE_HEIGHT_MAX, Math.max(TILE_HEIGHT_MIN, maxH)));
     };
 
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref, slotCount]);
+  }, [ref, slotCount, drawSlotIndex]);
+
+  return tileHeight;
+}
+
+function useOpenBoardTileHeight(
+  ref: RefObject<HTMLElement | null>,
+  meldCount: number,
+  handSlotCount: number,
+  drawSlotIndex: number,
+) {
+  const [tileHeight, setTileHeight] = useState(40);
+  const { minTileHeight } = meldLayoutMetrics(meldCount);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const update = () => {
+      const w = Math.max(0, el.clientWidth - OPEN_BOARD_WIDTH_SAFETY_PX);
+      const maxH = Math.min(
+        maxTileHeightForHandRow(w, handSlotCount, drawSlotIndex),
+        maxTileHeightForMeldRow(w, meldCount),
+      );
+      setTileHeight(Math.min(TILE_HEIGHT_MAX, Math.max(minTileHeight, maxH * 0.98)));
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, meldCount, handSlotCount, drawSlotIndex, minTileHeight]);
 
   return tileHeight;
 }
@@ -130,6 +308,41 @@ function loadHistory(): QueMiHistoryEntry[] {
 
 function saveHistory(entries: QueMiHistoryEntry[]) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, 50)));
+}
+
+function loadSession(): QueMiSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as QueMiSession;
+    if (s.phase !== 'playing' || !s.puzzle?.id) return null;
+    const hm: HandMode = s.handMode ?? s.puzzle.handMode ?? 'closed';
+    if (hm === 'open') {
+      const mc = s.puzzle.openMeldCount ?? 1;
+      if (!s.openGuess || s.openGuess.melds.length !== mc) return null;
+      if (s.openGuess.hand.length !== openHandSlotCount(mc)) return null;
+    } else if (!Array.isArray(s.guess) || s.guess.length !== HAND_TILE_COUNT) {
+      return null;
+    }
+    return { ...s, handMode: hm };
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: QueMiSession) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+let initialSession: QueMiSession | null | undefined;
+
+function getInitialSession(): QueMiSession | null {
+  if (initialSession === undefined) initialSession = loadSession();
+  return initialSession;
 }
 
 function emptySlots(): (string | null)[] {
@@ -175,12 +388,11 @@ function TileSlot({
   frozen,
   draggable,
   tileHeight,
+  fixedSize = true,
   label,
+  dropId,
   onClick,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
+  onPointerDown,
 }: {
   tile: string | null;
   index: number;
@@ -188,20 +400,20 @@ function TileSlot({
   frozen: boolean;
   draggable: boolean;
   tileHeight: number;
+  fixedSize?: boolean;
   label?: string;
+  dropId?: string;
   onClick?: () => void;
-  onDragStart?: (e: DragEvent) => void;
-  onDragEnd?: (e: DragEvent) => void;
-  onDragOver?: (e: DragEvent) => void;
-  onDrop?: (e: DragEvent) => void;
+  onPointerDown?: (e: ReactPointerEvent) => void;
 }) {
   const tileOverlay = feedbackTileOverlay(feedback, frozen);
+  const slotWidth = tileWidthFromHeight(tileHeight);
 
   return (
     <div
-      className="flex-1 min-w-0 flex flex-col items-center gap-0.5"
-      onDragOver={frozen ? undefined : onDragOver}
-      onDrop={frozen ? undefined : onDrop}
+      className={fixedSize ? 'shrink-0 flex flex-col items-center gap-0.5' : 'flex-1 min-w-0 flex flex-col items-center gap-0.5'}
+      style={fixedSize ? { width: slotWidth } : undefined}
+      data-quemi-drop={frozen ? undefined : dropId}
     >
       {label && (
         <span className="text-[9px] sm:text-[10px] font-medium leading-none" style={{ color: 'var(--color-text-light)' }}>
@@ -212,12 +424,11 @@ function TileSlot({
       <button
         type="button"
         onClick={frozen ? undefined : onClick}
-        draggable={draggable && !frozen && !!tile}
-        onDragStart={frozen ? undefined : onDragStart}
-        onDragEnd={frozen ? undefined : onDragEnd}
+        onPointerDown={frozen ? undefined : onPointerDown}
         style={{
           width: '100%',
-          maxWidth: `${tileHeight * 0.88}px`,
+          maxWidth: `${slotWidth}px`,
+          boxSizing: 'border-box',
           aspectRatio: '5 / 6',
           borderRadius: 6,
           border: '2px solid',
@@ -226,6 +437,7 @@ function TileSlot({
           justifyContent: 'center',
           cursor: frozen ? 'default' : 'pointer',
           padding: 0,
+          touchAction: draggable && !frozen && tile ? 'none' : undefined,
           ...feedbackStyle(feedback, frozen),
         }}
         aria-label={`slot-${index}`}
@@ -253,14 +465,15 @@ function TileSlot({
 
 type HandRowSlotHandlers = {
   onClick?: (index: number) => void;
-  onDragStart?: (index: number, e: DragEvent) => void;
-  onDragEnd?: (e: DragEvent) => void;
-  onDragOver?: (e: DragEvent) => void;
-  onDrop?: (index: number, e: DragEvent) => void;
+  onPointerDown?: (index: number, e: ReactPointerEvent) => void;
 };
 
 function HandRow({
   tiles,
+  drawSlotIndex,
+  dropPrefix,
+  tileHeight: tileHeightProp,
+  measureRef,
   feedback,
   frozen,
   draggable,
@@ -268,6 +481,10 @@ function HandRow({
   getSlotLabel,
 }: {
   tiles: (string | null)[];
+  drawSlotIndex: number;
+  dropPrefix: 'slot' | 'hand';
+  tileHeight?: number;
+  measureRef?: RefObject<HTMLElement | null>;
   feedback?: TileFeedback[];
   frozen: boolean;
   draggable?: boolean;
@@ -275,85 +492,263 @@ function HandRow({
   getSlotLabel?: (index: number) => string | undefined;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
-  const tileHeight = useHandTileHeight(rowRef, tiles.length);
+  const computedHeight = useTileHeight(measureRef ?? rowRef, tiles.length, drawSlotIndex);
+  const tileHeight = tileHeightProp ?? computedHeight;
+  const handTiles = tiles.slice(0, drawSlotIndex);
+  const drawTile = tiles[drawSlotIndex] ?? null;
 
   return (
-    <div ref={rowRef} className="flex flex-nowrap items-end gap-0.5 w-full">
-      <div className="flex flex-nowrap items-end flex-1 min-w-0">
-        <div className="flex flex-nowrap items-end gap-0.5 flex-[13] min-w-0">
-          {tiles.slice(0, DRAW_SLOT_INDEX).map((tile, i) => (
-            <TileSlot
-              key={i}
-              tile={tile}
-              index={i}
-              feedback={feedback?.[i]}
-              frozen={frozen}
-              draggable={!!draggable}
-              tileHeight={tileHeight}
-              label={getSlotLabel?.(i)}
-              onClick={handlers?.onClick ? () => handlers.onClick!(i) : undefined}
-              onDragStart={handlers?.onDragStart ? (e) => handlers.onDragStart!(i, e) : undefined}
-              onDragEnd={handlers?.onDragEnd}
-              onDragOver={handlers?.onDragOver}
-              onDrop={handlers?.onDrop ? (e) => handlers.onDrop!(i, e) : undefined}
-            />
-          ))}
-        </div>
-        <div className="shrink-0" style={{ width: HAND_DRAW_GAP_PX }} aria-hidden />
-        <div className="flex flex-nowrap items-end flex-1 min-w-0">
+    <div
+      ref={measureRef ? undefined : rowRef}
+      className="flex flex-nowrap items-end w-full justify-start"
+    >
+      <div className="flex flex-nowrap items-end shrink-0" style={{ gap: HAND_SLOT_GAP_PX }}>
+        {handTiles.map((tile, i) => (
           <TileSlot
-            tile={tiles[DRAW_SLOT_INDEX] ?? null}
-            index={DRAW_SLOT_INDEX}
-            feedback={feedback?.[DRAW_SLOT_INDEX]}
+            key={i}
+            tile={tile}
+            index={i}
+            feedback={feedback?.[i]}
             frozen={frozen}
             draggable={!!draggable}
             tileHeight={tileHeight}
-            label={getSlotLabel?.(DRAW_SLOT_INDEX)}
-            onClick={handlers?.onClick ? () => handlers.onClick!(DRAW_SLOT_INDEX) : undefined}
-            onDragStart={handlers?.onDragStart ? (e) => handlers.onDragStart!(DRAW_SLOT_INDEX, e) : undefined}
-            onDragEnd={handlers?.onDragEnd}
-            onDragOver={handlers?.onDragOver}
-            onDrop={handlers?.onDrop ? (e) => handlers.onDrop!(DRAW_SLOT_INDEX, e) : undefined}
+            label={getSlotLabel?.(i)}
+            dropId={`${dropPrefix}-${i}`}
+            onClick={handlers?.onClick ? () => handlers.onClick!(i) : undefined}
+            onPointerDown={handlers?.onPointerDown ? (e) => handlers.onPointerDown!(i, e) : undefined}
           />
-        </div>
+        ))}
+      </div>
+      <div className="shrink-0" style={{ width: HAND_DRAW_GAP_PX }} aria-hidden />
+      <TileSlot
+        tile={drawTile}
+        index={drawSlotIndex}
+        feedback={feedback?.[drawSlotIndex]}
+        frozen={frozen}
+        draggable={!!draggable}
+        tileHeight={tileHeight}
+        label={getSlotLabel?.(drawSlotIndex)}
+        dropId={`${dropPrefix}-${drawSlotIndex}`}
+        onClick={handlers?.onClick ? () => handlers.onClick!(drawSlotIndex) : undefined}
+        onPointerDown={handlers?.onPointerDown ? (e) => handlers.onPointerDown!(drawSlotIndex, e) : undefined}
+      />
+    </div>
+  );
+}
+
+type MeldRowHandlers = {
+  onClick?: (meld: number, slot: number) => void;
+  onPointerDown?: (meld: number, slot: number, e: ReactPointerEvent) => void;
+};
+
+function MeldRow({
+  melds,
+  tileHeight,
+  feedback,
+  frozen,
+  draggable,
+  handlers,
+}: {
+  melds: (string | null)[][];
+  tileHeight: number;
+  feedback?: TileFeedback[][];
+  frozen: boolean;
+  draggable?: boolean;
+  handlers?: MeldRowHandlers;
+}) {
+  const { t } = useTranslation();
+  const layout = meldLayoutMetrics(melds.length);
+
+  return (
+    <div className="w-full min-w-0">
+      <div className="flex flex-nowrap items-end justify-start max-w-full">
+      {melds.map((meld, mi) => {
+        const style = MELD_GROUP_STYLES[mi % MELD_GROUP_STYLES.length]!;
+        return (
+          <div key={mi} className="flex flex-nowrap items-end shrink-0">
+            {mi > 0 && <div className="shrink-0" style={{ width: layout.groupGap }} aria-hidden />}
+            <div className="flex flex-col gap-0.5 shrink-0">
+              <span
+                className="text-[9px] sm:text-[10px] font-semibold leading-none pl-0.5"
+                style={{ color: style.label }}
+              >
+                {t('queMi.openMeldGroup', { n: mi + 1 })}
+              </span>
+              <div
+                className={`rounded-lg py-1 ${layout.compact ? 'px-1' : 'px-1.5'}`}
+                style={{ background: MELD_GROUP_BG, border: `1.5px solid ${style.border}` }}
+              >
+                <div className="flex flex-nowrap items-end shrink-0" style={{ gap: layout.innerGap }}>
+                  {meld.map((tile, si) => (
+                    <TileSlot
+                      key={si}
+                      tile={tile}
+                      index={si}
+                      feedback={feedback?.[mi]?.[si]}
+                      frozen={frozen}
+                      draggable={!!draggable}
+                      tileHeight={tileHeight}
+                      dropId={`meld-${mi}-${si}`}
+                      onClick={handlers?.onClick ? () => handlers.onClick!(mi, si) : undefined}
+                      onPointerDown={handlers?.onPointerDown ? (e) => handlers.onPointerDown!(mi, si, e) : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
       </div>
     </div>
+  );
+}
+
+function OpenGuessBoard({
+  meldCount,
+  melds,
+  hand,
+  meldFeedback,
+  handFeedback,
+  frozen,
+  draggable,
+  meldHandlers,
+  handHandlers,
+  drawSlotLabel,
+}: {
+  meldCount: number;
+  melds: (string | null)[][];
+  hand: (string | null)[];
+  meldFeedback?: TileFeedback[][];
+  handFeedback?: TileFeedback[];
+  frozen: boolean;
+  draggable?: boolean;
+  meldHandlers?: MeldRowHandlers;
+  handHandlers?: HandRowSlotHandlers;
+  drawSlotLabel?: (index: number) => string | undefined;
+}) {
+  const boardRef = useRef<HTMLDivElement>(null);
+  const drawSlotIndex = openDrawSlotIndex(meldCount);
+  const tileHeight = useOpenBoardTileHeight(boardRef, meldCount, hand.length, drawSlotIndex);
+
+  return (
+    <div ref={boardRef} className="flex flex-col w-full min-w-0" style={{ gap: MELD_ROW_GAP_PX }}>
+      <MeldRow
+        melds={melds}
+        tileHeight={tileHeight}
+        feedback={meldFeedback}
+        frozen={frozen}
+        draggable={draggable}
+        handlers={meldHandlers}
+      />
+      <HandRow
+        tiles={hand}
+        drawSlotIndex={drawSlotIndex}
+        dropPrefix="hand"
+        tileHeight={tileHeight}
+        measureRef={boardRef}
+        feedback={handFeedback}
+        frozen={frozen}
+        draggable={draggable}
+        handlers={handHandlers}
+        getSlotLabel={drawSlotLabel}
+      />
+    </div>
+  );
+}
+
+function OpenAnswerBoard({
+  answer,
+  meldCount,
+  drawSlotLabel,
+}: {
+  answer: QueMiOpenAnswer;
+  meldCount: number;
+  drawSlotLabel?: (index: number) => string | undefined;
+}) {
+  return (
+    <OpenGuessBoard
+      meldCount={meldCount}
+      melds={answer.melds}
+      hand={[...answer.closedHand, answer.draw]}
+      frozen
+      drawSlotLabel={drawSlotLabel}
+    />
   );
 }
 
 export default function QueMiPage() {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const restored = getInitialSession();
 
-  const [phase, setPhase] = useState<Phase>('setup');
-  const [puzzleType, setPuzzleType] = useState<PuzzleType>('winnable');
-  const [difficulty, setDifficulty] = useState<PuzzleDifficulty>('normal');
-  const [puzzle, setPuzzle] = useState<QueMiPuzzle | null>(null);
-  const [inputMode, setInputMode] = useState<InputMode>('click');
-  const [guess, setGuess] = useState<(string | null)[]>(emptySlots);
-  const [attemptsLeft, setAttemptsLeft] = useState(0);
-  const [submitRecords, setSubmitRecords] = useState<QueMiHistorySubmit[]>([]);
+  const [phase, setPhase] = useState<Phase>(restored ? 'playing' : 'setup');
+  const [puzzleType, setPuzzleType] = useState<PuzzleType>(restored?.puzzleType ?? 'winnable');
+  const [handMode, setHandMode] = useState<HandMode>(restored?.handMode ?? 'closed');
+  const [openMeldCountPref, setOpenMeldCountPref] = useState<OpenMeldCountPref>(
+    restored?.openMeldCountPref ?? 'random',
+  );
+  const [shantenPreference, setShantenPreference] = useState<ShantenPreference>(
+    restored?.shantenPreference ?? 'random',
+  );
+  const [difficulty, setDifficulty] = useState<PuzzleDifficulty>(restored?.difficulty ?? 'normal');
+  const [puzzle, setPuzzle] = useState<QueMiPuzzle | null>(restored?.puzzle ?? null);
+  const [inputMode, setInputMode] = useState<InputMode>(restored?.inputMode ?? 'click');
+  const [guess, setGuess] = useState<(string | null)[]>(restored?.guess ?? emptySlots);
+  const [openGuess, setOpenGuess] = useState<QueMiOpenGuess | null>(restored?.openGuess ?? null);
+  const [attemptsLeft, setAttemptsLeft] = useState(restored?.attemptsLeft ?? 0);
+  const [submitRecords, setSubmitRecords] = useState<QueMiHistorySubmit[]>(restored?.submitRecords ?? []);
   const [won, setWon] = useState(false);
+  const [gaveUp, setGaveUp] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [history, setHistory] = useState<QueMiHistoryEntry[]>(loadHistory);
   const [reviewEntryId, setReviewEntryId] = useState<string | null>(null);
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem(GUIDE_KEY));
   const [showHistory, setShowHistory] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [dragTile, setDragTile] = useState<{ source: 'palette' | number; tile: string } | null>(null);
+  const [dragTile, setDragTile] = useState<{ source: DragSource; tile: string } | null>(null);
+  const [pointerDragPos, setPointerDragPos] = useState<{ x: number; y: number } | null>(null);
+  const pointerDragging = useRef(false);
+  const suppressClickAfterDrag = useRef(false);
+  const dragTileRef = useRef(dragTile);
+  dragTileRef.current = dragTile;
+  const [yakuHintShown, setYakuHintShown] = useState(restored?.yakuHintShown ?? false);
 
   const tileAvail = useMemo(
     () => (puzzle ? buildTileAvailability(puzzle.dora) : {}),
     [puzzle],
   );
 
+  const answerYaku = useMemo(
+    () => (puzzle?.type === 'winnable' ? getAnswerYaku(puzzle) : []),
+    [puzzle],
+  );
+
+  const answerYakuHint = useMemo(
+    () => (puzzle?.type === 'winnable' ? getAnswerYakuHint(puzzle) : []),
+    [puzzle],
+  );
+
+  const hintAvailable =
+    phase === 'playing'
+    && puzzle?.type === 'winnable'
+    && HINT_DIFFICULTIES.includes(puzzle.difficulty);
+
+  const isOpen = puzzle?.handMode === 'open' && puzzle.openMeldCount != null;
+  const meldCount = puzzle?.openMeldCount ?? 0;
+
+  const activeTiles = useMemo(() => {
+    if (isOpen && openGuess) return collectOpenTiles(openGuess);
+    return guess;
+  }, [isOpen, openGuess, guess]);
+
   const usedCounts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const tile of guess) {
+    for (const tile of activeTiles) {
       if (tile) c[tile] = (c[tile] ?? 0) + 1;
     }
     return c;
-  }, [guess]);
+  }, [activeTiles]);
 
   const canAddTile = useCallback(
     (tile: string) => (usedCounts[tile] ?? 0) < (tileAvail[tile] ?? 4),
@@ -361,20 +756,27 @@ export default function QueMiPage() {
   );
 
   const firstEmptyIndex = guess.findIndex((t) => !t);
-  const hasAnyTile = guess.some(Boolean);
-  const draggingFromHand =
-    inputMode === 'drag' && dragTile !== null && typeof dragTile.source === 'number';
-
-  const endDrag = useCallback(() => setDragTile(null), []);
+  const firstEmptyOpenRef = isOpen && openGuess ? findFirstEmptyOpenSlot(openGuess, meldCount) : null;
+  const hasAnyTile = activeTiles.some(Boolean);
+  const draggingFromBoard =
+    inputMode === 'drag' && dragTile !== null && dragTile.source !== 'palette';
 
   const startGame = () => {
     try {
-      const p = generatePuzzle(puzzleType, difficulty);
+      const mode: HandMode = puzzleType === 'winnable' ? handMode : 'closed';
+      const p = generatePuzzle(puzzleType, difficulty, {
+        shanten: puzzleType === 'nonWinnable' ? shantenPreference : undefined,
+        handMode: mode,
+        openMeldCount: mode === 'open' ? openMeldCountPref : undefined,
+      });
       setPuzzle(p);
       setAttemptsLeft(p.maxAttempts);
       setGuess(emptySlots());
+      setOpenGuess(p.handMode === 'open' && p.openMeldCount ? emptyOpenGuess(p.openMeldCount) : null);
       setSubmitRecords([]);
       setWon(false);
+      setGaveUp(false);
+      setYakuHintShown(false);
       setErrorKey(null);
       setPhase('playing');
     } catch {
@@ -399,10 +801,24 @@ export default function QueMiPage() {
     saveHistory(next);
   };
 
-  const finishGame = (didWin: boolean, p: QueMiPuzzle, used: number, submits: QueMiHistorySubmit[]) => {
+  const finishGame = (
+    didWin: boolean,
+    p: QueMiPuzzle,
+    used: number,
+    submits: QueMiHistorySubmit[],
+    surrendered = false,
+  ) => {
+    clearSession();
     setWon(didWin);
+    setGaveUp(surrendered);
     setPhase('finished');
     recordResult(p, didWin, used, submits);
+  };
+
+  const giveUp = () => {
+    if (!puzzle || phase !== 'playing') return;
+    const used = puzzle.maxAttempts - attemptsLeft;
+    finishGame(false, puzzle, used, submitRecords, true);
   };
 
   const openHistoryReview = (entry: QueMiHistoryEntry) => {
@@ -420,15 +836,63 @@ export default function QueMiPage() {
   };
 
   const exitReview = () => {
+    clearSession();
     setPhase('setup');
     setPuzzle(null);
     setSubmitRecords([]);
     setReviewEntryId(null);
+    setGaveUp(false);
     setErrorKey(null);
+  };
+
+  const backToSetup = () => {
+    clearSession();
+    setPhase('setup');
+    setPuzzle(null);
+    setGaveUp(false);
   };
 
   const submitGuess = () => {
     if (!puzzle || phase !== 'playing') return;
+
+    if (isOpen && openGuess) {
+      const result = validateOpenGuess(puzzle, openGuess);
+      if (!result.ok) {
+        setErrorKey(`queMi.error.${result.reason}`);
+        return;
+      }
+      setErrorKey(null);
+      const openFb = compareOpenGuessFeedback(puzzle, openGuess);
+      const guessTiles = collectOpenTiles(openGuess).filter(Boolean) as string[];
+      const attemptNum = puzzle.maxAttempts - attemptsLeft + 1;
+      const updatedSubmits: QueMiHistorySubmit[] = [
+        ...submitRecords,
+        {
+          attempt: attemptNum,
+          guess: guessTiles,
+          feedback: [],
+          openGuess: {
+            melds: openGuess.melds.map((m) => m.map((t) => t!)) as string[][],
+            hand: openGuess.hand.map((t) => t!) as string[],
+          },
+          openFeedback: openFb,
+        },
+      ];
+      setSubmitRecords(updatedSubmits);
+      if (result.correct) {
+        finishGame(true, puzzle, attemptNum, updatedSubmits);
+        return;
+      }
+      const nextAttempts = attemptsLeft - 1;
+      setAttemptsLeft(nextAttempts);
+      if (nextAttempts <= 0) {
+        finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits);
+      } else if (puzzle.openMeldCount) {
+        setOpenGuess(emptyOpenGuess(puzzle.openMeldCount));
+      }
+      return;
+    }
+
     const result = validateGuess(puzzle, guess);
     if (!result.ok) {
       setErrorKey(`queMi.error.${result.reason}`);
@@ -460,13 +924,24 @@ export default function QueMiPage() {
 
   const clearGuess = () => {
     if (phase !== 'playing') return;
-    setGuess(emptySlots());
+    if (isOpen && puzzle?.openMeldCount) {
+      setOpenGuess(emptyOpenGuess(puzzle.openMeldCount));
+    } else {
+      setGuess(emptySlots());
+    }
     setErrorKey(null);
   };
 
   const addTileClick = (tile: string) => {
     if (phase !== 'playing' || inputMode !== 'click') return;
     if (!canAddTile(tile)) return;
+    if (isOpen && openGuess && puzzle?.openMeldCount) {
+      const ref = findFirstEmptyOpenSlot(openGuess, puzzle.openMeldCount);
+      if (!ref) return;
+      setOpenGuess(setOpenTile(openGuess, ref, tile));
+      setErrorKey(null);
+      return;
+    }
     const idx = guess.findIndex((t) => !t);
     if (idx < 0) return;
     const next = [...guess];
@@ -475,68 +950,184 @@ export default function QueMiPage() {
     setErrorKey(null);
   };
 
-  const removeFromSlot = (index: number) => {
+  const removeFromClosedSlot = (index: number) => {
     if (phase !== 'playing') return;
-    const next = [...guess];
-    next[index] = null;
-    setGuess(next);
+    setGuess((prev) => {
+      if (!prev[index]) return prev;
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+  };
+
+  const removeFromOpenSlot = (ref: SlotRef) => {
+    if (phase !== 'playing' || !openGuess) return;
+    setOpenGuess(setOpenTile(openGuess, ref, null));
   };
 
   const removeLastTile = useCallback(() => {
     if (phase !== 'playing') return;
-    setGuess((prev) => {
-      for (let i = prev.length - 1; i >= 0; i--) {
-        if (prev[i]) {
-          const next = [...prev];
-          next[i] = null;
-          return next;
+    if (isOpen && openGuess && puzzle?.openMeldCount) {
+      setOpenGuess(removeLastOpenTile(openGuess, puzzle.openMeldCount));
+    } else {
+      setGuess((prev) => {
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i]) {
+            const next = [...prev];
+            next[i] = null;
+            return next;
+          }
         }
+        return prev;
+      });
+    }
+    setErrorKey(null);
+  }, [phase, isOpen, openGuess, puzzle?.openMeldCount]);
+
+  const placeClosedTileAt = useCallback((index: number, tile: string, from?: number) => {
+    if (phase !== 'playing') return;
+    setGuess((prev) => {
+      const next = [...prev];
+      if (from != null && from >= 0) {
+        next[from] = next[index] ?? null;
       }
-      return prev;
+      next[index] = tile;
+      return next;
     });
     setErrorKey(null);
   }, [phase]);
 
-  const dropHandTileOnPalette = useCallback(
-    (e: DragEvent) => {
+  const placeOpenTileAt = useCallback((target: SlotRef, tile: string, from?: SlotRef) => {
+    if (phase !== 'playing') return;
+    setOpenGuess((prev) => {
+      if (!prev) return prev;
+      let next = setOpenTile(prev, target, tile);
+      if (from && !slotRefsEqual(from, target)) {
+        next = setOpenTile(next, from, getOpenTile(prev, target));
+      }
+      return next;
+    });
+    setErrorKey(null);
+  }, [phase]);
+
+  const beginPointerDrag = useCallback(
+    (source: DragSource, tile: string, e: ReactPointerEvent) => {
       if (phase !== 'playing' || inputMode !== 'drag') return;
       e.preventDefault();
-      e.stopPropagation();
-      const raw = e.dataTransfer.getData('application/x-quemi-hand');
-      let idx = raw !== '' ? parseInt(raw, 10) : Number.NaN;
-      if (Number.isNaN(idx) && typeof dragTile?.source === 'number') {
-        idx = dragTile.source;
-      }
-      if (!Number.isNaN(idx) && idx >= 0 && idx < HAND_TILE_COUNT && guess[idx]) {
-        removeFromSlot(idx);
-        setErrorKey(null);
-      }
-      setDragTile(null);
-    },
-    [phase, inputMode, dragTile, guess],
-  );
-
-  const allowPaletteDrop = useCallback(
-    (e: DragEvent) => {
-      if (phase !== 'playing' || inputMode !== 'drag') return;
-      if (e.dataTransfer.types.includes('application/x-quemi-hand')) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-      }
+      pointerDragging.current = true;
+      setDragTile({ source, tile });
+      setPointerDragPos({ x: e.clientX, y: e.clientY });
     },
     [phase, inputMode],
   );
 
-  const placeTileAt = (index: number, tile: string, from?: number) => {
-    if (phase !== 'playing') return;
-    const next = [...guess];
-    if (from != null && from >= 0) {
-      next[from] = next[index];
+  const finishPointerDrag = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!pointerDragging.current) return;
+      pointerDragging.current = false;
+      const dt = dragTileRef.current;
+      setDragTile(null);
+      setPointerDragPos(null);
+      suppressClickAfterDrag.current = true;
+      if (!dt || phase !== 'playing') return;
+
+      const dropEl = document.elementFromPoint(clientX, clientY)?.closest('[data-quemi-drop]') as HTMLElement | null;
+      const drop = dropEl?.dataset.quemiDrop;
+
+      if (drop === 'palette' && dt.source !== 'palette') {
+        const from = dt.source;
+        if (from.area === 'closed') {
+          setGuess((prev) => {
+            if (!prev[from.index]) return prev;
+            const next = [...prev];
+            next[from.index] = null;
+            return next;
+          });
+        } else {
+          setOpenGuess((prev) => (prev ? setOpenTile(prev, from, null) : prev));
+        }
+        setErrorKey(null);
+      } else if (drop) {
+        const target = parseDropId(drop);
+        if (!target) return;
+
+        if (dt.source === 'palette') {
+          if (target.area === 'closed') {
+            setGuess((prev) => {
+              const used: Record<string, number> = {};
+              for (const t of prev) {
+                if (t) used[t] = (used[t] ?? 0) + 1;
+              }
+              const canAdd = (used[dt.tile] ?? 0) < (tileAvail[dt.tile] ?? 4);
+              if (!canAdd && !prev[target.index]) return prev;
+              const next = [...prev];
+              next[target.index] = dt.tile;
+              return next;
+            });
+          } else {
+            setOpenGuess((prev) => {
+              if (!prev) return prev;
+              const used: Record<string, number> = {};
+              for (const t of collectOpenTiles(prev)) {
+                if (t) used[t] = (used[t] ?? 0) + 1;
+              }
+              const canAdd = (used[dt.tile] ?? 0) < (tileAvail[dt.tile] ?? 4);
+              if (!canAdd && !getOpenTile(prev, target)) return prev;
+              return setOpenTile(prev, target, dt.tile);
+            });
+          }
+          setErrorKey(null);
+        } else {
+          if (target.area === 'closed' && dt.source.area === 'closed') {
+            placeClosedTileAt(target.index, dt.tile, dt.source.index);
+          } else if (target.area !== 'closed' && dt.source.area !== 'closed') {
+            placeOpenTileAt(target, dt.tile, dt.source);
+          }
+        }
+      }
+    },
+    [phase, tileAvail, placeClosedTileAt, placeOpenTileAt],
+  );
+
+  const finishPointerDragRef = useRef(finishPointerDrag);
+  finishPointerDragRef.current = finishPointerDrag;
+
+  useEffect(() => {
+    if (!pointerDragPos) return;
+    const onMove = (e: PointerEvent) => {
+      setPointerDragPos({ x: e.clientX, y: e.clientY });
+    };
+    const onUp = (e: PointerEvent) => {
+      finishPointerDragRef.current(e.clientX, e.clientY);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [pointerDragPos]);
+
+  useEffect(() => {
+    const blockGhostClick = (e: MouseEvent) => {
+      if (!suppressClickAfterDrag.current) return;
+      suppressClickAfterDrag.current = false;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    };
+    document.addEventListener('click', blockGhostClick, true);
+    return () => document.removeEventListener('click', blockGhostClick, true);
+  }, []);
+
+  useEffect(() => {
+    if (inputMode !== 'drag') {
+      pointerDragging.current = false;
+      setDragTile(null);
+      setPointerDragPos(null);
     }
-    next[index] = tile;
-    setGuess(next);
-    setErrorKey(null);
-  };
+  }, [inputMode]);
 
   const toggleFullscreen = async () => {
     const el = containerRef.current;
@@ -557,6 +1148,28 @@ export default function QueMiPage() {
   }, []);
 
   useEffect(() => {
+    if (phase !== 'playing' || !puzzle) {
+      if (phase !== 'playing') clearSession();
+      return;
+    }
+    saveSession({
+      phase: 'playing',
+      puzzle,
+      puzzleType,
+      handMode: puzzle.handMode,
+      openMeldCountPref,
+      difficulty,
+      shantenPreference,
+      guess,
+      openGuess: openGuess ?? undefined,
+      attemptsLeft,
+      submitRecords,
+      inputMode,
+      yakuHintShown,
+    });
+  }, [phase, puzzle, puzzleType, handMode, openMeldCountPref, difficulty, shantenPreference, guess, openGuess, attemptsLeft, submitRecords, inputMode, yakuHintShown]);
+
+  useEffect(() => {
     if (phase !== 'playing') return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Backspace' && e.key !== 'Delete') return;
@@ -575,7 +1188,20 @@ export default function QueMiPage() {
   };
 
   const windLabel = (w: string) => t(`queMi.wind.${w}`);
-  const drawSlotLabel = (i: number) => (i === DRAW_SLOT_INDEX ? t('queMi.draw') : undefined);
+  const drawSlotLabel = (i: number, drawIdx = DRAW_SLOT_INDEX) => (i === drawIdx ? t('queMi.draw') : undefined);
+  const openMeldCountLabel = (n: number) =>
+    n === 4 ? t('queMi.openMeldTanki') : t('queMi.openMeldCount', { n });
+  const openMeldPrefLabel = (pref: OpenMeldCountPref) =>
+    pref === 'random' ? t('queMi.openMeldRandom') : openMeldCountLabel(pref);
+  const errorMessage = useMemo(() => {
+    if (!errorKey) return null;
+    if (errorKey === 'queMi.error.shantenMismatch' && puzzle?.shanten != null) {
+      return t(errorKey, { n: puzzle.shanten });
+    }
+    return t(errorKey);
+  }, [errorKey, puzzle?.shanten, t]);
+  const shantenPrefLabel = (pref: ShantenPreference) =>
+    pref === 'random' ? t('queMi.shantenRandom') : t('queMi.shantenCount', { n: pref });
 
   return (
     <div
@@ -589,7 +1215,17 @@ export default function QueMiPage() {
           <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{t('queMi.title')}</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-light)' }}>{t('queMi.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {phase === 'playing' && (
+            <button
+              type="button"
+              onClick={giveUp}
+              className="btn-secondary text-sm px-3 py-1.5 rounded-lg font-semibold"
+              style={{ borderColor: '#dc2626', color: '#dc2626' }}
+            >
+              {t('queMi.giveUp')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
@@ -644,7 +1280,7 @@ export default function QueMiPage() {
                       {h.won ? <CheckCircle2 size={14} className="text-green-600 shrink-0" /> : <XCircle size={14} className="text-red-500 shrink-0" />}
                       <span className="shrink-0">{new Date(h.timestamp).toLocaleString()}</span>
                       <span className="truncate" style={{ color: 'var(--color-text-light)' }}>
-                        {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)} · {h.attemptsUsed}/{ATTEMPTS_LABEL(h)}
+                        {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)} · {h.attemptsUsed}/{ATTEMPTS_BY_DIFFICULTY[h.difficulty]}
                       </span>
                     </button>
                   </li>
@@ -656,7 +1292,7 @@ export default function QueMiPage() {
       )}
 
       {errorKey && phase === 'setup' && (
-        <p className="text-sm text-red-600 mb-4">{t(errorKey)}</p>
+        <p className="text-sm text-red-600 mb-4">{errorMessage}</p>
       )}
 
       {phase === 'setup' && (
@@ -685,6 +1321,78 @@ export default function QueMiPage() {
             </p>
           </div>
 
+          {puzzleType === 'winnable' && (
+            <div>
+              <h2 className="text-sm font-semibold mb-2">{t('queMi.selectHandMode')}</h2>
+              <div className="flex flex-wrap gap-2">
+                {(['closed', 'open'] as HandMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setHandMode(mode)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    style={{
+                      background: handMode === mode ? 'var(--color-primary)' : 'var(--color-bg)',
+                      color: handMode === mode ? '#fff' : 'var(--color-text)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    {t(`queMi.handMode.${mode}`)}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-text-light)' }}>
+                {t(`queMi.handModeDesc.${handMode}`)}
+              </p>
+            </div>
+          )}
+
+          {puzzleType === 'winnable' && handMode === 'open' && (
+            <div>
+              <h2 className="text-sm font-semibold mb-2">{t('queMi.selectOpenMeldCount')}</h2>
+              <div className="flex flex-wrap gap-2">
+                {OPEN_MELD_COUNT_PREFS.map((pref) => (
+                  <button
+                    key={String(pref)}
+                    type="button"
+                    onClick={() => setOpenMeldCountPref(pref)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    style={{
+                      background: openMeldCountPref === pref ? 'var(--color-primary)' : 'var(--color-bg)',
+                      color: openMeldCountPref === pref ? '#fff' : 'var(--color-text)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    {openMeldPrefLabel(pref)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {puzzleType === 'nonWinnable' && (
+            <div>
+              <h2 className="text-sm font-semibold mb-2">{t('queMi.selectShanten')}</h2>
+              <div className="flex flex-wrap gap-2">
+                {SHANTEN_PREFERENCES.map((pref) => (
+                  <button
+                    key={String(pref)}
+                    type="button"
+                    onClick={() => setShantenPreference(pref)}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    style={{
+                      background: shantenPreference === pref ? 'var(--color-primary)' : 'var(--color-bg)',
+                      color: shantenPreference === pref ? '#fff' : 'var(--color-text)',
+                      border: '1px solid var(--color-border)',
+                    }}
+                  >
+                    {shantenPrefLabel(pref)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <h2 className="text-sm font-semibold mb-2">{t('queMi.selectDifficulty')}</h2>
             <div className="flex flex-wrap gap-2">
@@ -700,13 +1408,13 @@ export default function QueMiPage() {
                     border: '1px solid var(--color-border)',
                   }}
                 >
-                  {t(`queMi.difficulty.${d}`)} ({t('queMi.attempts', { count: ATTEMPTS_MAP[d] })})
+                  {t(`queMi.difficulty.${d}`)}
                 </button>
               ))}
             </div>
           </div>
 
-          {errorKey && <p className="text-sm text-red-600">{t(errorKey)}</p>}
+          {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
 
           <button type="button" onClick={startGame} className="btn-primary px-6 py-2.5 rounded-xl text-sm font-semibold">
             {t('queMi.start')}
@@ -748,6 +1456,11 @@ export default function QueMiPage() {
                     {puzzle.dora.map((d) => <MahjongTile key={d} tile={d} height={24} />)}
                   </span>
                 </ContextTag>
+                {puzzle.handMode === 'open' && puzzle.openMeldCount != null && (
+                  <ContextTag variant="shanten" label={t('queMi.openMelds')}>
+                    {openMeldCountLabel(puzzle.openMeldCount)}
+                  </ContextTag>
+                )}
               </>
             ) : puzzle.shanten != null ? (
               <ContextTag variant="shanten" label={t('queMi.shanten')}>
@@ -755,13 +1468,46 @@ export default function QueMiPage() {
               </ContextTag>
             ) : null}
             {phase === 'playing' && (
-              <span className="ml-auto">
+              <span className="ml-auto flex items-center gap-2">
+                {hintAvailable && !yakuHintShown && (
+                  <button
+                    type="button"
+                    onClick={() => setYakuHintShown(true)}
+                    className="btn-secondary text-xs flex items-center gap-1 px-2.5 py-1 rounded-full"
+                  >
+                    <Lightbulb size={14} />
+                    {t('queMi.hint')}
+                  </button>
+                )}
                 <ContextTag variant="attempts" label={t('queMi.attemptsTag')}>
                   {t('queMi.attemptsCount', { count: attemptsLeft })}
                 </ContextTag>
               </span>
             )}
           </div>
+
+          {hintAvailable && yakuHintShown && answerYakuHint.length > 0 && (
+            <div
+              className="p-3 rounded-xl border"
+              style={{ borderColor: 'var(--color-border)', background: 'rgba(255, 247, 237, 0.85)' }}
+            >
+              <p className="text-xs font-semibold mb-2 flex items-center gap-1" style={{ color: '#b45309' }}>
+                <Lightbulb size={14} />
+                {t('queMi.hintYaku')}
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {answerYakuHint.map((y) => (
+                  <li
+                    key={y}
+                    className="text-xs px-2.5 py-1 rounded-full font-medium"
+                    style={{ background: '#fff', border: '1px solid #fcd34d', color: 'var(--color-text)' }}
+                  >
+                    {y}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {submitRecords.length > 0 && (
             <div>
@@ -777,12 +1523,26 @@ export default function QueMiPage() {
                     attempt={rec.attempt}
                     label={t('queMi.submitRecord', { n: rec.attempt })}
                   />
-                  <HandRow
-                    tiles={rec.guess}
-                    feedback={rec.feedback}
-                    frozen
-                    getSlotLabel={drawSlotLabel}
-                  />
+                  {rec.openGuess && puzzle.openMeldCount ? (
+                    <OpenGuessBoard
+                      meldCount={puzzle.openMeldCount}
+                      melds={rec.openGuess.melds}
+                      hand={rec.openGuess.hand}
+                      meldFeedback={rec.openFeedback?.meldFeedback}
+                      handFeedback={rec.openFeedback?.handFeedback}
+                      frozen
+                      drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
+                    />
+                  ) : (
+                    <HandRow
+                      tiles={rec.guess}
+                      drawSlotIndex={DRAW_SLOT_INDEX}
+                      dropPrefix="slot"
+                      feedback={rec.feedback}
+                      frozen
+                      getSlotLabel={drawSlotLabel}
+                    />
+                  )}
                 </div>
               ))}
               </div>
@@ -815,43 +1575,63 @@ export default function QueMiPage() {
               </div>
             </div>
 
-            <div className="p-3 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'rgba(255,255,255,0.5)' }}>
-              <HandRow
-                tiles={guess}
-                frozen={false}
-                draggable={inputMode === 'drag'}
-                getSlotLabel={drawSlotLabel}
-                handlers={{
-                  onClick: (i) => {
-                    if (inputMode === 'click' && guess[i]) removeFromSlot(i);
-                  },
-                  onDragStart: (i, e) => {
-                    const tile = guess[i];
-                    if (!tile) return;
-                    setDragTile({ source: i, tile });
-                    e.dataTransfer.setData('text/plain', tile);
-                    e.dataTransfer.setData('application/x-quemi-hand', String(i));
-                    e.dataTransfer.effectAllowed = 'move';
-                  },
-                  onDragEnd: endDrag,
-                  onDragOver: (e) => e.preventDefault(),
-                  onDrop: (i, e) => {
-                    e.preventDefault();
-                    const fromPalette = e.dataTransfer.getData('application/x-quemi-palette');
-                    if (fromPalette) {
-                      if (!canAddTile(fromPalette) && !guess[i]) return;
-                      placeTileAt(i, fromPalette);
-                      return;
-                    }
-                    if (dragTile?.source === 'palette') {
-                      placeTileAt(i, dragTile.tile);
-                    } else if (typeof dragTile?.source === 'number') {
-                      placeTileAt(i, dragTile.tile, dragTile.source);
-                    }
-                    setDragTile(null);
-                  },
-                }}
-              />
+            <div className="p-3 rounded-xl border min-w-0" style={{ borderColor: 'var(--color-border)', background: 'rgba(255,255,255,0.5)' }}>
+              {isOpen && openGuess && puzzle.openMeldCount ? (
+                <OpenGuessBoard
+                  meldCount={puzzle.openMeldCount}
+                  melds={openGuess.melds}
+                  hand={openGuess.hand}
+                  frozen={false}
+                  draggable={inputMode === 'drag'}
+                  drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
+                  meldHandlers={{
+                    onClick: (m, s) => {
+                      if (inputMode === 'click' && openGuess.melds[m]?.[s]) {
+                        removeFromOpenSlot({ area: 'meld', meld: m, slot: s });
+                      }
+                    },
+                    onPointerDown: (m, s, e) => {
+                      if (inputMode !== 'drag') return;
+                      const tile = openGuess.melds[m]?.[s];
+                      if (!tile) return;
+                      beginPointerDrag({ area: 'meld', meld: m, slot: s }, tile, e);
+                    },
+                  }}
+                  handHandlers={{
+                    onClick: (i) => {
+                      if (inputMode === 'click' && openGuess.hand[i]) {
+                        removeFromOpenSlot({ area: 'hand', index: i });
+                      }
+                    },
+                    onPointerDown: (i, e) => {
+                      if (inputMode !== 'drag') return;
+                      const tile = openGuess.hand[i];
+                      if (!tile) return;
+                      beginPointerDrag({ area: 'hand', index: i }, tile, e);
+                    },
+                  }}
+                />
+              ) : (
+                <HandRow
+                  tiles={guess}
+                  drawSlotIndex={DRAW_SLOT_INDEX}
+                  dropPrefix="slot"
+                  frozen={false}
+                  draggable={inputMode === 'drag'}
+                  getSlotLabel={drawSlotLabel}
+                  handlers={{
+                    onClick: (i) => {
+                      if (inputMode === 'click' && guess[i]) removeFromClosedSlot(i);
+                    },
+                    onPointerDown: (i, e) => {
+                      if (inputMode !== 'drag') return;
+                      const tile = guess[i];
+                      if (!tile) return;
+                      beginPointerDrag({ area: 'closed', index: i }, tile, e);
+                    },
+                  }}
+                />
+              )}
             </div>
           </div>
           )}
@@ -861,7 +1641,7 @@ export default function QueMiPage() {
               <div className="p-3 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="text-xs font-medium shrink-0" style={{ color: 'var(--color-text-light)' }}>{t('queMi.tilePicker')}</p>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     <button type="button" onClick={submitGuess} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">
                       {t('queMi.submit')}
                     </button>
@@ -881,17 +1661,15 @@ export default function QueMiPage() {
                     </button>
                   </div>
                 </div>
-                <div
-                  className="relative rounded-lg"
-                  onDragOver={allowPaletteDrop}
-                  onDrop={dropHandTileOnPalette}
-                >
-                {draggingFromHand && (
+                <div className="relative rounded-lg">
+                {draggingFromBoard && (
                   <div
-                    className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-lg pointer-events-none"
+                    data-quemi-drop="palette"
+                    className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 rounded-lg"
                     style={{
                       background: 'rgba(220, 38, 38, 0.58)',
                       border: '2px dashed rgba(255, 255, 255, 0.9)',
+                      touchAction: 'none',
                     }}
                     aria-hidden
                   >
@@ -908,22 +1686,16 @@ export default function QueMiPage() {
                   <div key={ri} className="flex flex-wrap gap-1 justify-center mb-1">
                     {row.map((tile) => {
                       const atCapacity = !canAddTile(tile);
-                      const clickDisabled = atCapacity || firstEmptyIndex < 0;
+                      const clickDisabled = atCapacity || (isOpen ? !firstEmptyOpenRef : firstEmptyIndex < 0);
                       return (
                         <button
                           key={tile}
                           type="button"
                           disabled={inputMode === 'click' && clickDisabled}
-                          draggable={inputMode === 'drag' && !atCapacity}
-                          onDragOver={allowPaletteDrop}
-                          onDrop={dropHandTileOnPalette}
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('application/x-quemi-palette', tile);
-                            e.dataTransfer.setData('text/plain', tile);
-                            setDragTile({ source: 'palette', tile });
-                            e.dataTransfer.effectAllowed = 'copy';
+                          onPointerDown={(e) => {
+                            if (inputMode !== 'drag' || atCapacity) return;
+                            beginPointerDrag('palette', tile, e);
                           }}
-                          onDragEnd={endDrag}
                           onClick={() => addTileClick(tile)}
                           style={{
                             border: 'none',
@@ -931,6 +1703,7 @@ export default function QueMiPage() {
                             padding: 0,
                             cursor: inputMode === 'click' && clickDisabled ? 'not-allowed' : 'pointer',
                             opacity: atCapacity ? 0.35 : 1,
+                            touchAction: inputMode === 'drag' && !atCapacity ? 'none' : undefined,
                           }}
                         >
                           <MahjongTile tile={tile} height={PICKER_TILE_HEIGHT} />
@@ -942,23 +1715,53 @@ export default function QueMiPage() {
                 </div>
               </div>
 
-              {errorKey && <p className="text-sm text-red-600">{t(errorKey)}</p>}
+              {errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
             </>
           )}
 
           {(phase === 'finished' || phase === 'review') && (
             <div className="p-5 rounded-xl border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
               <p className="text-lg font-bold" style={{ color: won ? '#16a34a' : 'var(--color-text)' }}>
-                {won ? t('queMi.win') : t('queMi.lose')}
+                {won ? t('queMi.win') : gaveUp ? t('queMi.gaveUp') : t('queMi.lose')}
               </p>
               <div>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answer')}</p>
-                <HandRow tiles={puzzle.answer} frozen getSlotLabel={drawSlotLabel} />
+                {puzzle.handMode === 'open' && puzzle.openAnswer && puzzle.openMeldCount ? (
+                  <OpenAnswerBoard
+                    answer={puzzle.openAnswer}
+                    meldCount={puzzle.openMeldCount}
+                    drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
+                  />
+                ) : (
+                  <HandRow
+                    tiles={puzzle.answer}
+                    drawSlotIndex={DRAW_SLOT_INDEX}
+                    dropPrefix="slot"
+                    frozen
+                    getSlotLabel={drawSlotLabel}
+                  />
+                )}
               </div>
+              {answerYaku.length > 0 && (
+                <div>
+                  <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answerYaku')}</p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {answerYaku.map((y) => (
+                      <li
+                        key={y}
+                        className="text-xs px-2.5 py-1 rounded-full font-medium"
+                        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        {y}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {phase === 'finished' ? (
                 <button
                   type="button"
-                  onClick={() => { setPhase('setup'); setPuzzle(null); }}
+                  onClick={backToSetup}
                   className="btn-primary px-5 py-2 rounded-xl text-sm font-semibold"
                 >
                   {t('queMi.playAgain')}
@@ -977,6 +1780,22 @@ export default function QueMiPage() {
         </div>
       )}
 
+      {pointerDragPos && dragTile && (
+        <div
+          className="fixed z-[100] pointer-events-none"
+          style={{
+            left: pointerDragPos.x,
+            top: pointerDragPos.y,
+            transform: 'translate(-50%, -50%)',
+            opacity: 0.92,
+            filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.25))',
+          }}
+          aria-hidden
+        >
+          <MahjongTile tile={dragTile.tile} height={PICKER_TILE_HEIGHT} />
+        </div>
+      )}
+
       {showGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="max-w-lg w-full p-6 rounded-2xl shadow-xl space-y-4" style={{ background: 'var(--color-card)' }}>
@@ -987,6 +1806,8 @@ export default function QueMiPage() {
               <li>{t('queMi.guideStep3')}</li>
               <li>{t('queMi.guideStep4')}</li>
               <li>{t('queMi.guideStep5')}</li>
+              <li>{t('queMi.guideStep6')}</li>
+              <li>{t('queMi.guideStep7')}</li>
             </ol>
             <button type="button" onClick={dismissGuide} className="btn-primary w-full py-2.5 rounded-xl text-sm font-semibold">
               {t('queMi.guideOk')}
@@ -997,16 +1818,4 @@ export default function QueMiPage() {
       </div>
     </div>
   );
-}
-
-const ATTEMPTS_MAP: Record<PuzzleDifficulty, number> = {
-  hard: 4,
-  advanced: 5,
-  medium: 6,
-  normal: 7,
-  easy: 8,
-};
-
-function ATTEMPTS_LABEL(h: QueMiHistoryEntry): number {
-  return ATTEMPTS_MAP[h.difficulty];
 }

@@ -6,9 +6,18 @@ import {
   TSUMO,
   RON,
   comparePai,
+  type Block,
 } from '@/mahjong-calc/types';
+import {
+  compareMeldFeedback,
+  compareOpenHandFeedback,
+  isOpenAnswerCorrect,
+  isOpenGuessComplete,
+  meldsToBlocks,
+} from './meld';
+import { computeShanten } from './shanten';
 import { buildCanonicalAnswer, tileToPai } from './tiles';
-import type { AgariWay, QueMiPuzzle, TileFeedback, Wind } from './types';
+import type { AgariWay, QueMiOpenGuess, QueMiPuzzle, QueMiOpenSubmitFeedback, TileFeedback, Wind } from './types';
 
 const WIND_TO_POS: Record<Wind, PositionType> = {
   east: PositionType.EAST,
@@ -21,6 +30,32 @@ export function isCompleteGuess(guess: (string | null)[]): guess is string[] {
   return guess.length === 14 && guess.every((t) => t && t.length > 0);
 }
 
+function buildCalcState(
+  hand13: string[],
+  draw: string,
+  field: Wind,
+  seat: Wind,
+  agariWay: AgariWay,
+  dora: string[],
+  furu: Block[] = [],
+): State {
+  const hand = hand13.map(tileToPai).sort(comparePai);
+  const agariPai = tileToPai(draw);
+  const doraPai = dora.map(tileToPai);
+  return new State(
+    WIND_TO_POS[field],
+    WIND_TO_POS[seat],
+    [],
+    agariWay === 'tsumo' ? TSUMO : RON,
+    hand,
+    furu,
+    doraPai,
+    [],
+    agariPai,
+    0,
+  );
+}
+
 export function isWinningHand(
   hand13: string[],
   draw: string,
@@ -28,31 +63,57 @@ export function isWinningHand(
   seat: Wind,
   agariWay: AgariWay,
   dora: string[],
+  furu: Block[] = [],
 ): boolean {
-  const hand = hand13.map(tileToPai).sort(comparePai);
-  const agariPai = tileToPai(draw);
-  const doraPai = dora.map(tileToPai);
-  const s = new State(
-    WIND_TO_POS[field],
-    WIND_TO_POS[seat],
-    [],
-    agariWay === 'tsumo' ? TSUMO : RON,
-    hand,
-    [],
-    doraPai,
-    [],
-    agariPai,
-    0,
-  );
-  const res = new Calculator().calculate(s, new Rule());
+  const res = new Calculator().calculate(buildCalcState(hand13, draw, field, seat, agariWay, dora, furu), new Rule());
   return res.isYakuman || res.hanRealYaku > 0;
+}
+
+export function getAnswerYaku(puzzle: QueMiPuzzle): string[] {
+  if (puzzle.handMode === 'open' && puzzle.openAnswer) {
+    const { closedHand, draw, melds } = puzzle.openAnswer;
+    const furu = meldsToBlocks(melds);
+    const res = new Calculator().calculate(
+      buildCalcState(closedHand, draw, puzzle.fieldWind, puzzle.seatWind, puzzle.agariWay, puzzle.dora, furu),
+      new Rule(),
+    );
+    return res.yaku;
+  }
+  const hand13 = puzzle.answer.slice(0, 13);
+  const draw = puzzle.answer[13]!;
+  const res = new Calculator().calculate(
+    buildCalcState(hand13, draw, puzzle.fieldWind, puzzle.seatWind, puzzle.agariWay, puzzle.dora),
+    new Rule(),
+  );
+  return res.yaku;
+}
+
+/** 提示用役种（不含宝牌） */
+export function getAnswerYakuHint(puzzle: QueMiPuzzle): string[] {
+  return getAnswerYaku(puzzle).filter((y) => !y.includes('宝牌'));
+}
+
+export function isKokushiWin(
+  hand13: string[],
+  draw: string,
+  field: Wind,
+  seat: Wind,
+  agariWay: AgariWay,
+  dora: string[],
+  furu: Block[] = [],
+): boolean {
+  const res = new Calculator().calculate(buildCalcState(hand13, draw, field, seat, agariWay, dora, furu), new Rule());
+  return res.isYakuman && res.yaku.some((y) => y.includes('国士'));
 }
 
 export type ValidateResult =
   | { ok: true; correct: boolean }
-  | { ok: false; reason: 'incomplete' | 'notWinning' | 'noYaku' | 'isWinning' };
+  | { ok: false; reason: 'incomplete' | 'notWinning' | 'noYaku' | 'isWinning' | 'shantenMismatch' };
 
 export function validateGuess(puzzle: QueMiPuzzle, guess: (string | null)[]): ValidateResult {
+  if (puzzle.handMode === 'open') {
+    return { ok: false, reason: 'incomplete' };
+  }
   if (!isCompleteGuess(guess)) return { ok: false, reason: 'incomplete' };
 
   const hand13 = guess.slice(0, 13);
@@ -68,11 +129,46 @@ export function validateGuess(puzzle: QueMiPuzzle, guess: (string | null)[]): Va
 
   if (puzzle.type === 'winnable') {
     if (!winning) return { ok: false, reason: 'notWinning' };
-  } else if (winning) {
-    return { ok: false, reason: 'isWinning' };
+  } else {
+    if (winning) return { ok: false, reason: 'isWinning' };
+    if (puzzle.shanten != null && computeShanten(hand13) !== puzzle.shanten) {
+      return { ok: false, reason: 'shantenMismatch' };
+    }
   }
 
   const correct = guess.every((t, i) => t === puzzle.answer[i]);
+  return { ok: true, correct };
+}
+
+export function validateOpenGuess(puzzle: QueMiPuzzle, openGuess: QueMiOpenGuess): ValidateResult {
+  if (puzzle.handMode !== 'open' || !puzzle.openAnswer || puzzle.openMeldCount == null) {
+    return { ok: false, reason: 'incomplete' };
+  }
+  if (!isOpenGuessComplete(puzzle.openMeldCount, openGuess.melds, openGuess.hand)) {
+    return { ok: false, reason: 'incomplete' };
+  }
+
+  const guessMelds = openGuess.melds as string[][];
+  const guessHand = openGuess.hand as string[];
+  const furu = meldsToBlocks(guessMelds);
+  const draw = guessHand[guessHand.length - 1]!;
+  const hand13 = guessHand.slice(0, -1) as string[];
+
+  const winCheck = isWinningHand(
+    hand13,
+    draw,
+    puzzle.fieldWind,
+    puzzle.seatWind,
+    puzzle.agariWay,
+    puzzle.dora,
+    furu,
+  );
+
+  if (puzzle.type === 'winnable' && !winCheck) {
+    return { ok: false, reason: 'notWinning' };
+  }
+
+  const correct = isOpenAnswerCorrect(puzzle.openAnswer, openGuess.melds, openGuess.hand);
   return { ok: true, correct };
 }
 
@@ -105,6 +201,14 @@ export function compareGuessFeedback(answer: string[], guess: string[]): TileFee
   }
 
   return feedback;
+}
+
+export function compareOpenGuessFeedback(puzzle: QueMiPuzzle, openGuess: QueMiOpenGuess): QueMiOpenSubmitFeedback {
+  const answer = puzzle.openAnswer!;
+  return {
+    meldFeedback: compareMeldFeedback(answer.melds, openGuess.melds),
+    handFeedback: compareOpenHandFeedback(answer, openGuess.hand),
+  };
 }
 
 function countMultiset(tiles: string[]): Record<string, number> {
