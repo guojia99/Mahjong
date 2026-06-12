@@ -256,6 +256,10 @@ func run(cmd *cobra.Command, args []string) error {
 		{
 			admin.GET("/login-logs/", handlers.LoginLogList)
 			admin.GET("/users/unbound/", handlers.UnboundUserList)
+			admin.GET("/que-mi/puzzles/", handlers.QueMiAdminPuzzleList)
+			admin.GET("/que-mi/blacklist/", handlers.QueMiBlacklistList)
+			admin.POST("/que-mi/blacklist/", handlers.QueMiBlacklistAdd)
+			admin.DELETE("/que-mi/blacklist/:user_id/", handlers.QueMiBlacklistRemove)
 		}
 
 		players := api.Group("/players", middleware.InvalidateQueryCacheAfterGameWrite())
@@ -397,6 +401,21 @@ func run(cmd *cobra.Command, args []string) error {
 			leagues.POST("/stages/:pk/generate-semifinal/", handlers.LeagueGenerateSemifinal)
 			leagues.POST("/stages/:pk/matches/offline/", handlers.LeagueCreateOfflineMatch)
 			leagues.POST("/stages/:pk/matches/online/", handlers.LeagueCreateOnlineMatch)
+		}
+
+		queMi := api.Group("/que-mi", middleware.InvalidateQueryCacheAfterGameWrite())
+		{
+			queMi.GET("/puzzles/", handlers.QueMiPuzzleList)
+			queMi.POST("/puzzles/", handlers.QueMiPuzzleCreate)
+			queMi.GET("/puzzles/:id/", handlers.QueMiPuzzleDetail)
+			queMi.DELETE("/puzzles/:id/", handlers.QueMiPuzzleDelete)
+			queMi.PATCH("/puzzles/:id/", handlers.QueMiPuzzlePatch)
+			queMi.POST("/puzzles/:id/start/", handlers.QueMiStartAttempt)
+			queMi.POST("/puzzles/:id/submit/", handlers.QueMiSubmitAnswer)
+			queMi.POST("/puzzles/:id/give-up/", handlers.QueMiGiveUp)
+			queMi.GET("/puzzles/:id/leaderboard/", handlers.QueMiLeaderboard)
+			queMi.GET("/my-attempts/", handlers.QueMiMyAttempts)
+			queMi.GET("/my-puzzles/", handlers.QueMiMyPuzzles)
 		}
 
 		tools := api.Group("/tools")

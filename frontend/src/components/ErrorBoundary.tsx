@@ -1,7 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
@@ -72,13 +71,13 @@ function ErrorFallbackView({ error, componentStack, onRetry }: {
           >
             <RefreshCw size={14} /> {t('common.retry')}
           </button>
-          <Link
-            to="/"
+          <a
+            href="/"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             <Home size={14} /> {t('errors.backHome')}
-          </Link>
+          </a>
         </div>
       </div>
     </div>

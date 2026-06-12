@@ -186,6 +186,10 @@ func InitDB(configPath string) *gorm.DB {
 		&models.User{},
 		&models.VerificationCode{},
 		&models.LoginLog{},
+		&models.QueMiPuzzle{},
+		&models.QueMiAttempt{},
+		&models.QueMiSubmit{},
+		&models.QueMiCreatorBlacklist{},
 	); err != nil {
 		panic("failed to migrate database: " + err.Error())
 	}

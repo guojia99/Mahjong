@@ -210,3 +210,43 @@ func TestInvalidateQueryCacheAfterPlayerWrite(t *testing.T) {
 		t.Fatal("expected games cache cleared after player write invalidation")
 	}
 }
+
+func TestInvalidateQueryCacheAfterQueMiWrite(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	InvalidateQueryCache()
+
+	var readHits int
+	r := gin.New()
+	api := r.Group("/api/v1")
+	queMi := api.Group("/que-mi", InvalidateQueryCacheAfterGameWrite())
+	queMi.POST("/puzzles/", func(c *gin.Context) {
+		c.Status(http.StatusCreated)
+	})
+	r.GET("/api/v1/que-mi/puzzles/", QueryCache(), func(c *gin.Context) {
+		readHits++
+		c.JSON(http.StatusOK, gin.H{"n": readHits})
+	})
+
+	readList := func() string {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/que-mi/puzzles/", nil))
+		return w.Body.String()
+	}
+
+	first := readList()
+	second := readList()
+	if first != second || !strings.Contains(second, `"n":1`) {
+		t.Fatalf("expected cached puzzle list: first=%s second=%s hits=%d", first, second, readHits)
+	}
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/que-mi/puzzles/", nil))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create puzzle status=%d", w.Code)
+	}
+
+	third := readList()
+	if readHits != 2 || !strings.Contains(third, `"n":2`) {
+		t.Fatalf("expected cache miss after que-mi create: hits=%d body=%s", readHits, third)
+	}
+}

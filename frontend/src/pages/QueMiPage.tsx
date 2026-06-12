@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   Maximize2,
   Minimize2,
@@ -23,6 +24,7 @@ import {
   XCircle,
   Lightbulb,
   Timer,
+  ArrowLeft,
 } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
 import { buildTileAvailability, generatePuzzle } from '@/mahjong-puzzle/generator';
@@ -51,7 +53,33 @@ import {
   type ShantenPreference,
   type TileFeedback,
 } from '@/mahjong-puzzle/types';
+import { formatQueMiDuration } from '@/components/que-mi/utils';
+import { QueMiLeaderboardPanel } from '@/components/que-mi/QueMiLeaderboard';
 import { QueMiGuide } from '@/pages/QueMiGuide';
+import {
+  getLeaderboard,
+  getPuzzle,
+  giveUp as giveUpOnline,
+  startAttempt,
+  submitAnswer,
+} from '@/api/queMi';
+import { isLoggedIn } from '@/api/auth';
+import { useAbortableEffect } from '@/hooks/useAbortableEffect';
+import { isAbortError } from '@/utils/http';
+import type { QueMiAttempt, QueMiLeaderboardEntry, QueMiPlayPuzzle, QueMiPuzzleDetail } from '@/types/queMi';
+import type { QueMiOpenSubmitFeedback } from '@/mahjong-puzzle/types';
+import {
+  apiSubmitsToHistory,
+  detailPuzzleToQueMi,
+  enrichSubmitHistory,
+  resolveOnlineAttemptPuzzle,
+  emptyGuessSlots,
+  initialOpenGuess,
+  playPuzzleToQueMi,
+  puzzleHasAnswer,
+  revealedPuzzleToQueMi,
+  startedAtMs,
+} from '@/pages/que-mi/onlineSession';
 import {
   compareGuessFeedback,
   compareOpenGuessFeedback,
@@ -68,7 +96,12 @@ const GUIDE_KEY = 'quemi-guide-seen';
 const DIFFICULTIES: PuzzleDifficulty[] = ['hard', 'advanced', 'medium', 'normal', 'easy'];
 const PUZZLE_TYPES: PuzzleType[] = ['winnable', 'nonWinnable'];
 
-type Phase = 'setup' | 'playing' | 'finished' | 'review';
+type Phase = 'setup' | 'loading' | 'login' | 'creator' | 'playing' | 'finished' | 'review';
+
+export type QueMiPageProps = {
+  /** When set, loads puzzle from API and syncs submits to the server. */
+  onlinePuzzleId?: string;
+};
 type InputMode = 'click' | 'drag';
 
 const PICKER_TILE_HEIGHT = 50;
@@ -172,17 +205,6 @@ function removeLastOpenTile(og: QueMiOpenGuess, meldCount: number): QueMiOpenGue
 }
 
 type ContextTagVariant = 'field' | 'seat' | 'agariTsumo' | 'agariRon' | 'dora' | 'shanten' | 'attempts' | 'timer';
-
-function formatDuration(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) {
-    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
 
 const CONTEXT_TAG_STYLES: Record<ContextTagVariant, { bg: string; border: string; label: string; value: string }> = {
   field: { bg: '#dbeafe', border: '#3b82f6', label: '#1e40af', value: '#1d4ed8' },
@@ -692,12 +714,21 @@ function OpenAnswerBoard({
   );
 }
 
-export default function QueMiPage() {
+export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiPageProps = {}) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { id: routePuzzleId } = useParams<{ id?: string }>();
+  const onlinePuzzleId = onlinePuzzleIdProp ?? routePuzzleId;
   const containerRef = useRef<HTMLDivElement>(null);
-  const restored = getInitialSession();
+  const isOnline = !!onlinePuzzleId;
+  const restored = isOnline ? null : getInitialSession();
 
-  const [phase, setPhase] = useState<Phase>(restored ? 'playing' : 'setup');
+  const [phase, setPhase] = useState<Phase>(
+    isOnline ? 'loading' : restored ? 'playing' : 'setup',
+  );
+  const [onlineDetail, setOnlineDetail] = useState<QueMiPuzzleDetail | null>(null);
+  const [leaderboard, setLeaderboard] = useState<QueMiLeaderboardEntry[]>([]);
+  const [onlineSubmitting, setOnlineSubmitting] = useState(false);
   const [puzzleType, setPuzzleType] = useState<PuzzleType>(restored?.puzzleType ?? 'winnable');
   const [handMode, setHandMode] = useState<HandMode>(restored?.handMode ?? 'closed');
   const [openMeldCountPref, setOpenMeldCountPref] = useState<OpenMeldCountPref>(
@@ -732,23 +763,145 @@ export default function QueMiPage() {
   const [gameDurationMs, setGameDurationMs] = useState<number | null>(null);
   const [timerTick, setTimerTick] = useState(0);
 
+  const refreshLeaderboard = useCallback(async (puzzleId: string) => {
+    try {
+      const lb = await getLeaderboard(puzzleId);
+      setLeaderboard(lb);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const applyOnlinePlaying = useCallback(
+    (_detail: QueMiPuzzleDetail, puzzleForPlay: QueMiPlayPuzzle, attempt: QueMiAttempt) => {
+      const queMi = playPuzzleToQueMi(puzzleForPlay);
+      setPuzzle(queMi);
+      setPuzzleType(queMi.type);
+      setHandMode(queMi.handMode);
+      setDifficulty(queMi.difficulty);
+      setAttemptsLeft(attempt.attempts_left);
+      setSubmitRecords(apiSubmitsToHistory(attempt.submits));
+      setGuess(emptyGuessSlots());
+      setOpenGuess(initialOpenGuess(queMi));
+      setWon(attempt.won);
+      setGaveUp(false);
+      setYakuHintShown(false);
+      setGameStartedAt(startedAtMs(attempt));
+      setGameDurationMs(attempt.duration_ms ?? null);
+      setErrorKey(null);
+      setPhase('playing');
+    },
+    [],
+  );
+
+  const applyOnlineFinished = useCallback((detail: QueMiPuzzleDetail, attempt: QueMiAttempt) => {
+    const queMi = resolveOnlineAttemptPuzzle(detail.id, detail, attempt);
+    setPuzzle(queMi);
+    setPuzzleType(queMi.type);
+    setHandMode(queMi.handMode);
+    setDifficulty(queMi.difficulty);
+    setAttemptsLeft(attempt.attempts_left);
+    setSubmitRecords(apiSubmitsToHistory(attempt.submits, queMi));
+    setGuess(emptyGuessSlots());
+    setOpenGuess(null);
+    setWon(attempt.won);
+    setGaveUp(false);
+    setYakuHintShown(false);
+    setGameStartedAt(null);
+    setGameDurationMs(attempt.duration_ms ?? null);
+    setErrorKey(null);
+    setPhase('finished');
+  }, []);
+
+  useAbortableEffect(
+    (signal) => {
+      if (!isOnline || !onlinePuzzleId) return;
+      (async () => {
+        try {
+          const detail = await getPuzzle(onlinePuzzleId, { signal });
+          if (signal.aborted) return;
+          setOnlineDetail(detail);
+          await refreshLeaderboard(onlinePuzzleId);
+
+          if (detail.is_mine) {
+            setPuzzle(detailPuzzleToQueMi(detail));
+            setPhase('creator');
+            return;
+          }
+          if (!isLoggedIn()) {
+            setPuzzle(playPuzzleToQueMi({
+              id: detail.id,
+              type: detail.puzzle.type,
+              difficulty: detail.puzzle.difficulty,
+              max_attempts: detail.puzzle.maxAttempts,
+              hand_mode: detail.puzzle.handMode,
+              open_meld_count: detail.puzzle.openMeldCount,
+              field_wind: detail.puzzle.fieldWind,
+              seat_wind: detail.puzzle.seatWind,
+              agari_way: detail.puzzle.agariWay,
+              dora: detail.puzzle.dora,
+              shanten: detail.puzzle.shanten,
+            }));
+            setPhase('login');
+            return;
+          }
+
+          if (detail.my_attempt) {
+            if (detail.my_attempt.status !== 'in_progress') {
+              applyOnlineFinished(detail, detail.my_attempt);
+              return;
+            }
+            const playPayload = {
+              id: detail.id,
+              type: detail.puzzle.type,
+              difficulty: detail.puzzle.difficulty,
+              max_attempts: detail.puzzle.maxAttempts,
+              hand_mode: detail.puzzle.handMode,
+              open_meld_count: detail.puzzle.openMeldCount,
+              field_wind: detail.puzzle.fieldWind,
+              seat_wind: detail.puzzle.seatWind,
+              agari_way: detail.puzzle.agariWay,
+              dora: detail.puzzle.dora,
+              shanten: detail.puzzle.shanten,
+            };
+            applyOnlinePlaying(detail, playPayload, detail.my_attempt);
+            return;
+          }
+
+          const res = await startAttempt(onlinePuzzleId);
+          if (signal.aborted) return;
+          applyOnlinePlaying(detail, res.puzzle, res.attempt);
+        } catch (e) {
+          if (!isAbortError(e)) {
+            setErrorKey('queMiOnline.loadFailed');
+            if (!signal.aborted) setPhase('login');
+          }
+        }
+      })();
+    },
+    [isOnline, onlinePuzzleId, applyOnlinePlaying, applyOnlineFinished, refreshLeaderboard],
+  );
+
   const tileAvail = useMemo(
     () => (puzzle ? buildTileAvailability(puzzle.dora) : {}),
     [puzzle],
   );
 
   const answerYaku = useMemo(
-    () => (puzzle?.type === 'winnable' ? getAnswerYaku(puzzle) : []),
+    () =>
+      puzzle?.type === 'winnable' && puzzleHasAnswer(puzzle) ? getAnswerYaku(puzzle) : [],
     [puzzle],
   );
 
   const answerYakuHint = useMemo(
-    () => (puzzle?.type === 'winnable' ? getAnswerYakuHint(puzzle) : []),
+    () =>
+      puzzle?.type === 'winnable' && puzzleHasAnswer(puzzle) ? getAnswerYakuHint(puzzle) : [],
     [puzzle],
   );
 
   const hintAvailable =
-    phase === 'playing'
+    !isOnline
+    && phase === 'playing'
     && puzzle?.type === 'winnable'
     && HINT_DIFFICULTIES.includes(puzzle.difficulty);
 
@@ -834,27 +987,73 @@ export default function QueMiPage() {
     saveHistory(next);
   };
 
-  const finishGame = (
+  const finishGame = async (
     didWin: boolean,
     p: QueMiPuzzle,
     used: number,
     submits: QueMiHistorySubmit[],
     surrendered = false,
+    onlinePayload?: { revealed_puzzle?: QueMiPuzzle; attempt?: QueMiAttempt },
   ) => {
     const durationMs = gameStartedAt != null ? Date.now() - gameStartedAt : 0;
-    clearSession();
+    if (!isOnline) clearSession();
     setGameStartedAt(null);
     setGameDurationMs(durationMs);
     setWon(didWin);
     setGaveUp(surrendered);
     setPhase('finished');
+    if (isOnline && onlinePuzzleId) {
+      try {
+        if (onlinePayload?.revealed_puzzle) {
+          const resolved = revealedPuzzleToQueMi(onlinePuzzleId, onlinePayload.revealed_puzzle);
+          setPuzzle(resolved);
+          if (onlinePayload.attempt) {
+            setSubmitRecords(apiSubmitsToHistory(onlinePayload.attempt.submits, resolved));
+            setWon(onlinePayload.attempt.won);
+            setGameDurationMs(onlinePayload.attempt.duration_ms ?? durationMs);
+            setAttemptsLeft(onlinePayload.attempt.attempts_left);
+          } else {
+            setSubmitRecords(enrichSubmitHistory(submits, resolved));
+          }
+        } else {
+          const full = await getPuzzle(onlinePuzzleId);
+          const resolved = full.my_attempt
+            ? resolveOnlineAttemptPuzzle(onlinePuzzleId, full, full.my_attempt)
+            : detailPuzzleToQueMi(full);
+          setPuzzle(resolved);
+          if (full.my_attempt) {
+            setSubmitRecords(apiSubmitsToHistory(full.my_attempt.submits, resolved));
+            setWon(full.my_attempt.won);
+            setGameDurationMs(full.my_attempt.duration_ms ?? durationMs);
+            setAttemptsLeft(full.my_attempt.attempts_left);
+          } else {
+            setSubmitRecords(submits);
+          }
+        }
+        await refreshLeaderboard(onlinePuzzleId);
+      } catch {
+        setPuzzle(p);
+        setSubmitRecords(submits);
+      }
+      return;
+    }
     recordResult(p, didWin, used, submits, durationMs);
   };
 
-  const giveUp = () => {
+  const giveUp = async () => {
     if (!puzzle || phase !== 'playing') return;
     const used = puzzle.maxAttempts - attemptsLeft;
-    finishGame(false, puzzle, used, submitRecords, true);
+    let giveUpPayload: { revealed_puzzle?: QueMiPuzzle; attempt?: QueMiAttempt } | undefined;
+    if (isOnline && onlinePuzzleId) {
+      try {
+        const res = await giveUpOnline(onlinePuzzleId);
+        giveUpPayload = res;
+      } catch {
+        setErrorKey('queMiOnline.giveUpFailed');
+        return;
+      }
+    }
+    await finishGame(false, puzzle, used, submitRecords, true, giveUpPayload);
   };
 
   const openHistoryReview = (entry: QueMiHistoryEntry) => {
@@ -886,6 +1085,10 @@ export default function QueMiPage() {
   };
 
   const backToSetup = () => {
+    if (isOnline) {
+      navigate('/que-mi/online');
+      return;
+    }
     clearSession();
     setPhase('setup');
     setPuzzle(null);
@@ -894,8 +1097,8 @@ export default function QueMiPage() {
     setGameDurationMs(null);
   };
 
-  const submitGuess = () => {
-    if (!puzzle || phase !== 'playing') return;
+  const submitGuess = async () => {
+    if (!puzzle || phase !== 'playing' || onlineSubmitting) return;
 
     if (isOpen && openGuess) {
       const result = validateOpenGuess(puzzle, openGuess);
@@ -904,31 +1107,71 @@ export default function QueMiPage() {
         return;
       }
       setErrorKey(null);
+      const attemptNum = puzzle.maxAttempts - attemptsLeft + 1;
+      const openGuessPayload = {
+        melds: openGuess.melds.map((m) => m.map((t) => t!)) as string[][],
+        hand: openGuess.hand.map((t) => t!) as string[],
+      };
+
+      if (isOnline && onlinePuzzleId) {
+        setOnlineSubmitting(true);
+        try {
+          const res = await submitAnswer(onlinePuzzleId, { open_guess: openGuessPayload });
+          if (!res.ok) {
+            setErrorKey(`queMi.error.${res.reason}`);
+            return;
+          }
+          const openFb = res.feedback as QueMiOpenSubmitFeedback;
+          const updatedSubmits: QueMiHistorySubmit[] = [
+            ...submitRecords,
+            {
+              attempt: attemptNum,
+              guess: collectOpenTiles(openGuess).filter(Boolean) as string[],
+              feedback: [],
+              openGuess: openGuessPayload,
+              openFeedback: openFb,
+            },
+          ];
+          setSubmitRecords(updatedSubmits);
+          if (res.correct) {
+            await finishGame(true, puzzle, attemptNum, updatedSubmits, false, res);
+            return;
+          }
+          setAttemptsLeft(res.attempts_left ?? attemptsLeft - 1);
+          if (res.status !== 'in_progress') {
+            await finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits, false, res);
+          } else if (puzzle.openMeldCount) {
+            setOpenGuess(emptyOpenGuess(puzzle.openMeldCount));
+          }
+        } catch {
+          setErrorKey('queMiOnline.submitFailed');
+        } finally {
+          setOnlineSubmitting(false);
+        }
+        return;
+      }
+
       const openFb = compareOpenGuessFeedback(puzzle, openGuess);
       const guessTiles = collectOpenTiles(openGuess).filter(Boolean) as string[];
-      const attemptNum = puzzle.maxAttempts - attemptsLeft + 1;
       const updatedSubmits: QueMiHistorySubmit[] = [
         ...submitRecords,
         {
           attempt: attemptNum,
           guess: guessTiles,
           feedback: [],
-          openGuess: {
-            melds: openGuess.melds.map((m) => m.map((t) => t!)) as string[][],
-            hand: openGuess.hand.map((t) => t!) as string[],
-          },
+          openGuess: openGuessPayload,
           openFeedback: openFb,
         },
       ];
       setSubmitRecords(updatedSubmits);
       if (result.correct) {
-        finishGame(true, puzzle, attemptNum, updatedSubmits);
+        await finishGame(true, puzzle, attemptNum, updatedSubmits);
         return;
       }
       const nextAttempts = attemptsLeft - 1;
       setAttemptsLeft(nextAttempts);
       if (nextAttempts <= 0) {
-        finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits);
+        await finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits);
       } else if (puzzle.openMeldCount) {
         setOpenGuess(emptyOpenGuess(puzzle.openMeldCount));
       }
@@ -942,8 +1185,41 @@ export default function QueMiPage() {
     }
     setErrorKey(null);
     const guessTiles = guess as string[];
-    const fb = compareGuessFeedback(puzzle.answer, guessTiles);
     const attemptNum = puzzle.maxAttempts - attemptsLeft + 1;
+
+    if (isOnline && onlinePuzzleId) {
+      setOnlineSubmitting(true);
+      try {
+        const res = await submitAnswer(onlinePuzzleId, { guess: guessTiles });
+        if (!res.ok) {
+          setErrorKey(`queMi.error.${res.reason}`);
+          return;
+        }
+        const fb = (Array.isArray(res.feedback) ? res.feedback : []) as TileFeedback[];
+        const updatedSubmits: QueMiHistorySubmit[] = [
+          ...submitRecords,
+          { attempt: attemptNum, guess: guessTiles, feedback: fb },
+        ];
+        setSubmitRecords(updatedSubmits);
+        if (res.correct) {
+          await finishGame(true, puzzle, attemptNum, updatedSubmits, false, res);
+          return;
+        }
+        setAttemptsLeft(res.attempts_left ?? attemptsLeft - 1);
+        if (res.status !== 'in_progress') {
+          await finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits, false, res);
+        } else {
+          setGuess(emptySlots());
+        }
+      } catch {
+        setErrorKey('queMiOnline.submitFailed');
+      } finally {
+        setOnlineSubmitting(false);
+      }
+      return;
+    }
+
+    const fb = compareGuessFeedback(puzzle.answer, guessTiles);
     const updatedSubmits: QueMiHistorySubmit[] = [
       ...submitRecords,
       { attempt: attemptNum, guess: guessTiles, feedback: fb },
@@ -951,14 +1227,14 @@ export default function QueMiPage() {
     setSubmitRecords(updatedSubmits);
 
     if (result.correct) {
-      finishGame(true, puzzle, attemptNum, updatedSubmits);
+      await finishGame(true, puzzle, attemptNum, updatedSubmits);
       return;
     }
 
     const nextAttempts = attemptsLeft - 1;
     setAttemptsLeft(nextAttempts);
     if (nextAttempts <= 0) {
-      finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits);
+      await finishGame(false, puzzle, puzzle.maxAttempts, updatedSubmits);
     } else {
       setGuess(emptySlots());
     }
@@ -1190,6 +1466,7 @@ export default function QueMiPage() {
   }, []);
 
   useEffect(() => {
+    if (isOnline) return;
     if (phase !== 'playing' || !puzzle) {
       if (phase !== 'playing') clearSession();
       return;
@@ -1210,7 +1487,7 @@ export default function QueMiPage() {
       yakuHintShown,
       startedAt: gameStartedAt ?? Date.now(),
     });
-  }, [phase, puzzle, puzzleType, handMode, openMeldCountPref, difficulty, shantenPreference, guess, openGuess, attemptsLeft, submitRecords, inputMode, yakuHintShown, gameStartedAt]);
+  }, [isOnline, phase, puzzle, puzzleType, handMode, openMeldCountPref, difficulty, shantenPreference, guess, openGuess, attemptsLeft, submitRecords, inputMode, yakuHintShown, gameStartedAt]);
 
   useEffect(() => {
     if (phase !== 'playing' || !gameStartedAt) return;
@@ -1252,6 +1529,14 @@ export default function QueMiPage() {
   const shantenPrefLabel = (pref: ShantenPreference) =>
     pref === 'random' ? t('queMi.shantenRandom') : t('queMi.shantenCount', { n: pref });
 
+  if (isOnline && phase === 'loading') {
+    return (
+      <div className="flex items-center justify-center py-20" style={{ color: 'var(--color-text-light)' }}>
+        {t('common.loading')}
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -1259,10 +1544,24 @@ export default function QueMiPage() {
       style={{ background: fullscreen ? 'var(--color-bg)' : undefined }}
     >
       <div className={fullscreen ? 'w-full max-w-4xl' : 'w-full'}>
+      {isOnline && (
+        <div className="mb-4">
+          <Link to="/que-mi/online" className="btn btn-sm btn-outline inline-flex items-center gap-1">
+            <ArrowLeft size={14} />
+            {t('queMiOnline.back')}
+          </Link>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>{t('queMi.title')}</h1>
-          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-light)' }}>{t('queMi.subtitle')}</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
+            {isOnline ? t('queMiOnline.title') : t('queMi.title')}
+          </h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-light)' }}>
+            {isOnline && onlineDetail
+              ? t('queMiOnline.byCreator', { name: onlineDetail.creator_name })
+              : t('queMi.subtitle')}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {phase === 'playing' && (
@@ -1275,14 +1574,16 @@ export default function QueMiPage() {
               {t('queMi.giveUp')}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setShowHistory((v) => !v)}
-            className="btn-secondary text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
-          >
-            <History size={16} />
-            {t('queMi.history')}
-          </button>
+          {!isOnline && (
+            <button
+              type="button"
+              onClick={() => setShowHistory((v) => !v)}
+              className="btn-secondary text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+            >
+              <History size={16} />
+              {t('queMi.history')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowGuide(true)}
@@ -1330,7 +1631,7 @@ export default function QueMiPage() {
                       <span className="shrink-0">{new Date(h.timestamp).toLocaleString()}</span>
                       <span className="truncate" style={{ color: 'var(--color-text-light)' }}>
                         {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)} · {h.attemptsUsed}/{ATTEMPTS_BY_DIFFICULTY[h.difficulty]}
-                        {h.durationMs != null ? ` · ${formatDuration(h.durationMs)}` : ''}
+                        {h.durationMs != null ? ` · ${formatQueMiDuration(h.durationMs)}` : ''}
                       </span>
                     </button>
                   </li>
@@ -1341,11 +1642,53 @@ export default function QueMiPage() {
         </div>
       )}
 
-      {errorKey && phase === 'setup' && (
+      {errorKey && (phase === 'setup' || phase === 'loading') && (
         <p className="text-sm text-red-600 mb-4">{errorMessage}</p>
       )}
 
-      {phase === 'setup' && (
+      {isOnline && phase === 'login' && (
+        <div className="p-6 rounded-2xl border text-center space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+          {errorKey ? (
+            <p className="text-sm text-red-600">{errorMessage}</p>
+          ) : (
+            <>
+              <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>{t('queMiOnline.loginToPlay')}</p>
+              <Link to="/login" className="btn btn-primary btn-sm">{t('nav.login', { defaultValue: 'Login' })}</Link>
+            </>
+          )}
+        </div>
+      )}
+
+      {isOnline && phase === 'creator' && puzzle && (
+        <div className="space-y-5">
+          <div className="p-4 rounded-xl border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-light)' }}>
+            {t('queMiOnline.creatorView')}
+          </div>
+          {(phase === 'creator') && (
+            <div className="p-5 rounded-xl border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+              <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answer')}</p>
+              {puzzle.handMode === 'open' && puzzle.openAnswer && puzzle.openMeldCount ? (
+                <OpenAnswerBoard
+                  answer={puzzle.openAnswer}
+                  meldCount={puzzle.openMeldCount}
+                  drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
+                />
+              ) : (puzzle.answer?.length ?? 0) === 14 ? (
+                <HandRow
+                  tiles={puzzle.answer}
+                  drawSlotIndex={DRAW_SLOT_INDEX}
+                  dropPrefix="slot"
+                  frozen
+                  getSlotLabel={drawSlotLabel}
+                />
+              ) : null}
+            </div>
+          )}
+          <QueMiLeaderboardPanel entries={leaderboard} />
+        </div>
+      )}
+
+      {phase === 'setup' && !isOnline && (
         <div className="p-6 rounded-2xl border space-y-6" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
           <div>
             <h2 className="text-sm font-semibold mb-2">{t('queMi.selectType')}</h2>
@@ -1529,7 +1872,7 @@ export default function QueMiPage() {
                 <ContextTag variant="timer" label={t('queMi.timerTag')}>
                   <span className="inline-flex items-center gap-1 tabular-nums">
                     <Timer size={12} aria-hidden />
-                    {formatDuration(liveDurationMs)}
+                    {formatQueMiDuration(liveDurationMs)}
                   </span>
                 </ContextTag>
                 <ContextTag variant="attempts" label={t('queMi.attemptsTag')}>
@@ -1695,7 +2038,7 @@ export default function QueMiPage() {
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="text-xs font-medium shrink-0" style={{ color: 'var(--color-text-light)' }}>{t('queMi.tilePicker')}</p>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                    <button type="button" onClick={submitGuess} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    <button type="button" onClick={() => void submitGuess()} disabled={onlineSubmitting} className="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50">
                       {t('queMi.submit')}
                     </button>
                     <button
@@ -1781,7 +2124,7 @@ export default function QueMiPage() {
                 {displayDurationMs != null && (
                   <span className="text-sm tabular-nums inline-flex items-center gap-1" style={{ color: 'var(--color-text-light)' }}>
                     <Timer size={14} aria-hidden />
-                    {t('queMi.duration', { time: formatDuration(displayDurationMs) })}
+                    {t('queMi.duration', { time: formatQueMiDuration(displayDurationMs) })}
                   </span>
                 )}
               </div>
@@ -1825,7 +2168,7 @@ export default function QueMiPage() {
                   onClick={backToSetup}
                   className="btn-primary px-5 py-2 rounded-xl text-sm font-semibold"
                 >
-                  {t('queMi.playAgain')}
+                  {isOnline ? t('queMiOnline.backToList') : t('queMi.playAgain')}
                 </button>
               ) : (
                 <button
@@ -1839,6 +2182,10 @@ export default function QueMiPage() {
             </div>
           )}
         </div>
+      )}
+
+      {isOnline && (phase === 'playing' || phase === 'finished') && (
+        <QueMiLeaderboardPanel entries={leaderboard} />
       )}
 
       {pointerDragPos && dragTile && (

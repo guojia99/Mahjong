@@ -70,6 +70,15 @@ var playerWritePaths = map[string]struct{}{
 	"/api/v1/players/majsoul-accounts/:account_pk/":    {},
 }
 
+// queMiWritePaths invalidate cached que-mi reads (puzzle list, detail, leaderboard, etc.).
+var queMiWritePaths = map[string]struct{}{
+	"/api/v1/que-mi/puzzles/":                  {},
+	"/api/v1/que-mi/puzzles/:id/":              {},
+	"/api/v1/que-mi/puzzles/:id/start/":        {},
+	"/api/v1/que-mi/puzzles/:id/submit/":       {},
+	"/api/v1/que-mi/puzzles/:id/give-up/":      {},
+}
+
 func buildQueryCacheKey(method, path, rawQuery string, body []byte, authToken, xToken string) string {
 	h := sha256.New()
 	_, _ = h.Write([]byte(method))
@@ -136,7 +145,10 @@ func invalidatesQueryCache(fullPath string) bool {
 	if _, ok := gameWritePaths[fullPath]; ok {
 		return true
 	}
-	_, ok := playerWritePaths[fullPath]
+	if _, ok := playerWritePaths[fullPath]; ok {
+		return true
+	}
+	_, ok := queMiWritePaths[fullPath]
 	return ok
 }
 

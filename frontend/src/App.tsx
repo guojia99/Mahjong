@@ -39,6 +39,11 @@ const DiscardAdvisePage = lazy(() => import('@/pages/DiscardAdvisePage'));
 const CalculatorPage = lazy(() => import('@/pages/CalculatorPage'));
 const PracticePage = lazy(() => import('@/pages/PracticePage'));
 const QueMiPage = lazy(() => import('@/pages/QueMiPage'));
+const QueMiOnlinePage = lazy(() => import('@/pages/que-mi/QueMiOnlinePage'));
+const QueMiCreatePage = lazy(() => import('@/pages/que-mi/QueMiCreatePage'));
+const QueMiMyAttemptsPage = lazy(() => import('@/pages/que-mi/QueMiMyAttemptsPage'));
+const QueMiMyPuzzlesPage = lazy(() => import('@/pages/que-mi/QueMiMyPuzzlesPage'));
+const QueMiAdminPage = lazy(() => import('@/pages/que-mi/QueMiAdminPage'));
 const OnlineGamePage = lazy(() => import('@/pages/OnlineGamePage'));
 const RankingLeaderboardPage = lazy(() => import('@/pages/RankingLeaderboardPage'));
 const RankingAdminPage = lazy(() => import('@/pages/RankingAdminPage'));
@@ -253,6 +258,56 @@ function App() {
             element={
               <LazyPage>
                 <QueMiPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/online"
+            element={
+              <LazyPage>
+                <QueMiOnlinePage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/online/create"
+            element={
+              <LazyPage>
+                <QueMiCreatePage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/online/mine"
+            element={
+              <LazyPage>
+                <QueMiMyAttemptsPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/online/my-puzzles"
+            element={
+              <LazyPage>
+                <QueMiMyPuzzlesPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/online/:id"
+            element={
+              <LazyPage>
+                <QueMiPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="que-mi/admin"
+            element={
+              <LazyPage>
+                <AdminRoute>
+                  <QueMiAdminPage />
+                </AdminRoute>
               </LazyPage>
             }
           />

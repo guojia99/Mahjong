@@ -89,6 +89,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     icon: Puzzle,
     children: [
       { type: 'item', path: '/que-mi', labelKey: 'nav.queMi', icon: Puzzle },
+      { type: 'item', path: '/que-mi/online', labelKey: 'nav.queMiOnline', icon: Globe },
     ],
   },
   {
@@ -137,6 +138,7 @@ const NAV_STRUCTURE: NavEntry[] = [
       { type: 'item', path: '/rooms/online', labelKey: 'nav.onlineImport', icon: Globe },
       { type: 'item', path: '/league-admin', labelKey: 'nav.leagueAdmin', icon: Swords },
       { type: 'item', path: '/ranking-admin', labelKey: 'nav.rankingAdmin', icon: Settings },
+      { type: 'item', path: '/que-mi/admin', labelKey: 'nav.queMiAdmin', icon: Puzzle },
     ],
   },
 ];
@@ -158,6 +160,12 @@ function matchActive(pathname: string, target: string): boolean {
   }
   if (target === '/league-admin') {
     return pathname === '/league-admin' || pathname.startsWith('/league-admin/');
+  }
+  if (target === '/que-mi/online') {
+    return pathname === '/que-mi/online' || pathname.startsWith('/que-mi/online/');
+  }
+  if (target === '/que-mi') {
+    return pathname === '/que-mi';
   }
   return pathname === target;
 }

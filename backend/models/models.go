@@ -469,6 +469,18 @@ func (j JSONField) AsArray() []interface{} {
 	return nil
 }
 
+// AsInterface unmarshals JSON of any shape (object or array).
+func (j JSONField) AsInterface() interface{} {
+	if j.IsNil() {
+		return nil
+	}
+	var v interface{}
+	if json.Unmarshal(j, &v) != nil {
+		return nil
+	}
+	return v
+}
+
 func (j JSONField) IsNil() bool {
 	return len(j) == 0 || string(j) == "null" || string(j) == "{}"
 }
@@ -519,3 +531,61 @@ func mustMarshal(v interface{}) []byte {
 func mustUnmarshal(data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
+
+const (
+	QueMiAttemptStatusInProgress = "in_progress"
+	QueMiAttemptStatusWon        = "won"
+	QueMiAttemptStatusLost       = "lost"
+)
+
+type QueMiPuzzle struct {
+	ID          string    `gorm:"primaryKey;size:36" json:"id"`
+	CreatedByID uint64    `gorm:"column:created_by_id;not null;index" json:"-"`
+	CreatedBy   *User     `gorm:"foreignKey:CreatedByID" json:"-"`
+	PuzzleData  JSONField `gorm:"column:puzzle_data;type:text;not null" json:"puzzle_data"`
+	IsDisabled  bool      `gorm:"column:is_disabled;default:false;index" json:"is_disabled"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+}
+
+func (QueMiPuzzle) TableName() string { return "que_mi_puzzles" }
+
+type QueMiAttempt struct {
+	ID           string     `gorm:"primaryKey;size:36" json:"id"`
+	PuzzleID     string     `gorm:"column:puzzle_id;size:36;not null;uniqueIndex:idx_quemi_attempt_user_puzzle" json:"puzzle_id"`
+	Puzzle       *QueMiPuzzle `gorm:"foreignKey:PuzzleID" json:"-"`
+	UserID       uint64     `gorm:"column:user_id;not null;uniqueIndex:idx_quemi_attempt_user_puzzle;index" json:"-"`
+	User         *User      `gorm:"foreignKey:UserID" json:"-"`
+	Status       string     `gorm:"size:20;not null;default:'in_progress';index" json:"status"`
+	AttemptsLeft int        `gorm:"column:attempts_left;not null" json:"attempts_left"`
+	Won          bool       `gorm:"default:false" json:"won"`
+	AttemptsUsed int        `gorm:"column:attempts_used;default:0" json:"attempts_used"`
+	DurationMs   int        `gorm:"column:duration_ms;default:0" json:"duration_ms"`
+	SessionState JSONField  `gorm:"column:session_state;type:text;default:'{}'" json:"session_state,omitempty"`
+	StartedAt    time.Time  `gorm:"column:started_at;autoCreateTime" json:"started_at"`
+	FinishedAt   *time.Time `gorm:"column:finished_at" json:"finished_at,omitempty"`
+}
+
+func (QueMiAttempt) TableName() string { return "que_mi_attempts" }
+
+type QueMiSubmit struct {
+	ID        string    `gorm:"primaryKey;size:36" json:"id"`
+	AttemptID string    `gorm:"column:attempt_id;size:36;not null;index" json:"attempt_id"`
+	Attempt   *QueMiAttempt `gorm:"foreignKey:AttemptID" json:"-"`
+	AttemptNo int       `gorm:"column:attempt_no;not null" json:"attempt_no"`
+	Guess     JSONField `gorm:"column:guess;type:text;not null" json:"guess"`
+	Feedback  JSONField `gorm:"column:feedback;type:text;not null" json:"feedback"`
+	Correct   bool      `gorm:"not null" json:"correct"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (QueMiSubmit) TableName() string { return "que_mi_submits" }
+
+type QueMiCreatorBlacklist struct {
+	UserID      uint64    `gorm:"primaryKey;column:user_id" json:"user_id"`
+	User        *User     `gorm:"foreignKey:UserID" json:"-"`
+	BlockedByID uint64    `gorm:"column:blocked_by_id;not null" json:"blocked_by_id"`
+	BlockedBy   *User     `gorm:"foreignKey:BlockedByID" json:"-"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (QueMiCreatorBlacklist) TableName() string { return "que_mi_creator_blacklist" }

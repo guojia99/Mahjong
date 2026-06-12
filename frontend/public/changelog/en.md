@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.5.0 — 2026-06-12
+
+- Online QueMi: browse community puzzles, create and share your own (login required), per-puzzle leaderboard
+- Track your attempts; creators can view answers and leaderboard only; admins can disable puzzles and manage creator blacklist
+- New "My puzzles" list; puzzle list filters (unplayed, difficulty, type, hand mode); improved create page layout
+
 ## v3.4.1 — 2026-06-12
 
 - Logged-in users can change password from the sidebar (current password required, no email verification)
