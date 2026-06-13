@@ -132,6 +132,27 @@ func TestFindUserForLoginByNickname(t *testing.T) {
 	}
 }
 
+func TestFindUserForLoginByEmail(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupAuthTestDB(t)
+
+	user := models.User{
+		Username: "email_user",
+		Email:    "Player@Example.COM",
+		Password: auth.HashPassword("secret12"),
+		IsActive: true,
+	}
+	config.DB.Create(&user)
+
+	found, err := findUserForLogin("player@example.com")
+	if err != nil || found == nil {
+		t.Fatal("expected user found by email")
+	}
+	if found.ID != user.ID {
+		t.Fatal("wrong user")
+	}
+}
+
 func TestPlayerBindAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	setupAuthTestDB(t)

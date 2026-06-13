@@ -20,6 +20,11 @@ func findUserForLogin(name string) (*models.User, error) {
 	if err := config.DB.Where("username = ?", name).First(&user).Error; err == nil {
 		return &user, nil
 	}
+	if strings.Contains(name, "@") {
+		if err := config.DB.Where("LOWER(email) = ?", normalizeEmail(name)).First(&user).Error; err == nil {
+			return &user, nil
+		}
+	}
 	var player models.Player
 	if err := config.DB.Where("nickname = ?", name).First(&player).Error; err != nil {
 		return nil, err

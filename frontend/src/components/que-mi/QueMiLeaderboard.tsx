@@ -1,9 +1,14 @@
+import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, Trophy, XCircle } from 'lucide-react';
-import type { QueMiLeaderboardEntry } from '@/types/queMi';
+import { CheckCircle2, Trophy, X, XCircle } from 'lucide-react';
+import { getPuzzleAttempt } from '@/api/queMi';
+import { QueMiSubmitRecordsView } from '@/components/que-mi/QueMiSubmitRecordsView';
 import { formatQueMiDuration } from '@/components/que-mi/utils';
+import { apiSubmitsToHistory } from '@/pages/que-mi/onlineSession';
+import type { QueMiLeaderboardEntry } from '@/types/queMi';
+import type { QueMiPuzzle } from '@/mahjong-puzzle/types';
 
 function rankBadgeStyle(rank: number): CSSProperties {
   if (rank === 1) {
@@ -73,7 +78,92 @@ function ResultBadge({ won }: { won: boolean }) {
   );
 }
 
-function LeaderboardTable({ entries }: { entries: QueMiLeaderboardEntry[] }) {
+function AttemptDetailModal({
+  puzzleId,
+  puzzle,
+  userId,
+  nickname,
+  onClose,
+}: {
+  puzzleId: string;
+  puzzle: QueMiPuzzle | null;
+  userId: number;
+  nickname: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [resolvedPuzzle, setResolvedPuzzle] = useState<QueMiPuzzle | null>(puzzle);
+  const [records, setRecords] = useState<ReturnType<typeof apiSubmitsToHistory>>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const detail = await getPuzzleAttempt(puzzleId, userId);
+        const p = detail.attempt.revealed_puzzle
+          ? { ...detail.attempt.revealed_puzzle, id: puzzleId }
+          : puzzle;
+        setResolvedPuzzle(p ?? null);
+        setRecords(apiSubmitsToHistory(detail.attempt.submits, p ?? undefined));
+      } catch {
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [puzzleId, userId, puzzle]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border p-5 shadow-xl"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-bold" style={{ color: 'var(--color-text)' }}>
+              {t('queMiOnline.viewAttempt', { name: nickname })}
+            </h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-light)' }}>
+              {t('queMi.submitRecords')}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="btn-secondary p-1.5 rounded-lg" aria-label={t('common.close')}>
+            <X size={16} />
+          </button>
+        </div>
+        {loading ? (
+          <p className="text-sm py-8 text-center" style={{ color: 'var(--color-text-light)' }}>
+            {t('common.loading')}
+          </p>
+        ) : error || !resolvedPuzzle ? (
+          <p className="text-sm py-8 text-center text-red-600">{t('queMiOnline.loadFailed')}</p>
+        ) : (
+          <QueMiSubmitRecordsView puzzle={resolvedPuzzle} records={records} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LeaderboardTable({
+  entries,
+  canViewAttempts,
+  onViewAttempt,
+}: {
+  entries: QueMiLeaderboardEntry[];
+  canViewAttempts: boolean;
+  onViewAttempt: (entry: QueMiLeaderboardEntry) => void;
+}) {
   const { t } = useTranslation();
   if (entries.length === 0) {
     return (
@@ -98,70 +188,120 @@ function LeaderboardTable({ entries }: { entries: QueMiLeaderboardEntry[] }) {
           </tr>
         </thead>
         <tbody>
-          {entries.map((e) => (
-            <tr
-              key={`${e.user_id}-${e.rank ?? 'x'}-${e.finished_at}`}
-              className="border-t transition-colors hover:bg-[color-mix(in_srgb,var(--color-primary-light)_18%,transparent)]"
-              style={{
-                borderColor: 'var(--color-border)',
-                background: e.won ? undefined : 'rgba(0,0,0,0.015)',
-              }}
-            >
-              <td className="py-3 px-3 text-center align-middle">
-                <RankCell rank={e.rank} />
-              </td>
-              <td className="py-3 px-3 align-middle font-medium" style={{ color: 'var(--color-text)' }}>
-                {e.player_id ? (
-                  <Link
-                    to={`/player-list/${e.player_id}`}
-                    className="hover:underline"
-                    style={{ color: 'var(--color-primary)' }}
-                  >
-                    {e.nickname || e.player_id}
-                  </Link>
-                ) : (
-                  e.nickname || '—'
-                )}
-              </td>
-              <td className="py-3 px-3 text-center align-middle tabular-nums font-medium">
-                {e.attempts_used}
-              </td>
-              <td className="py-3 px-3 text-right align-middle tabular-nums font-mono text-[13px]" style={{ color: 'var(--color-text)' }}>
-                {formatQueMiDuration(e.duration_ms)}
-              </td>
-              <td className="py-3 px-3 text-center align-middle">
-                <ResultBadge won={e.won} />
-              </td>
-            </tr>
-          ))}
+          {entries.map((e) => {
+            const clickable = canViewAttempts;
+            return (
+              <tr
+                key={`${e.user_id}-${e.rank ?? 'x'}-${e.finished_at}`}
+                className={`border-t transition-colors ${clickable ? 'cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-primary-light)_18%,transparent)]' : ''}`}
+                style={{
+                  borderColor: 'var(--color-border)',
+                  background: e.won ? undefined : 'rgba(0,0,0,0.015)',
+                }}
+                onClick={clickable ? () => onViewAttempt(e) : undefined}
+                onKeyDown={
+                  clickable
+                    ? (ev) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                          ev.preventDefault();
+                          onViewAttempt(e);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={clickable ? 0 : undefined}
+                role={clickable ? 'button' : undefined}
+              >
+                <td className="py-3 px-3 text-center align-middle">
+                  <RankCell rank={e.rank} />
+                </td>
+                <td className="py-3 px-3 align-middle font-medium" style={{ color: 'var(--color-text)' }}>
+                  {e.player_id ? (
+                    <Link
+                      to={`/player-list/${e.player_id}`}
+                      className="hover:underline"
+                      style={{ color: 'var(--color-primary)' }}
+                      onClick={(ev) => ev.stopPropagation()}
+                    >
+                      {e.nickname || e.player_id}
+                    </Link>
+                  ) : (
+                    e.nickname || '—'
+                  )}
+                </td>
+                <td className="py-3 px-3 text-center align-middle tabular-nums font-medium">
+                  {e.attempts_used}
+                </td>
+                <td className="py-3 px-3 text-right align-middle tabular-nums font-mono text-[13px]" style={{ color: 'var(--color-text)' }}>
+                  {formatQueMiDuration(e.duration_ms)}
+                </td>
+                <td className="py-3 px-3 text-center align-middle">
+                  <ResultBadge won={e.won} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+      {canViewAttempts && entries.length > 0 && (
+        <p className="text-xs px-3 py-2" style={{ color: 'var(--color-text-light)' }}>
+          {t('queMiOnline.viewAttemptHint')}
+        </p>
+      )}
     </div>
   );
 }
 
-export function QueMiLeaderboardPanel({ entries }: { entries: QueMiLeaderboardEntry[] }) {
+export interface QueMiLeaderboardPanelProps {
+  entries: QueMiLeaderboardEntry[];
+  puzzleId?: string;
+  puzzle?: QueMiPuzzle | null;
+  canViewAttempts?: boolean;
+}
+
+export function QueMiLeaderboardPanel({
+  entries,
+  puzzleId,
+  puzzle = null,
+  canViewAttempts = false,
+}: QueMiLeaderboardPanelProps) {
   const { t } = useTranslation();
+  const [viewing, setViewing] = useState<QueMiLeaderboardEntry | null>(null);
   const solveCount = entries.filter((e) => e.won).length;
   return (
-    <div
-      className="mt-6 rounded-xl border p-4 sm:p-5"
-      style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <div className="flex items-center gap-2">
-          <Trophy size={18} style={{ color: 'var(--color-primary)' }} />
-          <h2 className="font-bold" style={{ color: 'var(--color-text)' }}>
-            {t('queMiOnline.leaderboard')}
-          </h2>
+    <>
+      <div
+        className="mt-6 rounded-xl border p-4 sm:p-5"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-2">
+            <Trophy size={18} style={{ color: 'var(--color-primary)' }} />
+            <h2 className="font-bold" style={{ color: 'var(--color-text)' }}>
+              {t('queMiOnline.leaderboard')}
+            </h2>
+          </div>
+          {entries.length > 0 && (
+            <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-light)' }}>
+              {t('queMiOnline.leaderboardSummary', { total: entries.length, solved: solveCount })}
+            </span>
+          )}
         </div>
-        {entries.length > 0 && (
-          <span className="text-xs tabular-nums" style={{ color: 'var(--color-text-light)' }}>
-            {t('queMiOnline.leaderboardSummary', { total: entries.length, solved: solveCount })}
-          </span>
-        )}
+        <LeaderboardTable
+          entries={entries}
+          canViewAttempts={canViewAttempts && !!puzzleId}
+          onViewAttempt={setViewing}
+        />
       </div>
-      <LeaderboardTable entries={entries} />
-    </div>
+      {viewing && puzzleId && (
+        <AttemptDetailModal
+          puzzleId={puzzleId}
+          puzzle={puzzle}
+          userId={viewing.user_id}
+          nickname={viewing.nickname}
+          onClose={() => setViewing(null)}
+        />
+      )}
+    </>
   );
 }

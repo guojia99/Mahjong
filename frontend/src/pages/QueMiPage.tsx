@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
 import { buildTileAvailability, generatePuzzle } from '@/mahjong-puzzle/generator';
-import { PUZZLE_TILE_ROWS } from '@/mahjong-puzzle/tiles';
 import {
   emptyOpenGuess,
   MELD_GAP_PX,
@@ -55,6 +54,8 @@ import {
 } from '@/mahjong-puzzle/types';
 import { formatQueMiDuration } from '@/components/que-mi/utils';
 import { QueMiLeaderboardPanel } from '@/components/que-mi/QueMiLeaderboard';
+import { QueMiAdaptiveTilePicker } from '@/components/que-mi/QueMiAdaptiveTilePicker';
+import { QueMiPuzzleNameEditor } from '@/components/que-mi/QueMiPuzzleNameEditor';
 import { QueMiGuide } from '@/pages/QueMiGuide';
 import {
   getLeaderboard,
@@ -104,7 +105,6 @@ export type QueMiPageProps = {
 };
 type InputMode = 'click' | 'drag';
 
-const PICKER_TILE_HEIGHT = 50;
 const HAND_TILE_COUNT = 14;
 const DRAW_SLOT_INDEX = 13;
 const HAND_SLOT_GAP_PX = 2;
@@ -752,6 +752,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem(GUIDE_KEY));
   const [showHistory, setShowHistory] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pickerTileHeight, setPickerTileHeight] = useState(36);
   const [dragTile, setDragTile] = useState<{ source: DragSource; tile: string } | null>(null);
   const [pointerDragPos, setPointerDragPos] = useState<{ x: number; y: number } | null>(null);
   const pointerDragging = useRef(false);
@@ -1042,6 +1043,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
 
   const giveUp = async () => {
     if (!puzzle || phase !== 'playing') return;
+    if (!window.confirm(t('queMi.giveUpConfirm'))) return;
     const used = puzzle.maxAttempts - attemptsLeft;
     let giveUpPayload: { revealed_puzzle?: QueMiPuzzle; attempt?: QueMiAttempt } | undefined;
     if (isOnline && onlinePuzzleId) {
@@ -1553,10 +1555,19 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
         </div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>
-            {isOnline ? t('queMiOnline.title') : t('queMi.title')}
-          </h1>
+        <div className="min-w-0">
+          {isOnline && onlineDetail?.is_mine && onlinePuzzleId ? (
+            <QueMiPuzzleNameEditor
+              puzzleId={onlinePuzzleId}
+              name={onlineDetail.name}
+              onRenamed={(name) => setOnlineDetail((prev) => (prev ? { ...prev, name } : prev))}
+              className="mb-1"
+            />
+          ) : (
+            <h1 className="text-xl font-bold truncate" style={{ color: 'var(--color-text)' }}>
+              {isOnline && onlineDetail ? onlineDetail.name : isOnline ? t('queMiOnline.title') : t('queMi.title')}
+            </h1>
+          )}
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-text-light)' }}>
             {isOnline && onlineDetail
               ? t('queMiOnline.byCreator', { name: onlineDetail.creator_name })
@@ -1684,7 +1695,12 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
               ) : null}
             </div>
           )}
-          <QueMiLeaderboardPanel entries={leaderboard} />
+          <QueMiLeaderboardPanel
+            entries={leaderboard}
+            puzzleId={onlinePuzzleId}
+            puzzle={puzzle}
+            canViewAttempts={onlineDetail?.can_view_attempts}
+          />
         </div>
       )}
 
@@ -2034,7 +2050,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
 
           {phase === 'playing' && (
             <>
-              <div className="p-3 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+              <div className="p-3 rounded-xl border min-w-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <p className="text-xs font-medium shrink-0" style={{ color: 'var(--color-text-light)' }}>{t('queMi.tilePicker')}</p>
                   <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -2078,36 +2094,35 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
                     </span>
                   </div>
                 )}
-                {PUZZLE_TILE_ROWS.map((row, ri) => (
-                  <div key={ri} className="flex flex-wrap gap-1 justify-center mb-1">
-                    {row.map((tile) => {
-                      const atCapacity = !canAddTile(tile);
-                      const clickDisabled = atCapacity || (isOpen ? !firstEmptyOpenRef : firstEmptyIndex < 0);
-                      return (
-                        <button
-                          key={tile}
-                          type="button"
-                          disabled={inputMode === 'click' && clickDisabled}
-                          onPointerDown={(e) => {
-                            if (inputMode !== 'drag' || atCapacity) return;
-                            beginPointerDrag('palette', tile, e);
-                          }}
-                          onClick={() => addTileClick(tile)}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            padding: 0,
-                            cursor: inputMode === 'click' && clickDisabled ? 'not-allowed' : 'pointer',
-                            opacity: atCapacity ? 0.35 : 1,
-                            touchAction: inputMode === 'drag' && !atCapacity ? 'none' : undefined,
-                          }}
-                        >
-                          <MahjongTile tile={tile} height={PICKER_TILE_HEIGHT} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
+                <QueMiAdaptiveTilePicker
+                  onTileHeightChange={setPickerTileHeight}
+                  renderTile={(tile, tileHeight) => {
+                    const atCapacity = !canAddTile(tile);
+                    const clickDisabled = atCapacity || (isOpen ? !firstEmptyOpenRef : firstEmptyIndex < 0);
+                    return (
+                      <button
+                        key={tile}
+                        type="button"
+                        disabled={inputMode === 'click' && clickDisabled}
+                        onPointerDown={(e) => {
+                          if (inputMode !== 'drag' || atCapacity) return;
+                          beginPointerDrag('palette', tile, e);
+                        }}
+                        onClick={() => addTileClick(tile)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          padding: 0,
+                          cursor: inputMode === 'click' && clickDisabled ? 'not-allowed' : 'pointer',
+                          opacity: atCapacity ? 0.35 : 1,
+                          touchAction: inputMode === 'drag' && !atCapacity ? 'none' : undefined,
+                        }}
+                      >
+                        <MahjongTile tile={tile} height={tileHeight} />
+                      </button>
+                    );
+                  }}
+                />
                 </div>
               </div>
 
@@ -2185,7 +2200,12 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
       )}
 
       {isOnline && (phase === 'playing' || phase === 'finished') && (
-        <QueMiLeaderboardPanel entries={leaderboard} />
+        <QueMiLeaderboardPanel
+          entries={leaderboard}
+          puzzleId={onlinePuzzleId}
+          puzzle={puzzle}
+          canViewAttempts={onlineDetail?.can_view_attempts}
+        />
       )}
 
       {pointerDragPos && dragTile && (
@@ -2200,7 +2220,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
           }}
           aria-hidden
         >
-          <MahjongTile tile={dragTile.tile} height={PICKER_TILE_HEIGHT} />
+          <MahjongTile tile={dragTile.tile} height={pickerTileHeight} />
         </div>
       )}
 

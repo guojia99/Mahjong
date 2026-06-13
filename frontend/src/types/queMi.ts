@@ -18,10 +18,13 @@ export interface QueMiPuzzleListFilters {
   difficulty?: PuzzleDifficulty;
   type?: PuzzleType;
   hand_mode?: HandMode;
+  creator?: string;
+  name?: string;
 }
 
 export interface QueMiPuzzleListItem {
   id: string;
+  name: string;
   puzzle: QueMiPuzzle;
   creator_id: number;
   creator_name: string;
@@ -35,6 +38,7 @@ export interface QueMiPuzzleListItem {
 
 export interface QueMiPuzzleDetail extends QueMiPuzzleListItem {
   my_attempt?: QueMiAttempt;
+  can_view_attempts?: boolean;
 }
 
 /** Puzzle payload returned when starting or resuming play (answers stripped). */
@@ -107,6 +111,22 @@ export interface QueMiLeaderboardEntry {
   duration_ms: number;
   finished_at: string;
   won: boolean;
+}
+
+export interface QueMiGlobalLeaderboardEntry {
+  rank: number;
+  user_id: number;
+  player_id: string;
+  nickname: string;
+  wins: number;
+  played: number;
+  avg_attempts: number | null;
+  avg_duration_ms: number | null;
+}
+
+export interface QueMiPuzzleAttemptDetail {
+  attempt: QueMiAttempt;
+  nickname: string;
 }
 
 export interface QueMiMyAttemptItem {

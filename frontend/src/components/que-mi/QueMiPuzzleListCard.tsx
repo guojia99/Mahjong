@@ -33,8 +33,11 @@ export function QueMiPuzzleListCard({ item, href, subtitle, trailing }: QueMiPuz
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
+          <p className="font-semibold truncate mb-1" style={{ color: 'var(--color-text)' }}>
+            {item.name}
+          </p>
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="font-semibold" style={{ color: 'var(--color-text)' }}>
+            <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
               {t(`queMi.type.${item.puzzle.type}`)}
             </span>
             <span

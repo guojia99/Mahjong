@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.5.1 — 2026-06-13
+
+- Online QueMi: creators and players who finished a puzzle can view others' submission history from the leaderboard
+- Email login; fix missing submit history when re-entering an in-progress puzzle
+- Give-up confirmation; advanced filters by puzzle creator
+- Global leaderboard by difficulty and puzzle type
+- Online QueMi naming: default "Creator's puzzle 001", editable when creating or after publish; search puzzles by name
+
 ## v3.5.0 — 2026-06-12
 
 - Online QueMi: browse community puzzles, create and share your own (login required), per-puzzle leaderboard

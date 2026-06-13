@@ -540,6 +540,7 @@ const (
 
 type QueMiPuzzle struct {
 	ID          string    `gorm:"primaryKey;size:36" json:"id"`
+	Name        string    `gorm:"size:100;not null;default:'';index" json:"name"`
 	CreatedByID uint64    `gorm:"column:created_by_id;not null;index" json:"-"`
 	CreatedBy   *User     `gorm:"foreignKey:CreatedByID" json:"-"`
 	PuzzleData  JSONField `gorm:"column:puzzle_data;type:text;not null" json:"puzzle_data"`

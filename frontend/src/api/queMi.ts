@@ -3,8 +3,10 @@ import type { ApiRequestOptions } from './types';
 import { mergeApiOptions } from './types';
 import type {
   QueMiBlacklistEntry,
+  QueMiGlobalLeaderboardEntry,
   QueMiLeaderboardEntry,
   QueMiMyAttemptItem,
+  QueMiPuzzleAttemptDetail,
   QueMiPuzzleDetail,
   QueMiPuzzleListFilters,
   QueMiPuzzleListItem,
@@ -25,13 +27,23 @@ export async function listPuzzles(
   if (filters?.difficulty) params.difficulty = filters.difficulty;
   if (filters?.type) params.type = filters.type;
   if (filters?.hand_mode) params.hand_mode = filters.hand_mode;
+  if (filters?.creator) params.creator = filters.creator;
+  if (filters?.name) params.name = filters.name;
   const { data } = await api.get(`${BASE}/puzzles/`, { params, ...mergeApiOptions(opts) });
   return data;
 }
 
-export async function createPuzzle(puzzle: QueMiPuzzle): Promise<QueMiPuzzleListItem> {
-  const { data } = await api.post(`${BASE}/puzzles/`, { puzzle });
+export async function createPuzzle(puzzle: QueMiPuzzle, name?: string): Promise<QueMiPuzzleListItem> {
+  const body: { puzzle: QueMiPuzzle; name?: string } = { puzzle };
+  const trimmed = name?.trim();
+  if (trimmed) body.name = trimmed;
+  const { data } = await api.post(`${BASE}/puzzles/`, body);
   return data;
+}
+
+export async function getSuggestedPuzzleName(opts?: ApiRequestOptions): Promise<string> {
+  const { data } = await api.get<{ name: string }>(`${BASE}/puzzles/suggested-name/`, mergeApiOptions(opts));
+  return data.name;
 }
 
 export async function getPuzzle(id: string, opts?: ApiRequestOptions): Promise<QueMiPuzzleDetail> {
@@ -66,6 +78,27 @@ export async function getLeaderboard(id: string, opts?: ApiRequestOptions): Prom
   return data;
 }
 
+export async function getPuzzleAttempt(
+  puzzleId: string,
+  userId: number,
+  opts?: ApiRequestOptions,
+): Promise<QueMiPuzzleAttemptDetail> {
+  const { data } = await api.get(`${BASE}/puzzles/${puzzleId}/attempts/${userId}/`, mergeApiOptions(opts));
+  return data;
+}
+
+export async function getGlobalLeaderboard(
+  filters?: Pick<QueMiPuzzleListFilters, 'difficulty' | 'type' | 'hand_mode'>,
+  opts?: ApiRequestOptions,
+): Promise<QueMiGlobalLeaderboardEntry[]> {
+  const params: Record<string, string> = {};
+  if (filters?.difficulty) params.difficulty = filters.difficulty;
+  if (filters?.type) params.type = filters.type;
+  if (filters?.hand_mode) params.hand_mode = filters.hand_mode;
+  const { data } = await api.get(`${BASE}/leaderboard/`, { params, ...mergeApiOptions(opts) });
+  return data;
+}
+
 export async function getMyAttempts(opts?: ApiRequestOptions): Promise<QueMiMyAttemptItem[]> {
   const { data } = await api.get(`${BASE}/my-attempts/`, mergeApiOptions(opts));
   return data;
@@ -81,8 +114,16 @@ export async function adminListPuzzles(opts?: ApiRequestOptions): Promise<QueMiP
   return data;
 }
 
-export async function adminPatchPuzzle(id: string, payload: { is_disabled?: boolean }): Promise<QueMiPuzzleListItem> {
+export async function adminPatchPuzzle(
+  id: string,
+  payload: { is_disabled?: boolean; name?: string },
+): Promise<QueMiPuzzleListItem> {
   const { data } = await api.patch(`${BASE}/puzzles/${id}/`, payload);
+  return data;
+}
+
+export async function renamePuzzle(id: string, name: string): Promise<QueMiPuzzleListItem> {
+  const { data } = await api.patch(`${BASE}/puzzles/${id}/`, { name });
   return data;
 }
 

@@ -22,7 +22,9 @@ export function QueMiListFilters({ filters, onChange, showUnplayed = true }: Que
     filters.unplayed ||
     !!filters.difficulty ||
     !!filters.type ||
-    !!filters.hand_mode;
+    !!filters.hand_mode ||
+    !!filters.creator ||
+    !!filters.name;
 
   const clearFilters = () => {
     onChange({});
@@ -64,6 +66,19 @@ export function QueMiListFilters({ filters, onChange, showUnplayed = true }: Que
         </button>
       </div>
 
+      <label className="block space-y-1">
+        <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>
+          {t('queMiOnline.filterName')}
+        </span>
+        <input
+          type="search"
+          className="input w-full text-sm"
+          value={filters.name ?? ''}
+          onChange={(e) => patch({ name: e.target.value.trim() || undefined })}
+          placeholder={t('queMiOnline.filterNamePlaceholder')}
+        />
+      </label>
+
       {showUnplayed && (
         <label className="inline-flex items-center gap-2 text-sm cursor-pointer select-none">
           <input
@@ -77,7 +92,7 @@ export function QueMiListFilters({ filters, onChange, showUnplayed = true }: Que
       )}
 
       {expanded && (
-        <div className="grid gap-4 sm:grid-cols-3 pt-1">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 pt-1">
           <label className="block space-y-1">
             <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>
               {t('queMi.selectType')}
@@ -130,6 +145,18 @@ export function QueMiListFilters({ filters, onChange, showUnplayed = true }: Que
                 </option>
               ))}
             </select>
+          </label>
+          <label className="block space-y-1 sm:col-span-2 lg:col-span-1">
+            <span className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>
+              {t('queMiOnline.filterCreator')}
+            </span>
+            <input
+              type="text"
+              className="input w-full text-sm"
+              value={filters.creator ?? ''}
+              onChange={(e) => patch({ creator: e.target.value.trim() || undefined })}
+              placeholder={t('queMiOnline.filterCreatorPlaceholder')}
+            />
           </label>
         </div>
       )}

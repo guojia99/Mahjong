@@ -406,6 +406,7 @@ func run(cmd *cobra.Command, args []string) error {
 		queMi := api.Group("/que-mi", middleware.InvalidateQueryCacheAfterGameWrite())
 		{
 			queMi.GET("/puzzles/", handlers.QueMiPuzzleList)
+			queMi.GET("/puzzles/suggested-name/", handlers.QueMiSuggestedPuzzleName)
 			queMi.POST("/puzzles/", handlers.QueMiPuzzleCreate)
 			queMi.GET("/puzzles/:id/", handlers.QueMiPuzzleDetail)
 			queMi.DELETE("/puzzles/:id/", handlers.QueMiPuzzleDelete)
@@ -414,6 +415,8 @@ func run(cmd *cobra.Command, args []string) error {
 			queMi.POST("/puzzles/:id/submit/", handlers.QueMiSubmitAnswer)
 			queMi.POST("/puzzles/:id/give-up/", handlers.QueMiGiveUp)
 			queMi.GET("/puzzles/:id/leaderboard/", handlers.QueMiLeaderboard)
+			queMi.GET("/puzzles/:id/attempts/:user_id/", handlers.QueMiPuzzleAttemptDetail)
+			queMi.GET("/leaderboard/", handlers.QueMiGlobalLeaderboard)
 			queMi.GET("/my-attempts/", handlers.QueMiMyAttempts)
 			queMi.GET("/my-puzzles/", handlers.QueMiMyPuzzles)
 		}

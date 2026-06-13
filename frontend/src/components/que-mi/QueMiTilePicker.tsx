@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { MahjongTile } from '@/components/MahjongTile';
-import { PUZZLE_TILE_ROWS } from '@/mahjong-puzzle/tiles';
+import { QueMiAdaptiveTilePicker } from '@/components/que-mi/QueMiAdaptiveTilePicker';
 
 export interface QueMiTilePickerProps {
   availability: Record<string, number>;
@@ -13,38 +13,33 @@ export function QueMiTilePicker({ availability, usedCounts = {}, onPick, disable
   const { t } = useTranslation();
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 min-w-0">
       <div className="text-xs font-semibold" style={{ color: 'var(--color-text-light)' }}>
         {t('queMi.tilePicker')}
       </div>
-      <div className="space-y-1">
-        {PUZZLE_TILE_ROWS.map((row, ri) => (
-          <div key={ri} className="flex flex-wrap gap-1">
-            {row.map((tile) => {
-              const left = (availability[tile] ?? 0) - (usedCounts[tile] ?? 0);
-              const canPick = !disabled && left > 0;
-              return (
-                <button
-                  key={tile}
-                  type="button"
-                  disabled={!canPick}
-                  onClick={() => canPick && onPick(tile)}
-                  className="p-0.5 rounded transition-opacity"
-                  style={{
-                    opacity: canPick ? 1 : 0.35,
-                    cursor: canPick ? 'pointer' : 'not-allowed',
-                    background: 'transparent',
-                    border: 'none',
-                  }}
-                  aria-label={tile}
-                >
-                  <MahjongTile tile={tile} height={36} dim={!canPick} />
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
+      <QueMiAdaptiveTilePicker
+        renderTile={(tile, tileHeight) => {
+          const left = (availability[tile] ?? 0) - (usedCounts[tile] ?? 0);
+          const canPick = !disabled && left > 0;
+          return (
+            <button
+              type="button"
+              disabled={!canPick}
+              onClick={() => canPick && onPick(tile)}
+              className="p-0 rounded transition-opacity"
+              style={{
+                opacity: canPick ? 1 : 0.35,
+                cursor: canPick ? 'pointer' : 'not-allowed',
+                background: 'transparent',
+                border: 'none',
+              }}
+              aria-label={tile}
+            >
+              <MahjongTile tile={tile} height={tileHeight} dim={!canPick} />
+            </button>
+          );
+        }}
+      />
     </div>
   );
 }

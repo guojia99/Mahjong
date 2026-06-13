@@ -1,12 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
+import { QueMiAdaptiveTilePicker } from '@/components/que-mi/QueMiAdaptiveTilePicker';
 import { QueMiClosedHandInput } from '@/components/que-mi/QueMiClosedHandInput';
 import { QueMiContextBar } from '@/components/que-mi/QueMiContextBar';
 import { QueMiOptionGroup } from '@/components/que-mi/QueMiOptionGroup';
-import { createPuzzle } from '@/api/queMi';
+import { createPuzzle, getSuggestedPuzzleName } from '@/api/queMi';
 import { isLoggedIn } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import { ATTEMPTS_BY_DIFFICULTY } from '@/mahjong-puzzle/types';
@@ -15,7 +16,6 @@ import { buildCanonicalAnswer, countTiles, tileToIndex } from '@/mahjong-puzzle/
 import { computeShanten } from '@/mahjong-puzzle/shanten';
 import { isKokushiWin, isWinningHand, validateGuess } from '@/mahjong-puzzle/validate';
 import { meldsToBlocks } from '@/mahjong-puzzle/meld';
-import { PUZZLE_TILE_ROWS } from '@/mahjong-puzzle/tiles';
 
 const DIFFICULTIES: PuzzleDifficulty[] = ['hard', 'advanced', 'medium', 'normal', 'easy'];
 const PUZZLE_TYPES: PuzzleType[] = ['winnable', 'nonWinnable'];
@@ -106,7 +106,19 @@ export default function QueMiCreatePage() {
   const [agariWay, setAgariWay] = useState<AgariWay>('tsumo');
   const [dora, setDora] = useState<string[]>(['5s']);
   const [guess, setGuess] = useState<(string | null)[]>(emptyGuess);
+  const [puzzleName, setPuzzleName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const name = await getSuggestedPuzzleName();
+        setPuzzleName(name);
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   const sortedAnswer = useMemo(() => {
     const tiles = guess.filter(Boolean) as string[];
@@ -170,7 +182,7 @@ export default function QueMiCreatePage() {
 
     setSubmitting(true);
     try {
-      const created = await createPuzzle(puzzle);
+      const created = await createPuzzle(puzzle, puzzleName);
       showToast(t('queMiOnline.createSuccess'), 'success');
       navigate(`/que-mi/online/${created.id}`);
     } catch (e: unknown) {
@@ -204,6 +216,25 @@ export default function QueMiCreatePage() {
             {t('queMiOnline.createSubtitle')}
           </p>
         </div>
+      </div>
+
+      <div className={cardClass} style={cardStyle}>
+        <label className="block space-y-1">
+          <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+            {t('queMiOnline.puzzleName')}
+          </span>
+          <input
+            type="text"
+            className="input w-full text-sm"
+            value={puzzleName}
+            onChange={(e) => setPuzzleName(e.target.value)}
+            maxLength={100}
+            placeholder={t('queMiOnline.puzzleNamePlaceholder')}
+          />
+          <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+            {t('queMiOnline.puzzleNameHint')}
+          </p>
+        </label>
       </div>
 
       <div className={cardClass} style={cardStyle}>
@@ -290,27 +321,24 @@ export default function QueMiCreatePage() {
               ))
             )}
           </div>
-          <div className="rounded-xl border p-2 max-h-36 overflow-y-auto" style={{ borderColor: 'var(--color-border)' }}>
-            {PUZZLE_TILE_ROWS.map((row, ri) => (
-              <div key={ri} className="flex flex-wrap gap-1 justify-center mb-1">
-                {row.map((tile) => {
-                  const used = countTiles([...(guess.filter(Boolean) as string[]), ...dora]);
-                  const atCapacity = (used[tile] ?? 0) >= 4 || dora.length >= 5;
-                  return (
-                    <button
-                      key={tile}
-                      type="button"
-                      disabled={atCapacity}
-                      onClick={() => addDora(tile)}
-                      className="p-0.5 rounded disabled:opacity-35"
-                      style={{ background: 'transparent', border: 'none' }}
-                    >
-                      <MahjongTile tile={tile} height={32} />
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
+          <div className="rounded-xl border p-2 max-h-[194px] overflow-y-auto min-w-0" style={{ borderColor: 'var(--color-border)' }}>
+            <QueMiAdaptiveTilePicker
+              renderTile={(tile, tileHeight) => {
+                const used = countTiles([...(guess.filter(Boolean) as string[]), ...dora]);
+                const atCapacity = (used[tile] ?? 0) >= 4 || dora.length >= 5;
+                return (
+                  <button
+                    type="button"
+                    disabled={atCapacity}
+                    onClick={() => addDora(tile)}
+                    className="p-0 rounded disabled:opacity-35"
+                    style={{ background: 'transparent', border: 'none' }}
+                  >
+                    <MahjongTile tile={tile} height={tileHeight} />
+                  </button>
+                );
+              }}
+            />
           </div>
         </div>
       </div>

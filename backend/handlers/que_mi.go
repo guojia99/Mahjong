@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"mahjong-backend/config"
@@ -16,6 +19,13 @@ import (
 )
 
 const queMiDailyCreateLimit = 10
+const queMiPuzzleNameMaxLen = 100
+
+var queMiNamesBackfilled sync.Once
+
+func queMiEnsureNamesBackfilled() {
+	queMiNamesBackfilled.Do(queMiBackfillPuzzleNames)
+}
 
 func queMiTodayStart() time.Time {
 	now := time.Now().In(time.Local)
@@ -57,6 +67,61 @@ func queMiCountTodayCreated(userID uint64) int64 {
 	return n
 }
 
+func queMiCountUserPuzzles(userID uint64) int64 {
+	var n int64
+	config.DB.Model(&models.QueMiPuzzle{}).Where("created_by_id = ?", userID).Count(&n)
+	return n
+}
+
+func queMiDefaultPuzzleName(user *models.User) string {
+	seq := queMiCountUserPuzzles(user.ID) + 1
+	display := queMiUserNickname(user)
+	if display == "" {
+		display = user.Username
+	}
+	return fmt.Sprintf("%s的雀谜%03d", display, seq)
+}
+
+func queMiNormalizePuzzleName(name string) string {
+	name = strings.TrimSpace(name)
+	if len(name) > queMiPuzzleNameMaxLen {
+		name = name[:queMiPuzzleNameMaxLen]
+	}
+	return name
+}
+
+func queMiBackfillPuzzleNames() {
+	var rows []models.QueMiPuzzle
+	config.DB.Where("name = '' OR name IS NULL").Preload("CreatedBy").
+		Order("created_by_id ASC, created_at ASC").Find(&rows)
+	if len(rows) == 0 {
+		return
+	}
+	seqByUser := make(map[uint64]int)
+	for i := range rows {
+		row := &rows[i]
+		seqByUser[row.CreatedByID]++
+		display := ""
+		if row.CreatedBy != nil {
+			display = queMiUserNickname(row.CreatedBy)
+		}
+		if display == "" {
+			var u models.User
+			if config.DB.First(&u, row.CreatedByID).Error == nil {
+				display = queMiUserNickname(&u)
+				if display == "" {
+					display = u.Username
+				}
+			}
+		}
+		if display == "" {
+			display = "用户"
+		}
+		row.Name = fmt.Sprintf("%s的雀谜%03d", display, seqByUser[row.CreatedByID])
+		config.DB.Model(row).Update("name", row.Name)
+	}
+}
+
 func queMiPuzzleStats(puzzleID string) (playCount, solveCount int64) {
 	config.DB.Model(&models.QueMiAttempt{}).Where("puzzle_id = ?", puzzleID).Count(&playCount)
 	config.DB.Model(&models.QueMiAttempt{}).Where("puzzle_id = ? AND status = ?", puzzleID, models.QueMiAttemptStatusWon).Count(&solveCount)
@@ -77,10 +142,12 @@ func queMiStripAnswers(p *quemi.QueMiPuzzle) {
 }
 
 type queMiListFilters struct {
-	Unplayed  bool
+	Unplayed   bool
 	Difficulty string
-	Type      string
-	HandMode  string
+	Type       string
+	HandMode   string
+	Creator    string
+	Name       string
 }
 
 func queMiParseListFilters(c *gin.Context) queMiListFilters {
@@ -89,6 +156,8 @@ func queMiParseListFilters(c *gin.Context) queMiListFilters {
 		Difficulty: c.Query("difficulty"),
 		Type:       c.Query("type"),
 		HandMode:   c.Query("hand_mode"),
+		Creator:    strings.TrimSpace(c.Query("creator")),
+		Name:       strings.TrimSpace(c.Query("name")),
 	}
 }
 
@@ -137,6 +206,7 @@ func queMiSerializePuzzleWithAttempt(row *models.QueMiPuzzle, viewer *models.Use
 	isMine := viewer != nil && viewer.ID == row.CreatedByID
 	data := gin.H{
 		"id":           row.ID,
+		"name":         row.Name,
 		"puzzle":       p,
 		"creator_id":   row.CreatedByID,
 		"creator_name": creatorName,
@@ -159,8 +229,46 @@ func queMiCanViewAnswers(row *models.QueMiPuzzle, viewer *models.User) bool {
 	return viewer != nil && viewer.ID == row.CreatedByID
 }
 
+func queMiCanViewOthersAttempts(row *models.QueMiPuzzle, viewer *models.User) bool {
+	if viewer == nil {
+		return false
+	}
+	if viewer.IsStaff || viewer.ID == row.CreatedByID {
+		return true
+	}
+	var attempt models.QueMiAttempt
+	return config.DB.Where("puzzle_id = ? AND user_id = ? AND status != ?",
+		row.ID, viewer.ID, models.QueMiAttemptStatusInProgress).First(&attempt).Error == nil
+}
+
+func queMiCreatorMatchesFilter(row *models.QueMiPuzzle, creatorQuery string) bool {
+	if creatorQuery == "" {
+		return true
+	}
+	q := strings.ToLower(creatorQuery)
+	creatorName := strings.ToLower(queMiUserNickname(row.CreatedBy))
+	if strings.Contains(creatorName, q) {
+		return true
+	}
+	var u models.User
+	if row.CreatedBy != nil {
+		u = *row.CreatedBy
+	} else if config.DB.First(&u, row.CreatedByID).Error != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(u.Username), q)
+}
+
+func queMiNameMatchesFilter(row *models.QueMiPuzzle, nameQuery string) bool {
+	if nameQuery == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(row.Name), strings.ToLower(nameQuery))
+}
+
 // QueMiPuzzleList GET /que-mi/puzzles/
 func QueMiPuzzleList(c *gin.Context) {
+	queMiEnsureNamesBackfilled()
 	viewer := middleware.GetUser(c)
 	filters := queMiParseListFilters(c)
 	q := config.DB.Model(&models.QueMiPuzzle{}).Preload("CreatedBy")
@@ -185,6 +293,12 @@ func QueMiPuzzleList(c *gin.Context) {
 		if !queMiPuzzleMatchesFilters(p, filters) {
 			continue
 		}
+		if !queMiCreatorMatchesFilter(row, filters.Creator) {
+			continue
+		}
+		if !queMiNameMatchesFilter(row, filters.Name) {
+			continue
+		}
 		isMine := viewer != nil && viewer.ID == row.CreatedByID
 		if filters.Unplayed && viewer != nil {
 			if isMine {
@@ -205,6 +319,16 @@ func QueMiPuzzleList(c *gin.Context) {
 	respondOK(c, out)
 }
 
+// QueMiSuggestedPuzzleName GET /que-mi/puzzles/suggested-name/
+func QueMiSuggestedPuzzleName(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		respondError(c, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	respondOK(c, gin.H{"name": queMiDefaultPuzzleName(user)})
+}
+
 // QueMiPuzzleCreate POST /que-mi/puzzles/
 func QueMiPuzzleCreate(c *gin.Context) {
 	user := middleware.GetUser(c)
@@ -223,6 +347,7 @@ func QueMiPuzzleCreate(c *gin.Context) {
 
 	var req struct {
 		Puzzle quemi.QueMiPuzzle `json:"puzzle"`
+		Name   string            `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request")
@@ -262,8 +387,12 @@ func QueMiPuzzleCreate(c *gin.Context) {
 	}
 	row := models.QueMiPuzzle{
 		ID:          id,
+		Name:        queMiDefaultPuzzleName(user),
 		CreatedByID: user.ID,
 		PuzzleData:  jf,
+	}
+	if name := queMiNormalizePuzzleName(req.Name); name != "" {
+		row.Name = name
 	}
 	if err := config.DB.Create(&row).Error; err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to create puzzle")
@@ -275,6 +404,7 @@ func QueMiPuzzleCreate(c *gin.Context) {
 
 // QueMiPuzzleDetail GET /que-mi/puzzles/:id/
 func QueMiPuzzleDetail(c *gin.Context) {
+	queMiEnsureNamesBackfilled()
 	pk := c.Param("id")
 	var row models.QueMiPuzzle
 	if err := config.DB.Preload("CreatedBy").Where("id = ?", pk).First(&row).Error; err != nil {
@@ -295,17 +425,17 @@ func QueMiPuzzleDetail(c *gin.Context) {
 		}
 	}
 	data := queMiSerializePuzzle(&row, viewer, includeAnswers)
+	data["can_view_attempts"] = queMiCanViewOthersAttempts(&row, viewer)
 
 	if viewer != nil {
 		var attempt models.QueMiAttempt
 		if config.DB.Where("puzzle_id = ? AND user_id = ?", pk, viewer.ID).First(&attempt).Error == nil {
-			withSubmits := attempt.Status != models.QueMiAttemptStatusInProgress
 			var revealed *quemi.QueMiPuzzle
-			if withSubmits {
+			if attempt.Status != models.QueMiAttemptStatusInProgress {
 				puzzleFull, _ := queMiParsePuzzleData(row.PuzzleData)
 				revealed = &puzzleFull
 			}
-			data["my_attempt"] = queMiSerializeAttempt(&attempt, withSubmits, revealed)
+			data["my_attempt"] = queMiSerializeAttempt(&attempt, true, revealed)
 		}
 	}
 	respondOK(c, data)
@@ -343,28 +473,56 @@ func QueMiPuzzleDelete(c *gin.Context) {
 // QueMiPuzzlePatch PATCH /que-mi/puzzles/:id/
 func QueMiPuzzlePatch(c *gin.Context) {
 	user := middleware.GetUser(c)
-	if user == nil || !user.IsStaff {
-		respondError(c, http.StatusForbidden, "Admin required")
+	if user == nil {
+		respondError(c, http.StatusUnauthorized, "Authentication required")
 		return
 	}
 	pk := c.Param("id")
 	var req struct {
-		IsDisabled *bool `json:"is_disabled"`
+		IsDisabled *bool   `json:"is_disabled"`
+		Name       *string `json:"name"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		respondError(c, http.StatusBadRequest, "Invalid request")
 		return
 	}
+	if req.IsDisabled == nil && req.Name == nil {
+		respondError(c, http.StatusBadRequest, "No fields to update")
+		return
+	}
 	var row models.QueMiPuzzle
-	if err := config.DB.Where("id = ?", pk).First(&row).Error; err != nil {
+	if err := config.DB.Preload("CreatedBy").Where("id = ?", pk).First(&row).Error; err != nil {
 		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
+	isAdmin := user.IsStaff
+	isOwner := user.ID == row.CreatedByID
+	updates := map[string]interface{}{}
 	if req.IsDisabled != nil {
-		row.IsDisabled = *req.IsDisabled
+		if !isAdmin {
+			respondError(c, http.StatusForbidden, "Admin required")
+			return
+		}
+		updates["is_disabled"] = *req.IsDisabled
 	}
-	config.DB.Save(&row)
-	respondOK(c, queMiSerializePuzzle(&row, user, true))
+	if req.Name != nil {
+		if !isAdmin && !isOwner {
+			respondError(c, http.StatusForbidden, "Forbidden")
+			return
+		}
+		name := queMiNormalizePuzzleName(*req.Name)
+		if name == "" {
+			respondError(c, http.StatusBadRequest, "Name required")
+			return
+		}
+		updates["name"] = name
+	}
+	if err := config.DB.Model(&row).Updates(updates).Error; err != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to update puzzle")
+		return
+	}
+	config.DB.Preload("CreatedBy").First(&row, row.ID)
+	respondOK(c, queMiSerializePuzzle(&row, user, isAdmin || isOwner))
 }
 
 func queMiSerializeAttempt(a *models.QueMiAttempt, withSubmits bool, revealed *quemi.QueMiPuzzle) gin.H {
@@ -692,6 +850,162 @@ func QueMiLeaderboard(c *gin.Context) {
 			"duration_ms":   e.durationMs,
 			"finished_at":   formatTime(e.finishedAt),
 			"won":           e.won,
+		})
+	}
+	respondOK(c, out)
+}
+
+// QueMiPuzzleAttemptDetail GET /que-mi/puzzles/:id/attempts/:user_id/
+func QueMiPuzzleAttemptDetail(c *gin.Context) {
+	pk := c.Param("id")
+	targetUserID := parsePathUint64(c.Param("user_id"))
+	if targetUserID == 0 {
+		respondError(c, http.StatusBadRequest, "Invalid user_id")
+		return
+	}
+	var row models.QueMiPuzzle
+	if err := config.DB.Preload("CreatedBy").Where("id = ?", pk).First(&row).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
+		return
+	}
+	viewer := middleware.GetUser(c)
+	if !queMiCanViewOthersAttempts(&row, viewer) {
+		respondError(c, http.StatusForbidden, "Forbidden")
+		return
+	}
+	var attempt models.QueMiAttempt
+	if err := config.DB.Where("puzzle_id = ? AND user_id = ?", pk, targetUserID).First(&attempt).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
+		return
+	}
+	puzzleFull, _ := queMiParsePuzzleData(row.PuzzleData)
+	var revealed *quemi.QueMiPuzzle
+	if attempt.Status != models.QueMiAttemptStatusInProgress {
+		revealed = &puzzleFull
+	}
+	respondOK(c, gin.H{
+		"attempt": queMiSerializeAttempt(&attempt, true, revealed),
+		"nickname": queMiNicknameForUserID(targetUserID),
+	})
+}
+
+func queMiNicknameForUserID(userID uint64) string {
+	var u models.User
+	if config.DB.First(&u, userID).Error != nil {
+		return ""
+	}
+	return queMiUserNickname(&u)
+}
+
+// QueMiGlobalLeaderboard GET /que-mi/leaderboard/
+func QueMiGlobalLeaderboard(c *gin.Context) {
+	difficulty := c.Query("difficulty")
+	typeFilter := c.Query("type")
+	handMode := c.Query("hand_mode")
+
+	var attempts []models.QueMiAttempt
+	config.DB.Where("status IN ?",
+		[]string{models.QueMiAttemptStatusWon, models.QueMiAttemptStatusLost}).Find(&attempts)
+
+	type userStats struct {
+		userID           uint64
+		wins             int
+		played           int
+		totalWinDuration int
+		totalWinAttempts int
+	}
+	stats := make(map[uint64]*userStats)
+
+	for _, a := range attempts {
+		var row models.QueMiPuzzle
+		if config.DB.Where("id = ?", a.PuzzleID).First(&row).Error != nil {
+			continue
+		}
+		p, err := queMiParsePuzzleData(row.PuzzleData)
+		if err != nil {
+			continue
+		}
+		if difficulty != "" && string(p.Difficulty) != difficulty {
+			continue
+		}
+		if typeFilter != "" && string(p.Type) != typeFilter {
+			continue
+		}
+		if handMode != "" && string(p.HandMode) != handMode {
+			continue
+		}
+		s := stats[a.UserID]
+		if s == nil {
+			s = &userStats{userID: a.UserID}
+			stats[a.UserID] = s
+		}
+		s.played++
+		if a.Won {
+			s.wins++
+			s.totalWinDuration += a.DurationMs
+			s.totalWinAttempts += a.AttemptsUsed
+		}
+	}
+
+	entries := make([]*userStats, 0, len(stats))
+	for _, s := range stats {
+		entries = append(entries, s)
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].wins > 0 && entries[j].wins > 0 {
+			avgAttemptsI := float64(entries[i].totalWinAttempts) / float64(entries[i].wins)
+			avgAttemptsJ := float64(entries[j].totalWinAttempts) / float64(entries[j].wins)
+			if avgAttemptsI != avgAttemptsJ {
+				return avgAttemptsI < avgAttemptsJ
+			}
+			if entries[i].wins != entries[j].wins {
+				return entries[i].wins > entries[j].wins
+			}
+			avgDurI := float64(entries[i].totalWinDuration) / float64(entries[i].wins)
+			avgDurJ := float64(entries[j].totalWinDuration) / float64(entries[j].wins)
+			if avgDurI != avgDurJ {
+				return avgDurI < avgDurJ
+			}
+			return entries[i].userID < entries[j].userID
+		}
+		if entries[i].wins > 0 {
+			return true
+		}
+		if entries[j].wins > 0 {
+			return false
+		}
+		if entries[i].played != entries[j].played {
+			return entries[i].played > entries[j].played
+		}
+		return entries[i].userID < entries[j].userID
+	})
+
+	out := make([]gin.H, 0, len(entries))
+	for rank, s := range entries {
+		var u models.User
+		name := ""
+		playerID := ""
+		if config.DB.First(&u, s.userID).Error == nil {
+			name = queMiUserNickname(&u)
+			if u.PlayerID != nil {
+				playerID = *u.PlayerID
+			}
+		}
+		avgAttempts := interface{}(nil)
+		avgDuration := interface{}(nil)
+		if s.wins > 0 {
+			avgAttempts = float64(s.totalWinAttempts) / float64(s.wins)
+			avgDuration = float64(s.totalWinDuration) / float64(s.wins)
+		}
+		out = append(out, gin.H{
+			"rank":          rank + 1,
+			"user_id":       s.userID,
+			"player_id":     playerID,
+			"nickname":      name,
+			"wins":          s.wins,
+			"played":        s.played,
+			"avg_attempts":  avgAttempts,
+			"avg_duration_ms": avgDuration,
 		})
 	}
 	respondOK(c, out)
