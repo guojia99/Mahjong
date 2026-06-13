@@ -80,13 +80,11 @@ function ResultBadge({ won }: { won: boolean }) {
 
 function AttemptDetailModal({
   puzzleId,
-  puzzle,
   userId,
   nickname,
   onClose,
 }: {
   puzzleId: string;
-  puzzle: QueMiPuzzle | null;
   userId: number;
   nickname: string;
   onClose: () => void;
@@ -94,25 +92,27 @@ function AttemptDetailModal({
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [resolvedPuzzle, setResolvedPuzzle] = useState<QueMiPuzzle | null>(puzzle);
+  const [resolvedPuzzle, setResolvedPuzzle] = useState<QueMiPuzzle | null>(null);
   const [records, setRecords] = useState<ReturnType<typeof apiSubmitsToHistory>>([]);
 
   useEffect(() => {
     (async () => {
       try {
         const detail = await getPuzzleAttempt(puzzleId, userId);
-        const p = detail.attempt.revealed_puzzle
-          ? { ...detail.attempt.revealed_puzzle, id: puzzleId }
-          : puzzle;
-        setResolvedPuzzle(p ?? null);
-        setRecords(apiSubmitsToHistory(detail.attempt.submits, p ?? undefined));
+        if (!detail.attempt.revealed_puzzle) {
+          setError(true);
+          return;
+        }
+        const p = { ...detail.attempt.revealed_puzzle, id: puzzleId };
+        setResolvedPuzzle(p);
+        setRecords(apiSubmitsToHistory(detail.attempt.submits, p));
       } catch {
         setError(true);
       } finally {
         setLoading(false);
       }
     })();
-  }, [puzzleId, userId, puzzle]);
+  }, [puzzleId, userId]);
 
   return (
     <div
@@ -255,14 +255,12 @@ function LeaderboardTable({
 export interface QueMiLeaderboardPanelProps {
   entries: QueMiLeaderboardEntry[];
   puzzleId?: string;
-  puzzle?: QueMiPuzzle | null;
   canViewAttempts?: boolean;
 }
 
 export function QueMiLeaderboardPanel({
   entries,
   puzzleId,
-  puzzle = null,
   canViewAttempts = false,
 }: QueMiLeaderboardPanelProps) {
   const { t } = useTranslation();
@@ -293,10 +291,9 @@ export function QueMiLeaderboardPanel({
           onViewAttempt={setViewing}
         />
       </div>
-      {viewing && puzzleId && (
+      {viewing && puzzleId && canViewAttempts && (
         <AttemptDetailModal
           puzzleId={puzzleId}
-          puzzle={puzzle}
           userId={viewing.user_id}
           nickname={viewing.nickname}
           onClose={() => setViewing(null)}

@@ -223,22 +223,24 @@ func queMiSerializePuzzleWithAttempt(row *models.QueMiPuzzle, viewer *models.Use
 }
 
 func queMiCanViewAnswers(row *models.QueMiPuzzle, viewer *models.User) bool {
-	if viewer != nil && viewer.IsStaff {
-		return true
-	}
 	return viewer != nil && viewer.ID == row.CreatedByID
+}
+
+func queMiHasFinishedAttempt(puzzleID string, userID uint64) bool {
+	var attempt models.QueMiAttempt
+	return config.DB.Where("puzzle_id = ? AND user_id = ? AND status IN ?",
+		puzzleID, userID, []string{models.QueMiAttemptStatusWon, models.QueMiAttemptStatusLost}).
+		First(&attempt).Error == nil
 }
 
 func queMiCanViewOthersAttempts(row *models.QueMiPuzzle, viewer *models.User) bool {
 	if viewer == nil {
 		return false
 	}
-	if viewer.IsStaff || viewer.ID == row.CreatedByID {
+	if viewer.ID == row.CreatedByID {
 		return true
 	}
-	var attempt models.QueMiAttempt
-	return config.DB.Where("puzzle_id = ? AND user_id = ? AND status != ?",
-		row.ID, viewer.ID, models.QueMiAttemptStatusInProgress).First(&attempt).Error == nil
+	return queMiHasFinishedAttempt(row.ID, viewer.ID)
 }
 
 func queMiCreatorMatchesFilter(row *models.QueMiPuzzle, creatorQuery string) bool {
@@ -857,6 +859,11 @@ func QueMiLeaderboard(c *gin.Context) {
 
 // QueMiPuzzleAttemptDetail GET /que-mi/puzzles/:id/attempts/:user_id/
 func QueMiPuzzleAttemptDetail(c *gin.Context) {
+	viewer := middleware.GetUser(c)
+	if viewer == nil {
+		respondError(c, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	pk := c.Param("id")
 	targetUserID := parsePathUint64(c.Param("user_id"))
 	if targetUserID == 0 {
@@ -868,7 +875,6 @@ func QueMiPuzzleAttemptDetail(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
-	viewer := middleware.GetUser(c)
 	if !queMiCanViewOthersAttempts(&row, viewer) {
 		respondError(c, http.StatusForbidden, "Forbidden")
 		return

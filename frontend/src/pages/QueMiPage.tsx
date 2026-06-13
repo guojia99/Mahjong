@@ -912,6 +912,15 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
 
   const displayDurationMs = phase === 'playing' ? liveDurationMs : gameDurationMs;
 
+  const canViewOthersAttempts = useMemo(() => {
+    if (!isOnline || !onlineDetail) return false;
+    if (onlineDetail.is_mine) return true;
+    if (phase === 'playing') return false;
+    const status = onlineDetail.my_attempt?.status;
+    if (status === 'in_progress') return false;
+    return status === 'won' || status === 'lost';
+  }, [isOnline, onlineDetail, phase]);
+
   const isOpen = puzzle?.handMode === 'open' && puzzle.openMeldCount != null;
   const meldCount = puzzle?.openMeldCount ?? 0;
 
@@ -1032,6 +1041,12 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
           }
         }
         await refreshLeaderboard(onlinePuzzleId);
+        try {
+          const full = await getPuzzle(onlinePuzzleId);
+          setOnlineDetail(full);
+        } catch {
+          // ignore
+        }
       } catch {
         setPuzzle(p);
         setSubmitRecords(submits);
@@ -1698,8 +1713,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
           <QueMiLeaderboardPanel
             entries={leaderboard}
             puzzleId={onlinePuzzleId}
-            puzzle={puzzle}
-            canViewAttempts={onlineDetail?.can_view_attempts}
+            canViewAttempts={canViewOthersAttempts}
           />
         </div>
       )}
@@ -2203,8 +2217,7 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
         <QueMiLeaderboardPanel
           entries={leaderboard}
           puzzleId={onlinePuzzleId}
-          puzzle={puzzle}
-          canViewAttempts={onlineDetail?.can_view_attempts}
+          canViewAttempts={canViewOthersAttempts}
         />
       )}
 
