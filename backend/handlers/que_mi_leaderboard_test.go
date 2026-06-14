@@ -45,3 +45,16 @@ func TestQueMiEffectiveAttemptUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestQueMiCreatorAvgAttemptsPerPuzzle(t *testing.T) {
+	t.Parallel()
+	attempts := []models.QueMiAttempt{
+		{Status: models.QueMiAttemptStatusWon, AttemptsUsed: 2},
+		{Status: models.QueMiAttemptStatusLost, AttemptsUsed: 0},
+	}
+	got := queMiCreatorAvgAttemptsPerPuzzle(attempts, 5)
+	want := (2.0 + 5.0) / 2.0
+	if got != want {
+		t.Fatalf("avg = %v, want %v", got, want)
+	}
+}

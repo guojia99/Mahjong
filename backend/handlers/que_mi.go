@@ -164,7 +164,19 @@ func queMiPuzzleMatchesCategory(p quemi.QueMiPuzzle, category string) bool {
 	return queMiPuzzleCategory(p) == category
 }
 
-// queMiEffectiveAttemptUsage scores how many attempts count toward creator leaderboard.
+// queMiCreatorAvgAttemptsPerPuzzle returns the mean effective attempts per play on one puzzle.
+func queMiCreatorAvgAttemptsPerPuzzle(attempts []models.QueMiAttempt, maxAttempts int) float64 {
+	if len(attempts) == 0 {
+		return 0
+	}
+	total := 0
+	for _, a := range attempts {
+		total += queMiEffectiveAttemptUsage(a.Status, a.AttemptsUsed, maxAttempts)
+	}
+	return float64(total) / float64(len(attempts))
+}
+
+// queMiEffectiveAttemptUsage scores how many attempts one play counts as on creator leaderboard.
 // Give-up counts as max; exhausted loss with fewer than 4 attempts counts as 5.
 func queMiEffectiveAttemptUsage(status string, attemptsUsed, maxAttempts int) int {
 	if status == models.QueMiAttemptStatusWon {
@@ -1116,10 +1128,10 @@ func QueMiCreatorLeaderboard(c *gin.Context) {
 	config.DB.Preload("CreatedBy").Find(&puzzles)
 
 	type creatorStats struct {
-		userID      uint64
-		totalUsage  int
-		puzzleCount int
-		playCount   int
+		userID              uint64
+		sumPuzzleAvg        float64
+		puzzleCount         int
+		playCount           int
 	}
 	stats := make(map[uint64]*creatorStats)
 
@@ -1145,10 +1157,8 @@ func QueMiCreatorLeaderboard(c *gin.Context) {
 			stats[row.CreatedByID] = s
 		}
 		s.puzzleCount++
-		for _, a := range attempts {
-			s.playCount++
-			s.totalUsage += queMiEffectiveAttemptUsage(a.Status, a.AttemptsUsed, p.MaxAttempts)
-		}
+		s.playCount += len(attempts)
+		s.sumPuzzleAvg += queMiCreatorAvgAttemptsPerPuzzle(attempts, p.MaxAttempts)
 	}
 
 	entries := make([]*creatorStats, 0, len(stats))
@@ -1156,14 +1166,16 @@ func QueMiCreatorLeaderboard(c *gin.Context) {
 		entries = append(entries, s)
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].totalUsage != entries[j].totalUsage {
-			return entries[i].totalUsage > entries[j].totalUsage
-		}
-		if entries[i].playCount != entries[j].playCount {
-			return entries[i].playCount > entries[j].playCount
+		avgI := entries[i].sumPuzzleAvg / float64(entries[i].puzzleCount)
+		avgJ := entries[j].sumPuzzleAvg / float64(entries[j].puzzleCount)
+		if avgI != avgJ {
+			return avgI > avgJ
 		}
 		if entries[i].puzzleCount != entries[j].puzzleCount {
 			return entries[i].puzzleCount > entries[j].puzzleCount
+		}
+		if entries[i].playCount != entries[j].playCount {
+			return entries[i].playCount > entries[j].playCount
 		}
 		return entries[i].userID < entries[j].userID
 	})
@@ -1179,14 +1191,15 @@ func QueMiCreatorLeaderboard(c *gin.Context) {
 				playerID = *u.PlayerID
 			}
 		}
+		avgAttempts := s.sumPuzzleAvg / float64(s.puzzleCount)
 		out = append(out, gin.H{
-			"rank":          rank + 1,
-			"user_id":       s.userID,
-			"player_id":     playerID,
-			"nickname":      name,
-			"total_usage":   s.totalUsage,
-			"puzzle_count":  s.puzzleCount,
-			"play_count":    s.playCount,
+			"rank":                     rank + 1,
+			"user_id":                  s.userID,
+			"player_id":                playerID,
+			"nickname":                 name,
+			"avg_attempts_per_puzzle":  avgAttempts,
+			"puzzle_count":             s.puzzleCount,
+			"play_count":               s.playCount,
 		})
 	}
 	respondOK(c, out)

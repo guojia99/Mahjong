@@ -1129,7 +1129,7 @@ const en: Record<string, string> = {
   'queMiOnline.leaderboardCategory.non_winnable': 'Not winnable',
   'queMiOnline.creatorLeaderboardEmpty': 'No creator ranking data yet',
   'queMiOnline.creator': 'Creator',
-  'queMiOnline.creatorTotalUsage': 'Usage score',
+  'queMiOnline.creatorAvgAttempts': 'Avg attempts / puzzle',
   'queMiOnline.creatorPuzzleCount': 'Puzzles',
   'queMiOnline.creatorPlayCount': 'Plays',
   'queMiOnline.globalWins': 'Solved',

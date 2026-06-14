@@ -174,7 +174,7 @@ export function QueMiCreatorLeaderboardTable({ entries }: { entries: QueMiCreato
           >
             <th className="text-center py-3 px-3 w-16">{t('queMiOnline.rank')}</th>
             <th className="text-left py-3 px-3">{t('queMiOnline.creator')}</th>
-            <th className="text-center py-3 px-3 w-24">{t('queMiOnline.creatorTotalUsage')}</th>
+            <th className="text-center py-3 px-3 w-24">{t('queMiOnline.creatorAvgAttempts')}</th>
             <th className="text-center py-3 px-3 w-20">{t('queMiOnline.creatorPuzzleCount')}</th>
             <th className="text-center py-3 px-3 w-20">{t('queMiOnline.creatorPlayCount')}</th>
           </tr>
@@ -186,7 +186,9 @@ export function QueMiCreatorLeaderboardTable({ entries }: { entries: QueMiCreato
               <td className="py-3 px-3 align-middle font-medium" style={{ color: 'var(--color-text)' }}>
                 <PlayerLink playerId={e.player_id} nickname={e.nickname} />
               </td>
-              <td className="py-3 px-3 text-center align-middle tabular-nums font-medium">{e.total_usage}</td>
+              <td className="py-3 px-3 text-center align-middle tabular-nums font-medium">
+                {e.avg_attempts_per_puzzle.toFixed(1)}
+              </td>
               <td className="py-3 px-3 text-center align-middle tabular-nums">{e.puzzle_count}</td>
               <td className="py-3 px-3 text-center align-middle tabular-nums">{e.play_count}</td>
             </tr>

@@ -140,7 +140,7 @@ export interface QueMiCreatorLeaderboardEntry {
   user_id: number;
   player_id: string;
   nickname: string;
-  total_usage: number;
+  avg_attempts_per_puzzle: number;
   puzzle_count: number;
   play_count: number;
 }

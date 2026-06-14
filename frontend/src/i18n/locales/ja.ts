@@ -1128,7 +1128,7 @@ const ja: Record<string, string> = {
   'queMiOnline.leaderboardCategory.non_winnable': '非和了形',
   'queMiOnline.creatorLeaderboardEmpty': '出題者ランキングデータがありません',
   'queMiOnline.creator': '出題者',
-  'queMiOnline.creatorTotalUsage': '利用スコア',
+  'queMiOnline.creatorAvgAttempts': '平均解答回数/問',
   'queMiOnline.creatorPuzzleCount': '問題数',
   'queMiOnline.creatorPlayCount': 'プレイ数',
   'queMiOnline.globalWins': '正解',

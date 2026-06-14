@@ -3,7 +3,7 @@
 ## v3.5.3 — 2026-06-14
 
 - Online QueMi leaderboards split into winnable (closed), winnable (open), and not winnable
-- New creator leaderboard ranked by puzzle usage score
+- New creator leaderboard ranked by average attempts per puzzle from other players
 
 ## v3.5.2 — 2026-06-14
 

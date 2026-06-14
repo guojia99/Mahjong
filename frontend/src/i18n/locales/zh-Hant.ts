@@ -1128,7 +1128,7 @@ const zhHant: Record<string, string> = {
   'queMiOnline.leaderboardCategory.non_winnable': '不可胡',
   'queMiOnline.creatorLeaderboardEmpty': '暫無出題人排行資料',
   'queMiOnline.creator': '出題人',
-  'queMiOnline.creatorTotalUsage': '利用分',
+  'queMiOnline.creatorAvgAttempts': '平均答題次數/題',
   'queMiOnline.creatorPuzzleCount': '題目數',
   'queMiOnline.creatorPlayCount': '作答次數',
   'queMiOnline.globalWins': '解出',
