@@ -5,22 +5,25 @@ import { ArrowLeft, Plus } from 'lucide-react';
 import { MahjongTile } from '@/components/MahjongTile';
 import { QueMiAdaptiveTilePicker } from '@/components/que-mi/QueMiAdaptiveTilePicker';
 import { QueMiClosedHandInput } from '@/components/que-mi/QueMiClosedHandInput';
+import { createEmptyOpenGuess, QueMiOpenHandInput } from '@/components/que-mi/QueMiOpenHandInput';
 import { QueMiContextBar } from '@/components/que-mi/QueMiContextBar';
 import { QueMiOptionGroup } from '@/components/que-mi/QueMiOptionGroup';
 import { createPuzzle, getSuggestedPuzzleName } from '@/api/queMi';
 import { isLoggedIn } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import { ATTEMPTS_BY_DIFFICULTY } from '@/mahjong-puzzle/types';
-import type { AgariWay, PuzzleDifficulty, PuzzleType, QueMiPuzzle, Wind } from '@/mahjong-puzzle/types';
+import type { AgariWay, HandMode, PuzzleDifficulty, PuzzleType, QueMiOpenGuess, QueMiPuzzle, Wind } from '@/mahjong-puzzle/types';
 import { buildCanonicalAnswer, countTiles, tileToIndex } from '@/mahjong-puzzle/tiles';
+import { buildOpenAnswerFromGuess, collectOpenGuessTiles, isOpenGuessComplete, meldsToBlocks } from '@/mahjong-puzzle/meld';
 import { computeShanten } from '@/mahjong-puzzle/shanten';
 import { isKokushiWin, isWinningHand, validateGuess } from '@/mahjong-puzzle/validate';
-import { meldsToBlocks } from '@/mahjong-puzzle/meld';
 
 const DIFFICULTIES: PuzzleDifficulty[] = ['hard', 'advanced', 'medium', 'normal', 'easy'];
 const PUZZLE_TYPES: PuzzleType[] = ['winnable', 'nonWinnable'];
 const WINDS: Wind[] = ['east', 'south', 'west', 'north'];
 const AGARI_WAYS: AgariWay[] = ['tsumo', 'ron'];
+const HAND_MODES: HandMode[] = ['closed', 'open'];
+const OPEN_MELD_COUNTS = [1, 2, 3, 4] as const;
 
 function emptyGuess(): (string | null)[] {
   return Array(14).fill(null);
@@ -43,7 +46,7 @@ function validatePuzzleDefinition(puzzle: QueMiPuzzle): { key: string; n?: numbe
       if (m.length !== 3 || m.some((t) => !t)) return { key: 'queMi.error.incomplete' };
       for (const t of m) all[t] = (all[t] ?? 0) + 1;
     }
-    if (puzzle.openAnswer.closedHand.length !== 13 || !puzzle.openAnswer.draw) {
+    if (puzzle.openAnswer.closedHand.length !== 13 - puzzle.openMeldCount * 3 || !puzzle.openAnswer.draw) {
       return { key: 'queMi.error.incomplete' };
     }
     for (const t of puzzle.openAnswer.closedHand) all[t] = (all[t] ?? 0) + 1;
@@ -100,14 +103,19 @@ export default function QueMiCreatePage() {
   const { showToast, ToastComponent } = useToast();
 
   const [puzzleType, setPuzzleType] = useState<PuzzleType>('winnable');
+  const [handMode, setHandMode] = useState<HandMode>('closed');
+  const [openMeldCount, setOpenMeldCount] = useState<number>(1);
   const [difficulty, setDifficulty] = useState<PuzzleDifficulty>('normal');
   const [fieldWind, setFieldWind] = useState<Wind>('east');
   const [seatWind, setSeatWind] = useState<Wind>('east');
   const [agariWay, setAgariWay] = useState<AgariWay>('tsumo');
   const [dora, setDora] = useState<string[]>(['5s']);
   const [guess, setGuess] = useState<(string | null)[]>(emptyGuess);
+  const [openGuess, setOpenGuess] = useState<QueMiOpenGuess>(() => createEmptyOpenGuess(1));
   const [puzzleName, setPuzzleName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const isOpen = puzzleType === 'winnable' && handMode === 'open';
 
   useEffect(() => {
     (async () => {
@@ -120,27 +128,59 @@ export default function QueMiCreatePage() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (puzzleType === 'nonWinnable' && handMode === 'open') {
+      setHandMode('closed');
+    }
+  }, [puzzleType, handMode]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setOpenGuess(createEmptyOpenGuess(openMeldCount));
+    }
+  }, [isOpen, openMeldCount]);
+
+  const answerTiles = useMemo(() => {
+    if (isOpen) return collectOpenGuessTiles(openGuess);
+    return guess.filter(Boolean) as string[];
+  }, [isOpen, openGuess, guess]);
+
   const sortedAnswer = useMemo(() => {
+    if (isOpen) return null;
     const tiles = guess.filter(Boolean) as string[];
     if (tiles.length !== 14) return null;
     const hand13 = tiles.slice(0, 13);
     const draw = tiles[13]!;
     return buildCanonicalAnswer(hand13, draw);
-  }, [guess]);
+  }, [isOpen, guess]);
+
+  const openAnswer = useMemo(() => {
+    if (!isOpen) return null;
+    return buildOpenAnswerFromGuess(openMeldCount, openGuess);
+  }, [isOpen, openMeldCount, openGuess]);
+
+  const answerComplete = isOpen
+    ? isOpenGuessComplete(openMeldCount, openGuess.melds, openGuess.hand)
+    : sortedAnswer != null;
 
   const previewShanten = useMemo(() => {
-    if (puzzleType !== 'nonWinnable' || !sortedAnswer) return undefined;
-    return computeShanten(sortedAnswer.slice(0, 13));
-  }, [puzzleType, sortedAnswer]);
+    if (puzzleType !== 'nonWinnable') return undefined;
+    if (isOpen && openAnswer) return computeShanten(openAnswer.closedHand);
+    if (sortedAnswer) return computeShanten(sortedAnswer.slice(0, 13));
+    return undefined;
+  }, [puzzleType, isOpen, openAnswer, sortedAnswer]);
+
+  const openMeldCountLabel = (n: number) =>
+    n === 4 ? t('queMi.openMeldTanki') : t('queMi.openMeldCount', { n });
 
   const addDora = useCallback(
     (tile: string) => {
       if (dora.length >= 5) return;
-      const used = countTiles([...(guess.filter(Boolean) as string[]), ...dora]);
+      const used = countTiles([...answerTiles, ...dora]);
       if ((used[tile] ?? 0) >= 4) return;
       setDora((prev) => [...prev, tile]);
     },
-    [dora, guess],
+    [dora, answerTiles],
   );
 
   const removeDora = useCallback((index: number) => {
@@ -148,7 +188,7 @@ export default function QueMiCreatePage() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!sortedAnswer) {
+    if (!answerComplete) {
       showToast(t('queMi.error.incomplete'));
       return;
     }
@@ -157,22 +197,44 @@ export default function QueMiCreatePage() {
       return;
     }
 
-    const shanten = puzzleType === 'nonWinnable' ? computeShanten(sortedAnswer.slice(0, 13)) : undefined;
+    let puzzle: QueMiPuzzle;
 
-    const puzzle: QueMiPuzzle = {
-      id: '',
-      type: puzzleType,
-      difficulty,
-      maxAttempts: ATTEMPTS_BY_DIFFICULTY[difficulty],
-      handMode: 'closed',
-      answer: sortedAnswer,
-      fieldWind,
-      seatWind,
-      agariWay,
-      dora: [...dora],
-      shanten,
-      createdAt: Date.now(),
-    };
+    if (isOpen && openAnswer) {
+      puzzle = {
+        id: '',
+        type: puzzleType,
+        difficulty,
+        maxAttempts: ATTEMPTS_BY_DIFFICULTY[difficulty],
+        handMode: 'open',
+        openMeldCount,
+        openAnswer,
+        answer: buildCanonicalAnswer(openAnswer.closedHand, openAnswer.draw),
+        fieldWind,
+        seatWind,
+        agariWay,
+        dora: [...dora],
+        createdAt: Date.now(),
+      };
+    } else if (sortedAnswer) {
+      const shanten = puzzleType === 'nonWinnable' ? computeShanten(sortedAnswer.slice(0, 13)) : undefined;
+      puzzle = {
+        id: '',
+        type: puzzleType,
+        difficulty,
+        maxAttempts: ATTEMPTS_BY_DIFFICULTY[difficulty],
+        handMode: 'closed',
+        answer: sortedAnswer,
+        fieldWind,
+        seatWind,
+        agariWay,
+        dora: [...dora],
+        shanten,
+        createdAt: Date.now(),
+      };
+    } else {
+      showToast(t('queMi.error.incomplete'));
+      return;
+    }
 
     const err = validatePuzzleDefinition(puzzle);
     if (err) {
@@ -254,6 +316,24 @@ export default function QueMiCreatePage() {
             label: `${t(`queMi.difficulty.${d}`)} (${t('queMi.attempts', { count: ATTEMPTS_BY_DIFFICULTY[d] })})`,
           }))}
         />
+        {puzzleType === 'winnable' && (
+          <>
+            <QueMiOptionGroup
+              label={t('queMi.selectHandMode')}
+              value={handMode}
+              onChange={setHandMode}
+              options={HAND_MODES.map((mode) => ({ value: mode, label: t(`queMi.handMode.${mode}`) }))}
+            />
+            {handMode === 'open' && (
+              <QueMiOptionGroup
+                label={t('queMi.openMelds')}
+                value={openMeldCount}
+                onChange={setOpenMeldCount}
+                options={OPEN_MELD_COUNTS.map((n) => ({ value: n, label: openMeldCountLabel(n) }))}
+              />
+            )}
+          </>
+        )}
       </div>
 
       <div className={cardClass} style={cardStyle}>
@@ -290,6 +370,8 @@ export default function QueMiCreatePage() {
             agariWay={agariWay}
             dora={dora}
             shanten={previewShanten}
+            handMode={isOpen ? 'open' : 'closed'}
+            openMeldCount={isOpen ? openMeldCount : undefined}
           />
         </div>
       </div>
@@ -324,7 +406,7 @@ export default function QueMiCreatePage() {
           <div className="rounded-xl border p-2 max-h-[194px] overflow-y-auto min-w-0" style={{ borderColor: 'var(--color-border)' }}>
             <QueMiAdaptiveTilePicker
               renderTile={(tile, tileHeight) => {
-                const used = countTiles([...(guess.filter(Boolean) as string[]), ...dora]);
+                const used = countTiles([...answerTiles, ...dora]);
                 const atCapacity = (used[tile] ?? 0) >= 4 || dora.length >= 5;
                 return (
                   <button
@@ -348,27 +430,51 @@ export default function QueMiCreatePage() {
           {t('queMiOnline.createAnswer')}
         </h2>
         <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-          {t('queMiOnline.createAnswerHint')}
+          {isOpen ? t('queMiOnline.createOpenAnswerHint') : t('queMiOnline.createAnswerHint')}
         </p>
-        <QueMiClosedHandInput
-          guess={guess}
-          onChange={(g) => {
-            const filled = g.filter(Boolean) as string[];
-            if (filled.length <= 13) {
-              setGuess(g);
-            } else {
-              const hand13 = filled.slice(0, 13);
-              const draw = filled[13]!;
-              setGuess(buildCanonicalAnswer(hand13, draw));
-            }
-          }}
-          dora={dora}
-          onSubmit={handleSubmit}
-          submitDisabled={submitting || sortedAnswer == null}
-        />
-        {sortedAnswer && (
+        {isOpen ? (
+          <QueMiOpenHandInput
+            meldCount={openMeldCount}
+            openGuess={openGuess}
+            onChange={setOpenGuess}
+            dora={dora}
+            onSubmit={handleSubmit}
+            submitDisabled={submitting || !answerComplete}
+          />
+        ) : (
+          <QueMiClosedHandInput
+            guess={guess}
+            onChange={(g) => {
+              const filled = g.filter(Boolean) as string[];
+              if (filled.length <= 13) {
+                setGuess(g);
+              } else {
+                const hand13 = filled.slice(0, 13);
+                const draw = filled[13]!;
+                setGuess(buildCanonicalAnswer(hand13, draw));
+              }
+            }}
+            dora={dora}
+            onSubmit={handleSubmit}
+            submitDisabled={submitting || sortedAnswer == null}
+          />
+        )}
+        {sortedAnswer && !isOpen && (
           <p className="text-xs px-3 py-2 rounded-lg" style={{ background: 'var(--color-bg)', color: 'var(--color-text-light)' }}>
             {t('queMiOnline.sortedPreview')}: {sortedAnswer.join(' ')}
+          </p>
+        )}
+        {openAnswer && isOpen && (
+          <p className="text-xs px-3 py-2 rounded-lg space-y-1" style={{ background: 'var(--color-bg)', color: 'var(--color-text-light)' }}>
+            <span className="block">{t('queMiOnline.sortedPreview')}:</span>
+            {openAnswer.melds.map((m, i) => (
+              <span key={i} className="block">
+                {t('queMi.openMeldGroup', { n: i + 1 })}: {m.join(' ')}
+              </span>
+            ))}
+            <span className="block">
+              {t('queMi.yourGuess')}: {openAnswer.closedHand.join(' ')} · {t('queMi.draw')}: {openAnswer.draw}
+            </span>
           </p>
         )}
       </div>
@@ -376,7 +482,7 @@ export default function QueMiCreatePage() {
       <button
         type="button"
         className="btn btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-2.5 rounded-xl text-sm font-semibold"
-        disabled={submitting || sortedAnswer == null}
+        disabled={submitting || !answerComplete}
         onClick={handleSubmit}
       >
         <Plus size={16} />

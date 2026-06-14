@@ -8,6 +8,7 @@ import { deletePuzzle, getMyPuzzles } from '@/api/queMi';
 import { isLoggedIn } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import { QueMiPuzzleListCard } from '@/components/que-mi/QueMiPuzzleListCard';
+import { formatQueMiHandModeSummary } from '@/components/que-mi/utils';
 import type { QueMiPuzzleListItem } from '@/types/queMi';
 
 export default function QueMiMyPuzzlesPage() {
@@ -103,7 +104,7 @@ export default function QueMiMyPuzzlesPage() {
               key={item.id}
               item={item}
               href={`/que-mi/online/${item.id}`}
-              subtitle={`${t(`queMi.handMode.${item.puzzle.handMode}`)} · ${item.created_at.slice(0, 10)}${
+              subtitle={`${formatQueMiHandModeSummary(item.puzzle, t)} · ${item.created_at.slice(0, 10)}${
                 item.puzzle.shanten != null ? ` · ${t('queMi.shanten')} ${item.puzzle.shanten}` : ''
               }`}
               trailing={

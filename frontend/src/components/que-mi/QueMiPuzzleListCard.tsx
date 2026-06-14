@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Trophy, Users } from 'lucide-react';
 import type { QueMiAttemptStatus, QueMiPuzzleListItem } from '@/types/queMi';
+import { formatQueMiHandModeSummary } from '@/components/que-mi/utils';
 
 function attemptStatusBadgeClass(status: QueMiAttemptStatus): string {
   if (status === 'in_progress') return 'bg-blue-100 text-blue-700';
@@ -24,6 +25,8 @@ export interface QueMiPuzzleListCardProps {
 
 export function QueMiPuzzleListCard({ item, href, subtitle, trailing }: QueMiPuzzleListCardProps) {
   const { t } = useTranslation();
+  const handSummary = formatQueMiHandModeSummary(item.puzzle, t);
+  const isOpen = item.puzzle.handMode === 'open';
 
   return (
     <Link
@@ -46,6 +49,11 @@ export function QueMiPuzzleListCard({ item, href, subtitle, trailing }: QueMiPuz
             >
               {t(`queMi.difficulty.${item.puzzle.difficulty}`)}
             </span>
+            {isOpen && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-violet-100 text-violet-700">
+                {handSummary}
+              </span>
+            )}
             {item.is_mine && (
               <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700">
                 {t('queMiOnline.mine')}
@@ -66,7 +74,7 @@ export function QueMiPuzzleListCard({ item, href, subtitle, trailing }: QueMiPuz
           </div>
           <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
             {subtitle ??
-              `${t('queMiOnline.byCreator', { name: item.creator_name || '—' })} · ${t(`queMi.handMode.${item.puzzle.handMode}`)}${
+              `${t('queMiOnline.byCreator', { name: item.creator_name || '—' })} · ${handSummary}${
                 item.puzzle.shanten != null ? ` · ${t('queMi.shanten')} ${item.puzzle.shanten}` : ''
               }`}
           </p>

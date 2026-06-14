@@ -4,6 +4,7 @@ import { Shield, Ban, Plus } from 'lucide-react';
 import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { adminListPuzzles, adminPatchPuzzle, addBlacklist, listBlacklist, removeBlacklist } from '@/api/queMi';
 import { useToast } from '@/hooks/useToast';
+import { formatQueMiHandModeSummary } from '@/components/que-mi/utils';
 import type { QueMiBlacklistEntry, QueMiPuzzleListItem } from '@/types/queMi';
 
 export default function QueMiAdminPage() {
@@ -123,6 +124,7 @@ export default function QueMiAdminPage() {
                 <th className="text-left p-3">{t('queMiAdmin.creator')}</th>
                 <th className="text-left p-3">{t('queMi.selectType')}</th>
                 <th className="text-left p-3">{t('queMi.selectDifficulty')}</th>
+                <th className="text-left p-3">{t('queMi.selectHandMode')}</th>
                 <th className="text-right p-3">{t('queMiAdmin.plays')}</th>
                 <th className="text-right p-3">{t('queMiAdmin.actions')}</th>
               </tr>
@@ -133,6 +135,7 @@ export default function QueMiAdminPage() {
                   <td className="p-3">{item.creator_name}</td>
                   <td className="p-3">{t(`queMi.type.${item.puzzle.type}`)}</td>
                   <td className="p-3">{t(`queMi.difficulty.${item.puzzle.difficulty}`)}</td>
+                  <td className="p-3">{formatQueMiHandModeSummary(item.puzzle, t)}</td>
                   <td className="p-3 text-right tabular-nums">{item.play_count}</td>
                   <td className="p-3 text-right">
                     <button

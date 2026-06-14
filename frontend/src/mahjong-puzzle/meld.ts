@@ -275,3 +275,34 @@ export function isOpenGuessComplete(meldCount: number, melds: (string | null)[][
   return melds.every((m) => m.length === MELD_TILE_COUNT && m.every(Boolean))
     && hand.every(Boolean);
 }
+
+export function collectOpenGuessTiles(openGuess: {
+  melds: (string | null)[][];
+  hand: (string | null)[];
+}): string[] {
+  const tiles: string[] = [];
+  for (const m of openGuess.melds) {
+    for (const t of m) {
+      if (t) tiles.push(t);
+    }
+  }
+  for (const t of openGuess.hand) {
+    if (t) tiles.push(t);
+  }
+  return tiles;
+}
+
+export function buildOpenAnswerFromGuess(
+  meldCount: number,
+  openGuess: { melds: (string | null)[][]; hand: (string | null)[] },
+): QueMiOpenAnswer | null {
+  if (!isOpenGuessComplete(meldCount, openGuess.melds, openGuess.hand)) return null;
+  const drawIdx = openDrawSlotIndex(meldCount);
+  const draw = openGuess.hand[drawIdx]!;
+  const closedHand = openGuess.hand.filter((_, i) => i !== drawIdx) as string[];
+  return {
+    melds: openGuess.melds.map((m) => sortTilesCanonical(m as string[])),
+    closedHand: sortTilesCanonical(closedHand),
+    draw,
+  };
+}

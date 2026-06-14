@@ -250,6 +250,7 @@ func run(cmd *cobra.Command, args []string) error {
 			auth.POST("/bind-email/confirm/", handlers.BindEmailConfirm)
 			auth.POST("/change-email/confirm/", handlers.ChangeEmailConfirm)
 			auth.POST("/change-password/", handlers.ChangePassword)
+			auth.POST("/refresh/", handlers.RefreshToken)
 		}
 
 		admin := api.Group("/admin", middleware.AdminRequired())
@@ -417,6 +418,7 @@ func run(cmd *cobra.Command, args []string) error {
 			queMi.GET("/puzzles/:id/leaderboard/", handlers.QueMiLeaderboard)
 			queMi.GET("/puzzles/:id/attempts/:user_id/", handlers.QueMiPuzzleAttemptDetail)
 			queMi.GET("/leaderboard/", handlers.QueMiGlobalLeaderboard)
+			queMi.GET("/creator-leaderboard/", handlers.QueMiCreatorLeaderboard)
 			queMi.GET("/my-attempts/", handlers.QueMiMyAttempts)
 			queMi.GET("/my-puzzles/", handlers.QueMiMyPuzzles)
 		}

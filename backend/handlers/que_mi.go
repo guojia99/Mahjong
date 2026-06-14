@@ -141,6 +141,47 @@ func queMiStripAnswers(p *quemi.QueMiPuzzle) {
 	p.OpenAnswer = nil
 }
 
+const (
+	queMiCategoryWinnableClosed = "winnable_closed"
+	queMiCategoryWinnableOpen   = "winnable_open"
+	queMiCategoryNonWinnable    = "non_winnable"
+)
+
+func queMiPuzzleCategory(p quemi.QueMiPuzzle) string {
+	if p.Type == quemi.PuzzleTypeNonWinnable {
+		return queMiCategoryNonWinnable
+	}
+	if p.HandMode == quemi.HandModeOpen {
+		return queMiCategoryWinnableOpen
+	}
+	return queMiCategoryWinnableClosed
+}
+
+func queMiPuzzleMatchesCategory(p quemi.QueMiPuzzle, category string) bool {
+	if category == "" {
+		return true
+	}
+	return queMiPuzzleCategory(p) == category
+}
+
+// queMiEffectiveAttemptUsage scores how many attempts count toward creator leaderboard.
+// Give-up counts as max; exhausted loss with fewer than 4 attempts counts as 5.
+func queMiEffectiveAttemptUsage(status string, attemptsUsed, maxAttempts int) int {
+	if status == models.QueMiAttemptStatusWon {
+		return attemptsUsed
+	}
+	if status != models.QueMiAttemptStatusLost {
+		return 0
+	}
+	if attemptsUsed < maxAttempts {
+		return maxAttempts
+	}
+	if attemptsUsed < 4 {
+		return 5
+	}
+	return attemptsUsed
+}
+
 type queMiListFilters struct {
 	Unplayed   bool
 	Difficulty string
@@ -182,6 +223,77 @@ func queMiPuzzleMatchesFilters(p quemi.QueMiPuzzle, f queMiListFilters) bool {
 		return false
 	}
 	return true
+}
+
+func queMiBuildFilteredPuzzleList(rows []models.QueMiPuzzle, viewer *models.User, filters queMiListFilters) []gin.H {
+	var attemptMap map[string]string
+	if viewer != nil {
+		attemptMap = queMiUserAttemptMap(viewer.ID)
+	}
+
+	out := make([]gin.H, 0, len(rows))
+	for i := range rows {
+		row := &rows[i]
+		p, err := queMiParsePuzzleData(row.PuzzleData)
+		if err != nil {
+			continue
+		}
+		if !queMiPuzzleMatchesFilters(p, filters) {
+			continue
+		}
+		if !queMiCreatorMatchesFilter(row, filters.Creator) {
+			continue
+		}
+		if !queMiNameMatchesFilter(row, filters.Name) {
+			continue
+		}
+		isMine := viewer != nil && viewer.ID == row.CreatedByID
+		if filters.Unplayed && viewer != nil {
+			if isMine {
+				continue
+			}
+			if _, played := attemptMap[row.ID]; played {
+				continue
+			}
+		}
+		var myStatus *string
+		if viewer != nil {
+			if st, ok := attemptMap[row.ID]; ok {
+				myStatus = &st
+			}
+		}
+		out = append(out, queMiSerializePuzzleWithAttempt(row, viewer, false, myStatus))
+	}
+	return out
+}
+
+func queMiPaginateList(items []gin.H, page, pageSize int) (int, int, int, []gin.H) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	total := len(items)
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	if page > totalPages {
+		page = totalPages
+	}
+	start := (page - 1) * pageSize
+	if start >= total {
+		return total, page, pageSize, []gin.H{}
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return total, page, pageSize, items[start:end]
 }
 
 func queMiSerializePuzzle(row *models.QueMiPuzzle, viewer *models.User, includeAnswers bool) gin.H {
@@ -280,45 +392,17 @@ func QueMiPuzzleList(c *gin.Context) {
 	var rows []models.QueMiPuzzle
 	q.Order("created_at DESC").Find(&rows)
 
-	var attemptMap map[string]string
-	if viewer != nil {
-		attemptMap = queMiUserAttemptMap(viewer.ID)
-	}
+	filtered := queMiBuildFilteredPuzzleList(rows, viewer, filters)
+	page := parseQueryInt(c, "page", 1)
+	pageSize := parseQueryInt(c, "page_size", 20)
+	total, page, pageSize, results := queMiPaginateList(filtered, page, pageSize)
 
-	out := make([]gin.H, 0, len(rows))
-	for i := range rows {
-		row := &rows[i]
-		p, err := queMiParsePuzzleData(row.PuzzleData)
-		if err != nil {
-			continue
-		}
-		if !queMiPuzzleMatchesFilters(p, filters) {
-			continue
-		}
-		if !queMiCreatorMatchesFilter(row, filters.Creator) {
-			continue
-		}
-		if !queMiNameMatchesFilter(row, filters.Name) {
-			continue
-		}
-		isMine := viewer != nil && viewer.ID == row.CreatedByID
-		if filters.Unplayed && viewer != nil {
-			if isMine {
-				continue
-			}
-			if _, played := attemptMap[row.ID]; played {
-				continue
-			}
-		}
-		var myStatus *string
-		if viewer != nil {
-			if st, ok := attemptMap[row.ID]; ok {
-				myStatus = &st
-			}
-		}
-		out = append(out, queMiSerializePuzzleWithAttempt(row, viewer, false, myStatus))
-	}
-	respondOK(c, out)
+	respondOK(c, gin.H{
+		"count":     total,
+		"page":      page,
+		"page_size": pageSize,
+		"results":   results,
+	})
 }
 
 // QueMiSuggestedPuzzleName GET /que-mi/puzzles/suggested-name/
@@ -905,6 +989,7 @@ func queMiNicknameForUserID(userID uint64) string {
 
 // QueMiGlobalLeaderboard GET /que-mi/leaderboard/
 func QueMiGlobalLeaderboard(c *gin.Context) {
+	category := c.Query("category")
 	difficulty := c.Query("difficulty")
 	typeFilter := c.Query("type")
 	handMode := c.Query("hand_mode")
@@ -931,14 +1016,20 @@ func QueMiGlobalLeaderboard(c *gin.Context) {
 		if err != nil {
 			continue
 		}
-		if difficulty != "" && string(p.Difficulty) != difficulty {
-			continue
-		}
-		if typeFilter != "" && string(p.Type) != typeFilter {
-			continue
-		}
-		if handMode != "" && string(p.HandMode) != handMode {
-			continue
+		if category != "" {
+			if !queMiPuzzleMatchesCategory(p, category) {
+				continue
+			}
+		} else {
+			if difficulty != "" && string(p.Difficulty) != difficulty {
+				continue
+			}
+			if typeFilter != "" && string(p.Type) != typeFilter {
+				continue
+			}
+			if handMode != "" && string(p.HandMode) != handMode {
+				continue
+			}
 		}
 		s := stats[a.UserID]
 		if s == nil {
@@ -1017,6 +1108,90 @@ func QueMiGlobalLeaderboard(c *gin.Context) {
 	respondOK(c, out)
 }
 
+// QueMiCreatorLeaderboard GET /que-mi/creator-leaderboard/
+func QueMiCreatorLeaderboard(c *gin.Context) {
+	category := c.Query("category")
+
+	var puzzles []models.QueMiPuzzle
+	config.DB.Preload("CreatedBy").Find(&puzzles)
+
+	type creatorStats struct {
+		userID      uint64
+		totalUsage  int
+		puzzleCount int
+		playCount   int
+	}
+	stats := make(map[uint64]*creatorStats)
+
+	for _, row := range puzzles {
+		p, err := queMiParsePuzzleData(row.PuzzleData)
+		if err != nil {
+			continue
+		}
+		if !queMiPuzzleMatchesCategory(p, category) {
+			continue
+		}
+		var attempts []models.QueMiAttempt
+		config.DB.Where("puzzle_id = ? AND user_id != ? AND status IN ?",
+			row.ID, row.CreatedByID,
+			[]string{models.QueMiAttemptStatusWon, models.QueMiAttemptStatusLost}).
+			Find(&attempts)
+		if len(attempts) == 0 {
+			continue
+		}
+		s := stats[row.CreatedByID]
+		if s == nil {
+			s = &creatorStats{userID: row.CreatedByID}
+			stats[row.CreatedByID] = s
+		}
+		s.puzzleCount++
+		for _, a := range attempts {
+			s.playCount++
+			s.totalUsage += queMiEffectiveAttemptUsage(a.Status, a.AttemptsUsed, p.MaxAttempts)
+		}
+	}
+
+	entries := make([]*creatorStats, 0, len(stats))
+	for _, s := range stats {
+		entries = append(entries, s)
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].totalUsage != entries[j].totalUsage {
+			return entries[i].totalUsage > entries[j].totalUsage
+		}
+		if entries[i].playCount != entries[j].playCount {
+			return entries[i].playCount > entries[j].playCount
+		}
+		if entries[i].puzzleCount != entries[j].puzzleCount {
+			return entries[i].puzzleCount > entries[j].puzzleCount
+		}
+		return entries[i].userID < entries[j].userID
+	})
+
+	out := make([]gin.H, 0, len(entries))
+	for rank, s := range entries {
+		var u models.User
+		name := ""
+		playerID := ""
+		if config.DB.First(&u, s.userID).Error == nil {
+			name = queMiUserNickname(&u)
+			if u.PlayerID != nil {
+				playerID = *u.PlayerID
+			}
+		}
+		out = append(out, gin.H{
+			"rank":          rank + 1,
+			"user_id":       s.userID,
+			"player_id":     playerID,
+			"nickname":      name,
+			"total_usage":   s.totalUsage,
+			"puzzle_count":  s.puzzleCount,
+			"play_count":    s.playCount,
+		})
+	}
+	respondOK(c, out)
+}
+
 func derefTime(t *time.Time) time.Time {
 	if t == nil {
 		return time.Time{}
@@ -1057,10 +1232,11 @@ func QueMiMyAttempts(c *gin.Context) {
 		if config.DB.Where("id = ?", attempts[i].PuzzleID).First(&puzzleRow).Error == nil {
 			p, _ := queMiParsePuzzleData(puzzleRow.PuzzleData)
 			puzzleSummary = gin.H{
-				"id":         puzzleRow.ID,
-				"type":       p.Type,
-				"difficulty": p.Difficulty,
-				"hand_mode":  p.HandMode,
+				"id":              puzzleRow.ID,
+				"type":            p.Type,
+				"difficulty":      p.Difficulty,
+				"hand_mode":       p.HandMode,
+				"open_meld_count": p.OpenMeldCount,
 			}
 			if attempts[i].Status != models.QueMiAttemptStatusInProgress {
 				revealed = &p

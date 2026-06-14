@@ -113,6 +113,57 @@ func TestChangePassword(t *testing.T) {
 	}
 }
 
+func TestRefreshToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setupAuthTestDB(t)
+
+	user := models.User{
+		Username: "refreshuser",
+		Password: auth.HashPassword("secret12"),
+		IsActive: true,
+	}
+	if err := config.DB.Create(&user).Error; err != nil {
+		t.Fatal(err)
+	}
+	oldToken := "refresh-old-token-12345678901234567890"
+	if err := config.DB.Create(&middleware.AuthToken{Key: oldToken, UserID: user.ID}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/auth/refresh/", nil)
+	c.Request.Header.Set("Authorization", "Token "+oldToken)
+
+	RefreshToken(c)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	newToken, ok := resp["token"].(string)
+	if !ok || newToken == "" || newToken == oldToken {
+		t.Fatalf("expected new token, got %v", resp["token"])
+	}
+
+	var stored middleware.AuthToken
+	if err := config.DB.Where("user_id = ?", user.ID).First(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if stored.Key != newToken {
+		t.Fatalf("expected stored token %q, got %q", newToken, stored.Key)
+	}
+
+	var oldCount int64
+	config.DB.Model(&middleware.AuthToken{}).Where("key = ?", oldToken).Count(&oldCount)
+	if oldCount != 0 {
+		t.Fatal("old token should no longer exist")
+	}
+}
+
 func TestLoginLockedUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	setupAuthTestDB(t)

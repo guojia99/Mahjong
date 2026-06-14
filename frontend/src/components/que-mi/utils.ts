@@ -8,3 +8,20 @@ export function formatQueMiDuration(ms: number): string {
   }
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+type HandModeSummaryPuzzle = {
+  handMode: 'closed' | 'open';
+  openMeldCount?: number;
+};
+
+export function formatQueMiHandModeSummary(
+  puzzle: HandModeSummaryPuzzle,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  if (puzzle.handMode === 'open' && puzzle.openMeldCount != null) {
+    return puzzle.openMeldCount === 4
+      ? t('queMi.openMeldTanki')
+      : t('queMi.openMeldCount', { n: puzzle.openMeldCount });
+  }
+  return t('queMi.handMode.closed');
+}

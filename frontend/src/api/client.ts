@@ -41,9 +41,13 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const url = error.config?.url ?? '';
+      // Background token refresh may race; do not force logout on refresh 401.
+      if (!url.includes('/auth/refresh/')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
       return Promise.reject(error);
     }
     if (error.response?.status === 500 && serverErrorHandler) {

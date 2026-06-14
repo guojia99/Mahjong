@@ -114,3 +114,7 @@ func extractToken(c *gin.Context) string {
 func GetUser(c *gin.Context) *models.User {
 	return loadUserFromToken(c)
 }
+
+func GetToken(c *gin.Context) string {
+	return extractToken(c)
+}

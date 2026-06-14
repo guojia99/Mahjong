@@ -52,9 +52,10 @@ import {
   type ShantenPreference,
   type TileFeedback,
 } from '@/mahjong-puzzle/types';
-import { formatQueMiDuration } from '@/components/que-mi/utils';
+import { formatQueMiDuration, formatQueMiHandModeSummary } from '@/components/que-mi/utils';
 import { QueMiLeaderboardPanel } from '@/components/que-mi/QueMiLeaderboard';
 import { QueMiAdaptiveTilePicker } from '@/components/que-mi/QueMiAdaptiveTilePicker';
+import { QueMiContextBar } from '@/components/que-mi/QueMiContextBar';
 import { QueMiPuzzleNameEditor } from '@/components/que-mi/QueMiPuzzleNameEditor';
 import { QueMiGuide } from '@/pages/QueMiGuide';
 import {
@@ -1656,7 +1657,9 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
                       {h.won ? <CheckCircle2 size={14} className="text-green-600 shrink-0" /> : <XCircle size={14} className="text-red-500 shrink-0" />}
                       <span className="shrink-0">{new Date(h.timestamp).toLocaleString()}</span>
                       <span className="truncate" style={{ color: 'var(--color-text-light)' }}>
-                        {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)} · {h.attemptsUsed}/{ATTEMPTS_BY_DIFFICULTY[h.difficulty]}
+                        {t(`queMi.type.${h.type}`)} · {t(`queMi.difficulty.${h.difficulty}`)}
+                        {h.puzzle ? ` · ${formatQueMiHandModeSummary(h.puzzle, t)}` : ''}
+                        {' · '}{h.attemptsUsed}/{ATTEMPTS_BY_DIFFICULTY[h.difficulty]}
                         {h.durationMs != null ? ` · ${formatQueMiDuration(h.durationMs)}` : ''}
                       </span>
                     </button>
@@ -1690,26 +1693,56 @@ export default function QueMiPage({ onlinePuzzleId: onlinePuzzleIdProp }: QueMiP
           <div className="p-4 rounded-xl border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-light)' }}>
             {t('queMiOnline.creatorView')}
           </div>
-          {(phase === 'creator') && (
-            <div className="p-5 rounded-xl border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
-              <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answer')}</p>
-              {puzzle.handMode === 'open' && puzzle.openAnswer && puzzle.openMeldCount ? (
-                <OpenAnswerBoard
-                  answer={puzzle.openAnswer}
-                  meldCount={puzzle.openMeldCount}
-                  drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
-                />
-              ) : (puzzle.answer?.length ?? 0) === 14 ? (
-                <HandRow
-                  tiles={puzzle.answer}
-                  drawSlotIndex={DRAW_SLOT_INDEX}
-                  dropPrefix="slot"
-                  frozen
-                  getSlotLabel={drawSlotLabel}
-                />
-              ) : null}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}
+            >
+              {t(`queMi.type.${puzzle.type}`)}
+            </span>
+            <span
+              className="px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ background: 'var(--color-bg)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+            >
+              {t(`queMi.difficulty.${puzzle.difficulty}`)}
+            </span>
+            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+              {formatQueMiHandModeSummary(puzzle, t)}
+            </span>
+          </div>
+          <div
+            className="p-4 rounded-xl border"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}
+          >
+            <QueMiContextBar
+              fieldWind={puzzle.fieldWind}
+              seatWind={puzzle.seatWind}
+              agariWay={puzzle.agariWay}
+              dora={puzzle.dora}
+              shanten={puzzle.shanten}
+              handMode={puzzle.handMode}
+              openMeldCount={puzzle.openMeldCount}
+              maxAttempts={puzzle.maxAttempts}
+            />
+          </div>
+          <div className="p-5 rounded-xl border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-card)' }}>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-text-light)' }}>{t('queMi.answer')}</p>
+            {puzzle.handMode === 'open' && puzzle.openAnswer && puzzle.openMeldCount ? (
+              <OpenAnswerBoard
+                answer={puzzle.openAnswer}
+                meldCount={puzzle.openMeldCount}
+                drawSlotLabel={(i) => drawSlotLabel(i, openDrawSlotIndex(puzzle.openMeldCount!))}
+              />
+            ) : (puzzle.answer?.length ?? 0) === 14 ? (
+              <HandRow
+                tiles={puzzle.answer}
+                drawSlotIndex={DRAW_SLOT_INDEX}
+                dropPrefix="slot"
+                frozen
+                getSlotLabel={drawSlotLabel}
+              />
+            ) : null}
+          </div>
           <QueMiLeaderboardPanel
             entries={leaderboard}
             puzzleId={onlinePuzzleId}

@@ -36,6 +36,24 @@ export async function getMe(): Promise<User> {
   return data;
 }
 
+let refreshInFlight: Promise<string> | null = null;
+
+export async function refreshAuthToken(): Promise<string> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  refreshInFlight = api
+    .post<{ token: string }>('/auth/refresh/')
+    .then(({ data }) => {
+      localStorage.setItem('token', data.token);
+      return data.token;
+    })
+    .finally(() => {
+      refreshInFlight = null;
+    });
+  return refreshInFlight;
+}
+
 export async function sendVerificationCode(username: string, email: string, purpose: string) {
   const { data } = await api.post('/auth/verification/send/', { username, email, purpose });
   return data;

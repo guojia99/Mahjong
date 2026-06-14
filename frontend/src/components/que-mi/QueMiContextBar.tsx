@@ -53,6 +53,8 @@ export interface QueMiContextBarProps {
   showAttempts?: boolean;
   showTimer?: boolean;
   liveTimer?: boolean;
+  /** Puzzle max attempts (creator / preview). */
+  maxAttempts?: number;
 }
 
 export function QueMiContextBar({
@@ -69,6 +71,7 @@ export function QueMiContextBar({
   showAttempts = false,
   showTimer = false,
   liveTimer = false,
+  maxAttempts,
 }: QueMiContextBarProps) {
   const { t } = useTranslation();
   const [now, setNow] = useState(Date.now());
@@ -115,6 +118,11 @@ export function QueMiContextBar({
           {shanten}
         </ContextTag>
       ) : null}
+      {maxAttempts != null && (
+        <ContextTag variant="attempts" label={t('queMi.puzzleAttempts')}>
+          {t('queMi.attemptsCount', { count: maxAttempts })}
+        </ContextTag>
+      )}
       {(showAttempts || showTimer) && (
         <span className="ml-auto flex items-center gap-2">
           {showTimer && (

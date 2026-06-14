@@ -1,25 +1,49 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { History, Lightbulb, Plus, Puzzle, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, History, Lightbulb, Plus, Puzzle, Trophy } from 'lucide-react';
 import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
-import { getGlobalLeaderboard, listPuzzles } from '@/api/queMi';
+import { getCreatorLeaderboard, getGlobalLeaderboard, listPuzzles } from '@/api/queMi';
 import { isLoggedIn } from '@/api/auth';
-import { QueMiGlobalLeaderboardPanel } from '@/components/que-mi/QueMiGlobalLeaderboard';
+import { QueMiOnlineLeaderboardSection } from '@/components/que-mi/QueMiOnlineLeaderboardSection';
 import { QueMiListFilters } from '@/components/que-mi/QueMiListFilters';
 import { QueMiPuzzleListCard } from '@/components/que-mi/QueMiPuzzleListCard';
-import type { QueMiGlobalLeaderboardEntry, QueMiPuzzleListFilters, QueMiPuzzleListItem } from '@/types/queMi';
+import type {
+  QueMiCreatorLeaderboardEntry,
+  QueMiGlobalLeaderboardEntry,
+  QueMiLeaderboardCategory,
+  QueMiPuzzleListFilters,
+  QueMiPuzzleListItem,
+} from '@/types/queMi';
 
 type Tab = 'puzzles' | 'leaderboard';
+type LeaderboardKind = 'player' | 'creator';
+
+const DEFAULT_PAGE_SIZE = 20;
 
 export default function QueMiOnlinePage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('puzzles');
   const [puzzles, setPuzzles] = useState<QueMiPuzzleListItem[]>([]);
   const [globalLeaderboard, setGlobalLeaderboard] = useState<QueMiGlobalLeaderboardEntry[]>([]);
+  const [creatorLeaderboard, setCreatorLeaderboard] = useState<QueMiCreatorLeaderboardEntry[]>([]);
+  const [leaderboardKind, setLeaderboardKind] = useState<LeaderboardKind>('player');
+  const [leaderboardCategory, setLeaderboardCategory] = useState<QueMiLeaderboardCategory>('winnable_closed');
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<QueMiPuzzleListFilters>({});
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(totalCount / DEFAULT_PAGE_SIZE)),
+    [totalCount],
+  );
+
+  const handleFiltersChange = useCallback((next: QueMiPuzzleListFilters) => {
+    setFilters(next);
+    setPage(1);
+  }, []);
 
   useAbortableEffect(
     (signal) => {
@@ -27,8 +51,14 @@ export default function QueMiOnlinePage() {
       setLoading(true);
       (async () => {
         try {
-          const data = await listPuzzles(filters, { signal });
-          if (!signal.aborted) setPuzzles(data);
+          const data = await listPuzzles({ ...filters, page, page_size: DEFAULT_PAGE_SIZE }, { signal });
+          if (!signal.aborted) {
+            setPuzzles(data.results);
+            setTotalCount(data.count);
+            if (data.page !== page) {
+              setPage(data.page);
+            }
+          }
         } catch (e) {
           if (!isAbortError(e)) {
             // ignore
@@ -38,7 +68,7 @@ export default function QueMiOnlinePage() {
         }
       })();
     },
-    [filters, tab],
+    [filters, tab, page],
   );
 
   useAbortableEffect(
@@ -47,8 +77,14 @@ export default function QueMiOnlinePage() {
       setLoading(true);
       (async () => {
         try {
-          const data = await getGlobalLeaderboard(undefined, { signal });
-          if (!signal.aborted) setGlobalLeaderboard(data);
+          const [playerData, creatorData] = await Promise.all([
+            getGlobalLeaderboard(leaderboardCategory, { signal }),
+            getCreatorLeaderboard(leaderboardCategory, { signal }),
+          ]);
+          if (!signal.aborted) {
+            setGlobalLeaderboard(playerData);
+            setCreatorLeaderboard(creatorData);
+          }
         } catch (e) {
           if (!isAbortError(e)) {
             // ignore
@@ -58,7 +94,7 @@ export default function QueMiOnlinePage() {
         }
       })();
     },
-    [tab],
+    [tab, leaderboardCategory],
   );
 
   return (
@@ -129,7 +165,7 @@ export default function QueMiOnlinePage() {
 
       {tab === 'puzzles' ? (
         <>
-          <QueMiListFilters filters={filters} onChange={setFilters} showUnplayed={isLoggedIn()} />
+          <QueMiListFilters filters={filters} onChange={handleFiltersChange} showUnplayed={isLoggedIn()} />
           {loading ? (
             <div className="flex items-center justify-center py-16" style={{ color: 'var(--color-text-light)' }}>
               {t('common.loading')}
@@ -142,11 +178,43 @@ export default function QueMiOnlinePage() {
               {t('queMiOnline.emptyFiltered')}
             </div>
           ) : (
-            <div className="grid gap-3">
-              {puzzles.map((item) => (
-                <QueMiPuzzleListCard key={item.id} item={item} href={`/que-mi/online/${item.id}`} />
-              ))}
-            </div>
+            <>
+              {totalCount > 0 && (
+                <p className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+                  {t('queMiOnline.listTotal', { count: totalCount })}
+                </p>
+              )}
+              <div className="grid gap-3">
+                {puzzles.map((item) => (
+                  <QueMiPuzzleListCard key={item.id} item={item} href={`/que-mi/online/${item.id}`} />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    <ChevronLeft size={16} />
+                    {t('gameList.pagePrev')}
+                  </button>
+                  <span className="text-sm" style={{ color: 'var(--color-text-light)' }}>
+                    {t('gameList.pageInfo', { page, totalPages })}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline inline-flex items-center gap-1"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    {t('gameList.pageNext')}
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       ) : loading ? (
@@ -154,7 +222,14 @@ export default function QueMiOnlinePage() {
           {t('common.loading')}
         </div>
       ) : (
-        <QueMiGlobalLeaderboardPanel entries={globalLeaderboard} />
+        <QueMiOnlineLeaderboardSection
+          kind={leaderboardKind}
+          category={leaderboardCategory}
+          onKindChange={setLeaderboardKind}
+          onCategoryChange={setLeaderboardCategory}
+          playerEntries={globalLeaderboard}
+          creatorEntries={creatorLeaderboard}
+        />
       )}
     </div>
   );

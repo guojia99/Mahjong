@@ -6,6 +6,7 @@ import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
 import { getMyAttempts } from '@/api/queMi';
 import { isLoggedIn } from '@/api/auth';
+import { formatQueMiHandModeSummary } from '@/components/que-mi/utils';
 import type { QueMiMyAttemptItem } from '@/types/queMi';
 
 function statusLabel(t: (k: string) => string, status: string, won: boolean): string {
@@ -91,6 +92,18 @@ export default function QueMiMyAttemptsPage() {
                         style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}
                       >
                         {t(`queMi.difficulty.${puzzle.difficulty}`)}
+                      </span>
+                    )}
+                    {puzzle.hand_mode && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          puzzle.hand_mode === 'open' ? 'bg-violet-100 text-violet-700' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {formatQueMiHandModeSummary(
+                          { handMode: puzzle.hand_mode, openMeldCount: puzzle.open_meld_count },
+                          t,
+                        )}
                       </span>
                     )}
                     <span

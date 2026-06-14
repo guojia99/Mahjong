@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.5.3 — 2026-06-14
+
+- Online QueMi leaderboards split into winnable (closed), winnable (open), and not winnable
+- New creator leaderboard ranked by puzzle usage score
+
+## v3.5.2 — 2026-06-14
+
+- Auto-refresh auth token while logged in to reduce unexpected logouts during long sessions
+- QueMi open-meld puzzles (configurable meld count); lists and history show meld info
+
 ## v3.5.1 — 2026-06-13
 
 - Online QueMi: creators and players who finished a puzzle can view others' submission history from the leaderboard

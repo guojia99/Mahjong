@@ -13,6 +13,8 @@ import type {
 
 export type QueMiAttemptStatus = 'in_progress' | 'won' | 'lost';
 
+export type QueMiLeaderboardCategory = 'winnable_closed' | 'winnable_open' | 'non_winnable';
+
 export interface QueMiPuzzleListFilters {
   unplayed?: boolean;
   difficulty?: PuzzleDifficulty;
@@ -20,6 +22,15 @@ export interface QueMiPuzzleListFilters {
   hand_mode?: HandMode;
   creator?: string;
   name?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface QueMiPuzzleListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  results: QueMiPuzzleListItem[];
 }
 
 export interface QueMiPuzzleListItem {
@@ -124,6 +135,16 @@ export interface QueMiGlobalLeaderboardEntry {
   avg_duration_ms: number | null;
 }
 
+export interface QueMiCreatorLeaderboardEntry {
+  rank: number;
+  user_id: number;
+  player_id: string;
+  nickname: string;
+  total_usage: number;
+  puzzle_count: number;
+  play_count: number;
+}
+
 export interface QueMiPuzzleAttemptDetail {
   attempt: QueMiAttempt;
   nickname: string;
@@ -136,6 +157,7 @@ export interface QueMiMyAttemptItem {
     type?: PuzzleType;
     difficulty?: PuzzleDifficulty;
     hand_mode?: HandMode;
+    open_meld_count?: number;
   };
 }
 

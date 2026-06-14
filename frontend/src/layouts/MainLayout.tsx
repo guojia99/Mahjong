@@ -37,6 +37,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { logout as logoutApi, getCurrentUser, isAdmin, isLoggedIn } from '@/api/auth';
+import { useTokenRefresh } from '@/hooks/useTokenRefresh';
 
 const LANG_OPTIONS = [
   { code: 'zh-Hans', label: '简体中文' },
@@ -212,6 +213,8 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const user = getCurrentUser();
   const admin = isAdmin();
+
+  useTokenRefresh();
 
   const filteredNav = useMemo<NavEntry[]>(
     () => NAV_STRUCTURE.filter((entry) => !(entry.type === 'group' && entry.adminOnly && !admin)),

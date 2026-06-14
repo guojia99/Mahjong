@@ -165,6 +165,30 @@ func Me(c *gin.Context) {
 	respondOK(c, userToJSON(user, true))
 }
 
+func RefreshToken(c *gin.Context) {
+	user := middleware.GetUser(c)
+	if user == nil {
+		respondError(c, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	oldKey := middleware.GetToken(c)
+	if oldKey == "" {
+		respondError(c, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	newKey := generateToken()
+	result := config.DB.Model(&middleware.AuthToken{}).Where("key = ? AND user_id = ?", oldKey, user.ID).Update("key", newKey)
+	if result.Error != nil {
+		respondError(c, http.StatusInternalServerError, "Failed to refresh token")
+		return
+	}
+	if result.RowsAffected == 0 {
+		respondError(c, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	respondOK(c, gin.H{"token": newKey})
+}
+
 func VerificationSend(c *gin.Context) {
 	var req verificationSendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

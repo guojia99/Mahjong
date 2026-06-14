@@ -3,13 +3,16 @@ import type { ApiRequestOptions } from './types';
 import { mergeApiOptions } from './types';
 import type {
   QueMiBlacklistEntry,
+  QueMiCreatorLeaderboardEntry,
   QueMiGlobalLeaderboardEntry,
+  QueMiLeaderboardCategory,
   QueMiLeaderboardEntry,
   QueMiMyAttemptItem,
   QueMiPuzzleAttemptDetail,
   QueMiPuzzleDetail,
   QueMiPuzzleListFilters,
   QueMiPuzzleListItem,
+  QueMiPuzzleListResponse,
   QueMiGiveUpResponse,
   QueMiStartAttemptResponse,
   QueMiSubmitAnswerResponse,
@@ -21,7 +24,7 @@ const BASE = '/que-mi';
 export async function listPuzzles(
   filters?: QueMiPuzzleListFilters,
   opts?: ApiRequestOptions,
-): Promise<QueMiPuzzleListItem[]> {
+): Promise<QueMiPuzzleListResponse> {
   const params: Record<string, string> = {};
   if (filters?.unplayed) params.unplayed = 'true';
   if (filters?.difficulty) params.difficulty = filters.difficulty;
@@ -29,7 +32,9 @@ export async function listPuzzles(
   if (filters?.hand_mode) params.hand_mode = filters.hand_mode;
   if (filters?.creator) params.creator = filters.creator;
   if (filters?.name) params.name = filters.name;
-  const { data } = await api.get(`${BASE}/puzzles/`, { params, ...mergeApiOptions(opts) });
+  if (filters?.page != null) params.page = String(filters.page);
+  if (filters?.page_size != null) params.page_size = String(filters.page_size);
+  const { data } = await api.get<QueMiPuzzleListResponse>(`${BASE}/puzzles/`, { params, ...mergeApiOptions(opts) });
   return data;
 }
 
@@ -88,14 +93,24 @@ export async function getPuzzleAttempt(
 }
 
 export async function getGlobalLeaderboard(
-  filters?: Pick<QueMiPuzzleListFilters, 'difficulty' | 'type' | 'hand_mode'>,
+  category: QueMiLeaderboardCategory,
   opts?: ApiRequestOptions,
 ): Promise<QueMiGlobalLeaderboardEntry[]> {
-  const params: Record<string, string> = {};
-  if (filters?.difficulty) params.difficulty = filters.difficulty;
-  if (filters?.type) params.type = filters.type;
-  if (filters?.hand_mode) params.hand_mode = filters.hand_mode;
-  const { data } = await api.get(`${BASE}/leaderboard/`, { params, ...mergeApiOptions(opts) });
+  const { data } = await api.get(`${BASE}/leaderboard/`, {
+    params: { category },
+    ...mergeApiOptions(opts),
+  });
+  return data;
+}
+
+export async function getCreatorLeaderboard(
+  category: QueMiLeaderboardCategory,
+  opts?: ApiRequestOptions,
+): Promise<QueMiCreatorLeaderboardEntry[]> {
+  const { data } = await api.get(`${BASE}/creator-leaderboard/`, {
+    params: { category },
+    ...mergeApiOptions(opts),
+  });
   return data;
 }
 
