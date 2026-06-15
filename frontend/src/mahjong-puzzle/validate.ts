@@ -191,7 +191,7 @@ export function validateGuess(puzzle: QueMiPuzzle, guess: (string | null)[]): Va
 }
 
 export function validateOpenGuess(puzzle: QueMiPuzzle, openGuess: QueMiOpenGuess): ValidateResult {
-  if (puzzle.handMode !== 'open' || !puzzle.openAnswer || puzzle.openMeldCount == null) {
+  if (puzzle.handMode !== 'open' || puzzle.openMeldCount == null) {
     return { ok: false, reason: 'incomplete' };
   }
   if (!isOpenGuessComplete(puzzle.openMeldCount, openGuess.melds, openGuess.hand)) {
@@ -213,7 +213,9 @@ export function validateOpenGuess(puzzle: QueMiPuzzle, openGuess: QueMiOpenGuess
     }
   }
 
-  const correct = isOpenAnswerCorrect(puzzle.openAnswer, openGuess.melds, openGuess.hand);
+  const correct = puzzle.openAnswer
+    ? isOpenAnswerCorrect(puzzle.openAnswer, openGuess.melds, openGuess.hand)
+    : false;
   return { ok: true, correct };
 }
 
