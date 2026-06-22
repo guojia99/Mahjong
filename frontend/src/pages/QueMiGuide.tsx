@@ -204,7 +204,22 @@ export function QueMiGuide({ open, onClose }: { open: boolean; onClose: () => vo
 
           {tab === 'open' && (
             <GuideTabPanel>
-              <GuideParagraph>{t('queMi.guide.open.layout')}</GuideParagraph>
+              <GuideParagraph>{t('queMi.guide.open.noInputHint')}</GuideParagraph>
+              <div className="flex flex-wrap items-end gap-3 py-1">
+                <GuideMeldGroup
+                  tiles={['5s', '5s', '5s']}
+                  feedbacks={['green', 'green', 'green']}
+                  borderColor="#60a5fa"
+                  label={t('queMi.guide.open.triplet')}
+                />
+              </div>
+              <div className="flex items-center gap-3 py-1">
+                <GuideFeedbackTile tile="1m" feedback="black" />
+                <p className="text-sm flex-1 leading-snug" style={{ color: 'var(--color-text)' }}>
+                  {t('queMi.guide.open.handInMeld')}
+                </p>
+              </div>
+              <GuideParagraph>{t('queMi.guide.open.meldOnly')}</GuideParagraph>
               <div className="flex flex-wrap items-end gap-3 py-1">
                 <GuideMeldGroup
                   tiles={['1m', '1m', '1m']}

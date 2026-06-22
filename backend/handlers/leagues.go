@@ -651,67 +651,6 @@ func LeagueUnregisterPlayer(c *gin.Context) {
 	respondNoContent(c)
 }
 
-// --- Standard Stages ---
-
-func LeagueCreateStandardStages(c *gin.Context) {
-	pk := c.Param("pk")
-	var season models.LeagueSeason
-	config.DB.Where("id = ?", pk).First(&season)
-	if season.ID == "" {
-		respondError(c, http.StatusNotFound, "Season not found")
-		return
-	}
-	if season.Status != "registration" {
-		respondError(c, http.StatusBadRequest, "Season already started")
-		return
-	}
-	config.DB.Where("season_id = ?", pk).Delete(&models.LeagueStage{})
-
-	templates := []struct {
-		Name           string
-		StageType      string
-		GamesPerPlayer int
-		Uma1st, Uma2nd float64
-		Uma3rd, Uma4th float64
-		AllowCompanion bool
-		AllowFreeTable bool
-		RecordRanking  bool
-	}{
-		{"积分赛", "swiss", 8, 20, 10, -10, -20, true, true, true},
-		{"淘汰赛第一阶段", "elimination_1", 4, 20, 10, -10, -20, true, true, true},
-		{"淘汰赛第二阶段", "elimination_2", 4, 20, 10, -10, -20, true, true, true},
-		{"淘汰赛第三阶段", "elimination_3", 4, 20, 10, -10, -20, true, true, true},
-		{"复活赛", "revival", 4, 20, 10, -10, -20, false, true, true},
-		{"半决赛", "semifinal", 6, 50, 10, -15, -40, false, false, true},
-		{"决赛", "final", 4, 50, 10, -15, -40, false, false, true},
-	}
-	for idx, tpl := range templates {
-		stage := models.LeagueStage{
-			ID:             newUUID(),
-			SeasonID:       pk,
-			Name:           tpl.Name,
-			StageType:      tpl.StageType,
-			Status:         "pending",
-			Order:          idx + 1,
-			GamesPerPlayer: tpl.GamesPerPlayer,
-			Uma1st:         tpl.Uma1st,
-			Uma2nd:         tpl.Uma2nd,
-			Uma3rd:         tpl.Uma3rd,
-			Uma4th:         tpl.Uma4th,
-			BaseScore:      25000,
-			AllowCompanion: tpl.AllowCompanion,
-			AllowFreeTable: tpl.AllowFreeTable,
-			RecordRanking:  tpl.RecordRanking,
-			PromotionRules: leagueEmptyJSONField(),
-		}
-		if err := config.DB.Create(&stage).Error; err != nil {
-			respondError(c, http.StatusInternalServerError, "Failed to create stage: "+err.Error())
-			return
-		}
-	}
-	respondOK(c, gin.H{"message": "Standard stages created"})
-}
-
 // --- Stages ---
 
 func LeagueStageList(c *gin.Context) {
@@ -1205,112 +1144,10 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 	respondError(c, http.StatusNotImplemented, "Use game import endpoints")
 }
 
-func LeaguePromoteStage(c *gin.Context) {
-	pk := c.Param("pk")
-	leagueSyncStagePlayersFromSeason(pk)
-	respondOK(c, gin.H{"message": "Players synced"})
-}
-
 func LeagueSyncStagePlayers(c *gin.Context) {
 	pk := c.Param("pk")
 	leagueSyncStagePlayersFromSeason(pk)
 	respondOK(c, gin.H{"message": "Players synced"})
-}
-
-// --- Promotion (simplified) ---
-
-func LeagueApplyStagePromotion(c *gin.Context) {
-	pk := c.Param("pk")
-	var stage models.LeagueStage
-	config.DB.Preload("Season").Where("id = ?", pk).First(&stage)
-	if stage.Status != "finished" {
-		respondError(c, http.StatusBadRequest, "Stage must be finished first")
-		return
-	}
-
-	var nextStage models.LeagueStage
-	config.DB.Where("season_id = ? AND `order` > ?", stage.SeasonID, stage.Order).
-		Order("`order`").First(&nextStage)
-	if nextStage.ID == "" {
-		respondError(c, http.StatusBadRequest, "No next stage found")
-		return
-	}
-
-	rules := stage.PromotionRules
-	if rules.IsNil() {
-		rules = models.JSONField("{}")
-	}
-	rulesMap := rules.AsMap()
-
-	winnersPromote := 4
-	if v, ok := rulesMap["winners_promote"]; ok {
-		if n, ok := v.(float64); ok {
-			winnersPromote = int(n)
-		}
-	}
-	losersEliminate := 4
-	if v, ok := rulesMap["losers_eliminate"]; ok {
-		if n, ok := v.(float64); ok {
-			losersEliminate = int(n)
-		}
-	}
-
-	var currentSPs []models.LeagueStagePlayer
-	config.DB.Where("stage_id = ?", pk).Find(&currentSPs)
-
-	winners := make([]models.LeagueStagePlayer, 0)
-	losers := make([]models.LeagueStagePlayer, 0)
-	others := make([]models.LeagueStagePlayer, 0)
-	for _, sp := range currentSPs {
-		if sp.GroupType == "winners" {
-			winners = append(winners, sp)
-		} else if sp.GroupType == "losers" {
-			losers = append(losers, sp)
-		} else {
-			others = append(others, sp)
-		}
-	}
-
-	sort.Slice(winners, func(i, j int) bool { return winners[i].TotalPT > winners[j].TotalPT })
-	sort.Slice(losers, func(i, j int) bool { return losers[i].TotalPT > losers[j].TotalPT })
-	sort.Slice(others, func(i, j int) bool { return others[i].TotalPT > others[j].TotalPT })
-
-	promoted := make([]string, 0)
-	for i, sp := range winners {
-		if i < winnersPromote {
-			promoted = append(promoted, sp.PlayerID)
-			config.DB.Model(&sp).Update("is_promoted", true)
-		}
-	}
-	for i, sp := range losers {
-		if i >= losersEliminate {
-			promoted = append(promoted, sp.PlayerID)
-		} else {
-			config.DB.Model(&sp).Update("is_eliminated", true)
-		}
-	}
-	for _, sp := range others {
-		promoted = append(promoted, sp.PlayerID)
-	}
-
-	for _, pid := range promoted {
-		var existing models.LeagueStagePlayer
-		if err := config.DB.Where("stage_id = ? AND player_id = ?", nextStage.ID, pid).First(&existing).Error; err != nil {
-			sp := models.LeagueStagePlayer{
-				ID: newUUID(), StageID: nextStage.ID, PlayerID: pid,
-			}
-			if nextStage.HasGroups() {
-				sp.GroupType = "none"
-			}
-			config.DB.Create(&sp)
-		}
-	}
-
-	respondOK(c, gin.H{
-		"message":       "Promotion applied",
-		"promoted":      len(promoted),
-		"next_stage_id": nextStage.ID,
-	})
 }
 
 // --- Helpers ---
@@ -1538,6 +1375,9 @@ func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
 		matches = append(matches, serializeLeagueMatch(&m))
 	}
 	data["matches"] = matches
+	if bypass := leagueLoadBypassPlayers(s); len(bypass) > 0 {
+		data["bypass_players"] = bypass
+	}
 	return data
 }
 

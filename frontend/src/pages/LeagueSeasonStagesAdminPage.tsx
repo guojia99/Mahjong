@@ -98,14 +98,26 @@ export default function LeagueSeasonStagesAdminPage() {
     }, [seasonId, t, showToast]);
 
     const isRegistration = season?.status === 'registration';
+    const registeredCount = season?.player_count ?? 0;
+    const templateFormat: 'compact' | 'standard' | 'insufficient' =
+        registeredCount >= 16 ? 'standard' : registeredCount >= 12 ? 'compact' : 'insufficient';
 
     async function handleApplyStandard() {
         if (!seasonId) return;
-        if (!confirm(t('league.applyStandardConfirm'))) return;
+        const playerCount = season?.player_count ?? 0;
+        const confirmKey = playerCount >= 16
+            ? 'league.applyStandardConfirm'
+            : playerCount >= 12
+                ? 'league.applyStandardConfirmCompact'
+                : 'league.applyStandardConfirm';
+        if (!confirm(t(confirmKey))) return;
         try {
-            const created = await createStandardStages(seasonId);
-            setStages(created);
-            showToast(t('league.standardStagesCreated'), 'success');
+            const res = await createStandardStages(seasonId);
+            setStages(res.stages);
+            const toastKey = res.format === 'compact'
+                ? 'league.standardStagesCreatedCompact'
+                : 'league.standardStagesCreated';
+            showToast(t(toastKey), 'success');
         } catch (e: unknown) {
             const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('league.actionFailed');
             showToast(msg);
@@ -184,8 +196,13 @@ export default function LeagueSeasonStagesAdminPage() {
                                 {t('league.standardTemplateTitle')}
                             </h3>
                             <p className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                                {t('league.standardTemplateDesc')}
+                                {templateFormat === 'compact'
+                                    ? t('league.standardTemplateDescCompact', { n: registeredCount })
+                                    : templateFormat === 'standard'
+                                        ? t('league.standardTemplateDesc')
+                                        : t('league.standardTemplateNeedPlayers', { n: registeredCount })}
                             </p>
+                            {templateFormat === 'standard' && (
                             <ul className="mt-2 text-xs space-y-0.5" style={{ color: 'var(--color-text-light)' }}>
                                 <li>1. {t('league.stageType.swiss')} (8半庄)</li>
                                 <li>2~4. {t('league.stageType.elimination1')} / {t('league.stageType.elimination2')} / {t('league.stageType.elimination3')} (各4半庄)</li>
@@ -193,10 +210,21 @@ export default function LeagueSeasonStagesAdminPage() {
                                 <li>6. {t('league.stageType.semifinal')} (6半庄)</li>
                                 <li>7. {t('league.stageType.final')} (4半庄)</li>
                             </ul>
+                            )}
+                            {templateFormat === 'compact' && (
+                            <ul className="mt-2 text-xs space-y-0.5" style={{ color: 'var(--color-text-light)' }}>
+                                <li>1. {t('league.stageType.swiss')} (8半庄，前6胜者组)</li>
+                                <li>2~3. {t('league.stageType.elimination1')} / {t('league.stageType.elimination2')} (各4半庄)</li>
+                                <li>4. {t('league.stageType.elimination3')} (8人混打4半庄)</li>
+                                <li>5. {t('league.stageType.semifinal')} (6半庄)</li>
+                                <li>6. {t('league.stageType.final')} (4半庄)</li>
+                            </ul>
+                            )}
                         </div>
                         <button
                             onClick={handleApplyStandard}
-                            className="self-center inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white whitespace-nowrap"
+                            disabled={templateFormat === 'insufficient'}
+                            className="self-center inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ background: 'var(--color-primary)' }}
                         >
                             <Sparkles size={14} /> {t('league.applyStandard')}

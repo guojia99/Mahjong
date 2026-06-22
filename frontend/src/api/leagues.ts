@@ -153,9 +153,17 @@ export async function createLeagueStage(seasonId: string, payload: Partial<Leagu
     return data;
 }
 
-export async function createStandardStages(seasonId: string): Promise<LeagueStage[]> {
+export async function createStandardStages(seasonId: string): Promise<{
+    stages: LeagueStage[];
+    format: 'standard' | 'compact';
+    player_count: number;
+}> {
     const { data } = await api.post(`/leagues/seasons/${seasonId}/stages/standard/`);
-    return data;
+    return {
+        stages: data.stages ?? [],
+        format: data.format ?? 'standard',
+        player_count: data.player_count ?? 0,
+    };
 }
 
 export async function reorderStages(seasonId: string, orderedIds: string[]): Promise<LeagueStage[]> {

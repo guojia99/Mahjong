@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.5.4 — 2026-06-22
+
+- League one-click schedule: 12–15 players use a compact double-elim bracket (top 6 to winners, no revival, 8-player mixed Round 3); 16 players keep the original format; fewer than 12 cannot create
+
 ## v3.5.3 — 2026-06-14
 
 - Online QueMi leaderboards split into winnable (closed), winnable (open), and not winnable

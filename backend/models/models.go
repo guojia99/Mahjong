@@ -361,6 +361,12 @@ func (s *LeagueStage) GetUmaList() []float64 {
 }
 
 func (s *LeagueStage) HasGroups() bool {
+	if s.StageType == "elimination_3" {
+		rules := s.PromotionRules.AsMap()
+		if mixed, ok := rules["mixed"].(bool); ok && mixed {
+			return false
+		}
+	}
 	return s.StageType == "elimination_1" || s.StageType == "elimination_2" || s.StageType == "elimination_3"
 }
 
