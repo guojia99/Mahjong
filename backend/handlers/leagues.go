@@ -1250,10 +1250,16 @@ func leagueRecalculateStagePT(stageID string) {
 		}
 	}
 
-	for _, sp := range stagePlayers {
-		config.DB.Model(sp).Updates(map[string]interface{}{
-			"total_pt": sp.TotalPT, "games_played": sp.GamesPlayed, "rank_in_stage": sp.RankInStage,
-		})
+	for i := range stagePlayers {
+		sp := &stagePlayers[i]
+		config.DB.Model(&models.LeagueStagePlayer{}).
+			Where("id = ?", sp.ID).
+			Select("total_pt", "games_played", "rank_in_stage").
+			Updates(map[string]interface{}{
+				"total_pt":      sp.TotalPT,
+				"games_played":  sp.GamesPlayed,
+				"rank_in_stage": sp.RankInStage,
+			})
 	}
 }
 

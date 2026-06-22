@@ -185,6 +185,29 @@ func TestLeagueCompactSwissGrouping(t *testing.T) {
 	}
 }
 
+func TestLeagueRecalculateStagePTWithPreloadedPlayer(t *testing.T) {
+	leagueTestDB(t)
+	seasonID, playerIDs := leagueTestCreateSeason(t, 4)
+	stages, _ := leagueCreateStagesFromTemplates(seasonID, leagueCompact1216Templates())
+	swiss := stages[0]
+
+	for i, pid := range playerIDs {
+		config.DB.Create(&models.LeagueStagePlayer{
+			ID: newUUID(), StageID: swiss.ID, PlayerID: pid,
+			GroupType: "none", TotalPT: float64(10 - i), GamesPlayed: 1,
+		})
+	}
+
+	// Must not panic: Preload("Player") + Updates used to trigger unaddressable reflect panic.
+	leagueRecalculateStagePT(swiss.ID)
+
+	var sps []models.LeagueStagePlayer
+	config.DB.Where("stage_id = ?", swiss.ID).Find(&sps)
+	if len(sps) != 4 {
+		t.Fatalf("expected 4 stage players, got %d", len(sps))
+	}
+}
+
 func TestLeagueCompactElim3NoGroups(t *testing.T) {
 	leagueTestDB(t)
 	seasonID, _ := leagueTestCreateSeason(t, 14)

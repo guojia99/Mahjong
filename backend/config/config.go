@@ -160,6 +160,11 @@ func prepareDBPath() (string, error) {
 	return abs, nil
 }
 
+func sqliteDSN(dbPath string) string {
+	// WAL + busy_timeout: readers don't block on writers; panicked handlers retry instead of wedging prod.
+	return dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+}
+
 func InitDB(configPath string) *gorm.DB {
 	Load(configPath)
 
@@ -168,15 +173,18 @@ func InitDB(configPath string) *gorm.DB {
 		panic("failed to prepare database path: " + err.Error())
 	}
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
-		Logger: logger.Discard,
+	db, err := gorm.Open(sqlite.Open(sqliteDSN(dbPath)), &gorm.Config{
+		Logger:               logger.Discard,
+		FullSaveAssociations: false,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("failed to connect database %s: %s", dbPath, err.Error()))
 	}
 
 	sqlDB, _ := db.DB()
-	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxOpenConns(4)
+	sqlDB.SetMaxIdleConns(2)
+	sqlDB.SetConnMaxLifetime(0)
 
 	time.Local = time.FixedZone("CST", 8*3600)
 

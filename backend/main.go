@@ -222,7 +222,9 @@ func run(cmd *cobra.Command, args []string) error {
 
 	mediaPath := config.ProjectRoot + "/media"
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(middleware.RecoveryWithDBRollback())
+	r.Use(gin.Logger())
 
 	r.Use(cors.New(cors.Config{
 		AllowAllOrigins:  true,
