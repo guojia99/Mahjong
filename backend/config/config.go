@@ -162,7 +162,9 @@ func prepareDBPath() (string, error) {
 
 func sqliteDSN(dbPath string) string {
 	// WAL + busy_timeout: readers don't block on writers; panicked handlers retry instead of wedging prod.
-	return dbPath + "?_busy_timeout=5000&_journal_mode=WAL&_foreign_keys=on"
+	// Do NOT enable _foreign_keys=on here: the production DB was migrated from Django and some legacy
+	// FK definitions (e.g. room_players → rooms) are incompatible with SQLite strict FK checks.
+	return dbPath + "?_busy_timeout=5000&_journal_mode=WAL"
 }
 
 func InitDB(configPath string) *gorm.DB {
