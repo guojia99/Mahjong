@@ -3,7 +3,9 @@ package majsoulpaipu
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // ResolveNodeDir finds backend/majsoul_node from the db_config.json location.
@@ -41,5 +43,25 @@ func ResolveNodeDir(configPath string) (nodeDir string, scriptPath string, err e
 	return "", "", fmt.Errorf(
 		"paipu.js not found (searched upward from %s); use -c backend/db_config.json or set MAJSOUL_NODE_DIR",
 		filepath.Dir(absConfig),
+	)
+}
+
+// ResolveNodeBin returns the Node.js executable for paipu.js.
+// Override with MAJSOUL_NODE_BIN; otherwise looks up "node", then "nodejs".
+func ResolveNodeBin() (string, error) {
+	if bin := strings.TrimSpace(os.Getenv("MAJSOUL_NODE_BIN")); bin != "" {
+		if _, err := os.Stat(bin); err != nil {
+			return "", fmt.Errorf("MAJSOUL_NODE_BIN=%q: %w", bin, err)
+		}
+		return bin, nil
+	}
+	for _, name := range []string{"node", "nodejs"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf(
+		"node executable not found in PATH (install Node.js 18+ and run: cd backend/majsoul_node && npm install; " +
+			"or set MAJSOUL_NODE_BIN to the full path)",
 	)
 }

@@ -23,6 +23,7 @@ type AuthConfig struct {
 
 // Client calls backend/majsoul_node/paipu.js (same as legacy Django service).
 type Client struct {
+	NodeBin    string
 	ScriptPath string
 	WorkDir    string
 	Auth       AuthConfig
@@ -32,6 +33,10 @@ type Client struct {
 // Prefer majsoul_access_token when set.
 func NewClientFromConfig(configPath string, auth AuthConfig) (*Client, error) {
 	nodeDir, script, err := ResolveNodeDir(configPath)
+	if err != nil {
+		return nil, err
+	}
+	nodeBin, err := ResolveNodeBin()
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +54,7 @@ func NewClientFromConfig(configPath string, auth AuthConfig) (*Client, error) {
 	}
 
 	return &Client{
+		NodeBin:    nodeBin,
 		ScriptPath: script,
 		WorkDir:    nodeDir,
 		Auth:       auth,
@@ -122,7 +128,7 @@ func (c *Client) FetchRecords(paipuInputs []string, detail bool) ([]map[string]i
 		args = append(args, c.Auth.Account, c.Auth.Password)
 	}
 
-	cmd := exec.Command("node", args...)
+	cmd := exec.Command(c.NodeBin, args...)
 	cmd.Dir = c.WorkDir
 	cmd.Env = c.nodeEnv()
 	out, err := cmd.CombinedOutput()
