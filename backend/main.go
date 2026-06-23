@@ -18,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const defaultConfigPath = config.DefaultConfigPath
+
 var (
 	configPath string
 	port       int
@@ -30,7 +32,7 @@ func main() {
 		RunE:  run,
 	}
 
-	rootCmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	rootCmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath, "path to config file")
 	rootCmd.Flags().IntVarP(&port, "port", "p", 8000, "server listen port")
 
 	rootCmd.AddCommand(newSetPasswordCmd())
@@ -66,7 +68,7 @@ func newSetPasswordCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath, "path to config file")
 	cmd.Flags().StringVar(&username, "username", "", "username to reset")
 	cmd.Flags().StringVar(&password, "password", "", "new plaintext password")
 	_ = cmd.MarkFlagRequired("username")
@@ -98,7 +100,7 @@ func newPaipuLoginTestCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath, "path to config file")
 	return cmd
 }
 
@@ -193,7 +195,7 @@ func newPaipuCmd() *cobra.Command {
 			return enc.Encode(out)
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath, "path to config file")
 	cmd.Flags().BoolVar(&analyze, "analyze", false, "also output normalized API fields (players/scores/game_mode)")
 	return cmd
 }
@@ -212,7 +214,7 @@ func newPaipuAiAnalyzeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&configPath, "config", "c", "backend/db_config.json", "path to config file")
+	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath, "path to config file")
 	return cmd
 }
 

@@ -65,7 +65,39 @@ var (
 	ConfigFilePath string
 )
 
+// DefaultConfigPath is the conventional db_config.json location when running from backend/.
+const DefaultConfigPath = "db_config.json"
+
+// ResolveConfigPath picks an existing db_config.json when the requested path is missing.
+// Supports running the binary from the repo root (backend/db_config.json) or from backend/ (db_config.json).
+func ResolveConfigPath(configPath string) string {
+	if configPath == "" {
+		configPath = DefaultConfigPath
+	}
+	if _, err := os.Stat(configPath); err == nil {
+		return configPath
+	}
+	for _, alt := range alternateConfigPaths(configPath) {
+		if _, err := os.Stat(alt); err == nil {
+			return alt
+		}
+	}
+	return configPath
+}
+
+func alternateConfigPaths(configPath string) []string {
+	switch filepath.Clean(configPath) {
+	case DefaultConfigPath:
+		return []string{filepath.Join("backend", DefaultConfigPath)}
+	case filepath.Join("backend", DefaultConfigPath):
+		return []string{DefaultConfigPath}
+	default:
+		return nil
+	}
+}
+
 func Load(configPath string) {
+	configPath = ResolveConfigPath(configPath)
 	absConfig, err := filepath.Abs(configPath)
 	if err != nil {
 		panic("cannot resolve config path " + configPath + ": " + err.Error())
