@@ -72,8 +72,60 @@ assert_dir_access() {
 	fi
 }
 
+# Resolve Node.js for majsoul_node/paipu.js (systemd has a minimal PATH).
+# Override detection when running make prod: MAJSOUL_NODE_BIN=/path/to/node make prod
+resolve_node_bin() {
+	local bin=""
+
+	if [ -n "${MAJSOUL_NODE_BIN:-}" ] && [ -x "${MAJSOUL_NODE_BIN}" ]; then
+		echo "${MAJSOUL_NODE_BIN}"
+		return 0
+	fi
+
+	for bin in "$(command -v node 2>/dev/null)" "$(command -v nodejs 2>/dev/null)"; do
+		if [ -n "$bin" ] && [ -x "$bin" ]; then
+			echo "$bin"
+			return 0
+		fi
+	done
+
+	local run_user_home
+	run_user_home="$(getent passwd "$RUN_USER" 2>/dev/null | cut -d: -f6)"
+	if [ -n "$run_user_home" ]; then
+		if [ "$(id -u)" -eq 0 ]; then
+			bin="$(runuser -u "$RUN_USER" -- bash -lc 'command -v node 2>/dev/null || command -v nodejs 2>/dev/null' 2>/dev/null || true)"
+		else
+			bin="$(sudo -u "$RUN_USER" bash -lc 'command -v node 2>/dev/null || command -v nodejs 2>/dev/null' 2>/dev/null || true)"
+		fi
+		if [ -n "$bin" ] && [ -x "$bin" ]; then
+			echo "$bin"
+			return 0
+		fi
+
+		local nvm_dir="${run_user_home}/.nvm/versions/node"
+		local latest=""
+		if [ -d "$nvm_dir" ]; then
+			latest="$(ls -1d "${nvm_dir}"/*/bin/node 2>/dev/null | sort -V | tail -n1)"
+			if [ -n "$latest" ] && [ -x "$latest" ]; then
+				echo "$latest"
+				return 0
+			fi
+		fi
+	fi
+
+	for bin in /usr/bin/node /usr/local/bin/node /usr/bin/nodejs; do
+		if [ -x "$bin" ]; then
+			echo "$bin"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 write_prod_unit() {
 	local unit_path="$1"
+	local node_env_line="${MAJSOUL_NODE_BIN_LINE:-}"
 	mkdir -p "$LOG_DIR"
 	cat >"$unit_path" <<EOF
 [Unit]
@@ -85,6 +137,7 @@ Wants=network-online.target
 Type=simple
 User=${RUN_USER}
 Group=${RUN_GROUP}
+${node_env_line}
 WorkingDirectory=${ROOT_DIR}/backend
 ExecStart=${ROOT_DIR}/backend/mahjong-prodsupervisor \\
 	--backend-bin ${ROOT_DIR}/backend/mahjong-backend \\
@@ -133,6 +186,14 @@ install_service() {
 	fi
 
 	echo "Installing ${name}.service (user=${RUN_USER}, root=${ROOT_DIR})"
+
+	MAJSOUL_NODE_BIN_LINE=""
+	if node_bin="$(resolve_node_bin)"; then
+		MAJSOUL_NODE_BIN_LINE="Environment=MAJSOUL_NODE_BIN=${node_bin}"
+		echo "  Node: ${node_bin}"
+	else
+		echo "  Warning: node not found; set MAJSOUL_NODE_BIN=... make prod or install Node.js for paipu fetch" >&2
+	fi
 
 	local tmp_unit
 	tmp_unit="$(mktemp)"

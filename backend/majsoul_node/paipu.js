@@ -18,6 +18,15 @@ const DEFAULT_USER_AGENT =
 /** 国服网页 login 使用的 currency_platforms（与浏览器一致） */
 const CN_CURRENCY_PLATFORMS = [1, 2, 5, 6, 8, 10, 11];
 
+/** WebGL package → resource（网页 HTML 不含 WebGL_2022-* 时按 package 查表） */
+const WEBGL_PACKAGE_RESOURCE = {
+  "4.0.38": "0.16.226",
+  "4.0.44": "0.16.238",
+};
+
+const DEFAULT_WEBGL_RESOURCE = "0.16.238";
+const DEFAULT_WEBGL_PACKAGE = "4.0.44";
+
 let protobufRoot = null;
 let protobufWrapper = null;
 let webglVersions = null;
@@ -110,6 +119,21 @@ async function initProtobuf() {
  * 国服 WebGL 客户端版本（非 version.json 的 web-0.11.x）。
  * 错误使用 web-* 会导致 code=151 / version_str 为空。
  */
+function resourceForWebGLPackage(pkg) {
+  if (WEBGL_PACKAGE_RESOURCE[pkg]) return WEBGL_PACKAGE_RESOURCE[pkg];
+  const known = Object.keys(WEBGL_PACKAGE_RESOURCE)
+    .map((k) => ({ pkg: k, resource: WEBGL_PACKAGE_RESOURCE[k] }))
+    .sort((a, b) => {
+      const pa = a.pkg.split(".").map(Number);
+      const pb = b.pkg.split(".").map(Number);
+      for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
+      }
+      return 0;
+    });
+  return known[0]?.resource || DEFAULT_WEBGL_RESOURCE;
+}
+
 async function resolveWebGLVersions(http) {
   const envResource = (process.env.MAJSOUL_WEBGL_RESOURCE || "").trim();
   const envPackage = (process.env.MAJSOUL_WEBGL_PACKAGE || "").trim();
@@ -120,16 +144,22 @@ async function resolveWebGLVersions(http) {
       client_version_string: `WebGL_2022-${envResource}`,
     };
   }
-  let pkg = envPackage || "4.0.38";
-  let resource = envResource || "0.16.226";
+  let pkg = envPackage || DEFAULT_WEBGL_PACKAGE;
+  let resource = envResource || DEFAULT_WEBGL_RESOURCE;
   try {
     const html = String((await http.get("")).data || "");
-    const pkgMatch = html.match(/WebGL-release-([\d.]+)/);
+    const pkgMatch =
+      html.match(/WebGL-release-([\d.]+)/) ||
+      html.match(/"productVersion":\s*"([\d.]+)"/);
     if (pkgMatch) pkg = pkgMatch[1];
     const resMatch = html.match(/WebGL_2022-([\d.]+)/);
-    if (resMatch) resource = resMatch[1];
+    if (resMatch) {
+      resource = resMatch[1];
+    } else if (!envResource) {
+      resource = resourceForWebGLPackage(pkg);
+    }
   } catch (e) {
-    /* use defaults */
+    if (!envResource) resource = resourceForWebGLPackage(pkg);
   }
   return {
     resource,
@@ -239,26 +269,30 @@ function extractAccessToken(loginRes) {
 function buildBrowserDeviceInfo() {
   const ua =
     (process.env.MAJSOUL_USER_AGENT || "").trim() || DEFAULT_USER_AGENT;
+  const screenW =
+    parseInt(process.env.MAJSOUL_SCREEN_WIDTH || "2560", 10) || 2560;
+  const screenH =
+    parseInt(process.env.MAJSOUL_SCREEN_HEIGHT || "1440", 10) || 1440;
   return {
     platform: "pc",
-    hardware: "Mac",
+    hardware: "pc",
     os: "windows",
-    os_version: "10.15.7",
     is_browser: true,
     software: "Chrome",
     sale_platform: "web",
     user_agent: ua,
-    screen_width: 1920,
-    screen_height: 1080,
+    screen_width: screenW,
+    screen_height: screenH,
+    screen_type: 2,
   };
 }
 
 /** 构建与国服网页 Chrome 一致的 .lq.Lobby.login 请求体 */
 function buildLoginPayload(username, password) {
   const vers = webglVersions || {
-    resource: "0.16.226",
-    package: "4.0.38",
-    client_version_string: "WebGL_2022-0.16.226",
+    resource: DEFAULT_WEBGL_RESOURCE,
+    package: DEFAULT_WEBGL_PACKAGE,
+    client_version_string: `WebGL_2022-${DEFAULT_WEBGL_RESOURCE}`,
   };
   return {
     account: username,
