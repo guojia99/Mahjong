@@ -11,7 +11,7 @@ func TestNormalizeTurnScoresEqualQOnlyChosen100(t *testing.T) {
 }
 
 func TestFAQTurnScoreSuboptimal(t *testing.T) {
-	q := []float64{0.0, 0.5, 1.0}
+	q := []float64{0.0, 0.9, 1.0}
 	if FAQTurnScore(q, 2) != 100 {
 		t.Fatalf("best should be 100")
 	}
@@ -19,8 +19,8 @@ func TestFAQTurnScoreSuboptimal(t *testing.T) {
 		t.Fatalf("worst should be 0")
 	}
 	mid := FAQTurnScore(q, 1)
-	if mid < 20 || mid > 30 {
-		t.Fatalf("mid expect ~25 got %d", mid)
+	if mid != 90 {
+		t.Fatalf("mid expect 90 got %d", mid)
 	}
 }
 

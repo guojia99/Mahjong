@@ -77,7 +77,7 @@ func serializeGameList(game *models.Game) gin.H {
 		"source_url":        game.SourceURL,
 		"has_paipu_data":    hasPaipuData,
 		"paipu_has_actions": paipuHasActions,
-		"ai_analysis":       aiSummaryForGame(game),
+		"ai_analysis":       aiSummaryForGameWithPlayers(game),
 		"players":           players,
 		"is_scored":         game.IsScored(),
 		"created_at":        formatTime(game.CreatedAt),
@@ -126,7 +126,7 @@ func serializeGameDetail(game *models.Game) gin.H {
 	}
 	data["players"] = players
 	data["paipu_data"] = game.PaipuData
-	data["ai_analysis"] = aiSummaryForGame(game)
+	data["ai_analysis"] = aiSummaryForGameWithPlayers(game)
 	data["ai_analysis_detail"] = mortal.IsAnalysisDataCurrent(game.AiAnalysisStatus, game.AiAnalysisData)
 
 	roomInfo := gin.H{"id": nil, "name": nil}
@@ -321,7 +321,7 @@ func GameList(c *gin.Context) {
 	}
 
 	var games []models.Game
-	qs.Preload("GamePlayers.Player").
+	qs.Preload("GamePlayers.Player.MajsoulAccounts").
 		Preload("HandRecords.Player").
 		Order("created_at DESC").
 		Offset((page - 1) * pageSize).
@@ -345,7 +345,7 @@ func GameList(c *gin.Context) {
 func GameDetail(c *gin.Context) {
 	pk := c.Param("pk")
 	var game models.Game
-	if err := config.DB.Preload("GamePlayers.Player").
+	if err := config.DB.Preload("GamePlayers.Player.MajsoulAccounts").
 		Preload("HandRecords.Player").
 		Preload("LeagueMatch.Stage.Season.Series").
 		Where("id = ?", pk).First(&game).Error; err != nil {

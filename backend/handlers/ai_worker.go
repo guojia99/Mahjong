@@ -17,7 +17,7 @@ var aiWorkerBusy atomic.Bool
 // StartAiAnalysisWorker polls pending online games and runs Mortal analysis for each configured backend.
 func StartAiAnalysisWorker() {
 	go func() {
-		//runAiAnalysisBatch()
+		runAiAnalysisBatch()
 		ticker := time.NewTicker(aiWorkerInterval)
 		defer ticker.Stop()
 		for range ticker.C {

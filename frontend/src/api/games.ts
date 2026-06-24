@@ -108,6 +108,7 @@ export async function importOnlineGame(payload: {
     player_id: string;
     score?: number;
     is_dealer_start?: boolean;
+    seat_number?: number;
     /** 牌谱中的雀魂 UID，导入后写入该雀士的雀魂账号表 */
     uid?: number;
     /** 牌谱昵称，写入 MahjongSoulAccount.nickname */

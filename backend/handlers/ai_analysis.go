@@ -103,6 +103,12 @@ func aiSummaryFromResult(ar *mortal.AnalysisResult, modelKey string, analyzedAt 
 	return out
 }
 
+func aiSummaryForGameWithPlayers(game *models.Game) gin.H {
+	summary := aiSummaryForGame(game)
+	enrichAiSummaryPlayerIDs(game, summary)
+	return summary
+}
+
 func aiSummaryForViewer(game *models.Game, viewerSeat int) gin.H {
 	base := aiSummaryForGame(game)
 	if base["has_ai_analysis"] != true {
@@ -347,7 +353,7 @@ func PlayerAiMatchScoreSeries(c *gin.Context) {
 	}
 
 	var gps []models.GamePlayer
-	config.DB.Preload("Game").Where("player_id = ? AND game_id IN ? AND score IS NOT NULL", pk, gameIDs).Find(&gps)
+	config.DB.Preload("Game.GamePlayers.Player.MajsoulAccounts").Where("player_id = ? AND game_id IN ? AND score IS NOT NULL", pk, gameIDs).Find(&gps)
 	sort.Slice(gps, func(i, j int) bool {
 		gi, gj := gps[i].Game, gps[j].Game
 		if gi == nil || gj == nil {
@@ -388,7 +394,7 @@ func PlayerAiMatchScoreSeries(c *gin.Context) {
 		matchGrade := ""
 		found := false
 		for _, p := range ar.Players {
-			if p.Seat == gp.SeatNumber {
+			if p.Seat == aiSeatForGamePlayer(game, &gp) {
 				matchAvg = p.MatchAvg
 				matchGrade = p.MatchGrade
 				found = true

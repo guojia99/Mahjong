@@ -1,7 +1,6 @@
 package mortal
 
 import (
-	"math"
 	"strings"
 )
 
@@ -189,7 +188,7 @@ func BuildOptionsFromReaction(r Reaction, meta map[string]interface{}) ([]Decisi
 
 func buildOptionsFromMask(mask uint64, qvals []float64, chosenCompact int) []DecisionOption {
 	pis := PiTau(qvals, 1)
-	linearScores := NormalizeTurnScores(qvals, chosenCompact)
+	linearScores := TurnScoresFromQValues(qvals, chosenCompact)
 	var opts []DecisionOption
 	qi := 0
 	for i := 0; i < ActionSpace; i++ {
@@ -270,35 +269,7 @@ func argmaxQ(qvals []float64) int {
 	return idx
 }
 
-// NormalizeTurnScores maps q_values to 0–100; when all Q equal, only chosen gets 100.
+// NormalizeTurnScores maps q_values to graded 0–100 scores (alias for TurnScoresFromQValues).
 func NormalizeTurnScores(qvals []float64, chosenIdx int) []int {
-	if len(qvals) == 0 {
-		return nil
-	}
-	minQ, maxQ := qvals[0], qvals[0]
-	for _, q := range qvals[1:] {
-		if q < minQ {
-			minQ = q
-		}
-		if q > maxQ {
-			maxQ = q
-		}
-	}
-	out := make([]int, len(qvals))
-	span := maxQ - minQ
-	if span < 1e-9 {
-		for i := range out {
-			out[i] = 0
-		}
-		if chosenIdx >= 0 && chosenIdx < len(out) {
-			out[chosenIdx] = 100
-		} else if len(out) == 1 {
-			out[0] = 100
-		}
-		return out
-	}
-	for i, q := range qvals {
-		out[i] = int(math.Round((q - minQ) / span * 100))
-	}
-	return out
+	return TurnScoresFromQValues(qvals, chosenIdx)
 }

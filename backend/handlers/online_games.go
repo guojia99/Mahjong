@@ -273,11 +273,17 @@ func OnlineGameImport(c *gin.Context) {
 		if d, ok := pdata["is_dealer_start"].(bool); ok {
 			isDealer = d
 		}
+		seatNum := i
+		if v, ok := pdata["seat_number"].(float64); ok {
+			seatNum = int(v)
+		} else if v, ok := pdata["seat"].(float64); ok {
+			seatNum = int(v)
+		}
 		gp := models.GamePlayer{
 			ID:            newUUID(),
 			GameID:        game.ID,
 			PlayerID:      player.ID,
-			SeatNumber:    i,
+			SeatNumber:    seatNum,
 			Score:         score,
 			IsDealerStart: isDealer,
 		}

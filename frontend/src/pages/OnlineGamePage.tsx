@@ -417,12 +417,13 @@ export default function OnlineGamePage() {
   const doImportOne = async (row: RowState, urlsAlreadyImportedInRun: Set<string>) => {
     if (!row.ok || !row.data || !roomId) return;
     if (!canImportOne(row)) return;
-    const player_data = row.data.players.map((p, i) => ({
+    const player_data = row.data.players.map((p) => ({
       player_id: row.bindings[p.uid],
       uid: p.uid,
       majsoul_nickname: p.nickname,
       score: p.score,
-      is_dealer_start: i === 0,
+      seat_number: p.seat,
+      is_dealer_start: p.seat === 0,
     }));
     const hasPaipuTime = Boolean(row.data.start_time);
     const st = hasPaipuTime ? toNaiveISO(row.data.start_time) : (effectiveStartTime ? toNaiveISO(effectiveStartTime) : null);

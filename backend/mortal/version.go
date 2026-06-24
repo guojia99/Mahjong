@@ -7,7 +7,7 @@ import (
 )
 
 // AnalysisVersion is stored in each AnalysisResult.version; bump when mjai/scoring logic changes.
-const AnalysisVersion = 9
+const AnalysisVersion = 10
 
 // StoredAnalysisVersion reads version from persisted JSON (legacy single or multi-model store).
 func StoredAnalysisVersion(data models.JSONField) int {

@@ -29,14 +29,13 @@ func ActionsFromPaipuData(pd models.JSONField) []map[string]interface{} {
 	return result
 }
 
-func PlayerNamesFromPaipu(pd models.JSONField) [4]string {
-	names := [4]string{"P0", "P1", "P2", "P3"}
+func paipuPlayersList(pd models.JSONField) []interface{} {
 	if pd.IsNil() {
-		return names
+		return nil
 	}
 	pdMap := pd.AsMap()
 	if pdMap == nil {
-		return names
+		return nil
 	}
 	var pl interface{}
 	if nested, ok := pdMap["majsoul_record_detail"].(map[string]interface{}); ok {
@@ -47,9 +46,37 @@ func PlayerNamesFromPaipu(pd models.JSONField) [4]string {
 	}
 	arr, ok := pl.([]interface{})
 	if !ok {
-		return names
+		return nil
 	}
-	for _, p := range arr {
+	return arr
+}
+
+// PaipuAccountIDsBySeat maps majsoul seat 0–3 to accountId from stored paipu JSON.
+func PaipuAccountIDsBySeat(pd models.JSONField) map[int]int64 {
+	out := map[int]int64{}
+	for _, p := range paipuPlayersList(pd) {
+		m, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		seat := toInt(m["seat"])
+		if seat < 0 || seat > 3 {
+			continue
+		}
+		uid := toInt64(m["accountId"])
+		if uid == 0 {
+			uid = toInt64(m["account_id"])
+		}
+		if uid > 0 {
+			out[seat] = uid
+		}
+	}
+	return out
+}
+
+func PlayerNamesFromPaipu(pd models.JSONField) [4]string {
+	names := [4]string{"P0", "P1", "P2", "P3"}
+	for _, p := range paipuPlayersList(pd) {
 		m, ok := p.(map[string]interface{})
 		if !ok {
 			continue

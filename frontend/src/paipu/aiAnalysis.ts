@@ -24,6 +24,7 @@ export interface AiAnalysisSummary {
   models?: AiModelInfo[];
   players?: {
     seat: number;
+    player_id?: string;
     match_avg: number;
     match_grade: string;
     kyoku: { kyoku_index: number; avg: number; grade: string }[];
@@ -318,14 +319,16 @@ export function decisionFrameIndices(
   return out;
 }
 
-/** Match site player to AI summary by seat_number. */
+/** Match site player to AI summary by paipu seat (player_id) or seat_number fallback. */
 export function aiMatchForPlayer(
   game: { ai_analysis?: AiAnalysisSummary; players: { player: { id: string }; seat_number: number }[] },
   playerId: string,
 ): { match_avg: number; match_grade: string } | null {
   const gp = game.players.find((p) => p.player.id === playerId);
   if (!gp || !game.ai_analysis?.has_ai_analysis || !game.ai_analysis.players) return null;
-  const row = game.ai_analysis.players.find((p) => p.seat === gp.seat_number);
+  const row =
+    game.ai_analysis.players.find((p) => p.player_id === playerId) ??
+    game.ai_analysis.players.find((p) => p.seat === gp.seat_number);
   if (!row) return null;
   return { match_avg: row.match_avg, match_grade: row.match_grade };
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.5.5 — 2026-06-24
+
+- Mortal AI scoring: only discards within 25 points of the best count; from 4th rank onward, bonus reduced 20% per rank
+
 ## v3.5.4 — 2026-06-22
 
 - League one-click schedule: 12–15 players use a compact double-elim bracket (top 6 to winners, no revival, 8-player mixed Round 3); 16 players keep the original format; fewer than 12 cannot create

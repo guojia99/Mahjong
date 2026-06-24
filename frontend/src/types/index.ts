@@ -105,6 +105,7 @@ export interface AiAnalysisSummary {
     models?: { key: string; name: string; version: string; model_tag: string }[];
     players?: {
         seat: number;
+        player_id?: string;
         match_avg: number;
         match_grade: string;
         kyoku: { kyoku_index: number; avg: number; grade: string }[];
