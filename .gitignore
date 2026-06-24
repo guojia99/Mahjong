@@ -55,3 +55,5 @@ models/mortal_akagi_202401.pth
 ./backend/majsoul_node/gateway2.log
 
 .DS_Store/
+
+marjong.db.*
