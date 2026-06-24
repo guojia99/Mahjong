@@ -1136,14 +1136,6 @@ func LeagueReorderStages(c *gin.Context) {
 	respondOK(c, gin.H{"message": "Reordered"})
 }
 
-func LeagueCreateOfflineMatch(c *gin.Context) {
-	respondError(c, http.StatusNotImplemented, "Use game creation endpoints")
-}
-
-func LeagueCreateOnlineMatch(c *gin.Context) {
-	respondError(c, http.StatusNotImplemented, "Use game import endpoints")
-}
-
 func LeagueSyncStagePlayers(c *gin.Context) {
 	pk := c.Param("pk")
 	leagueSyncStagePlayersFromSeason(pk)
@@ -1388,11 +1380,32 @@ func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
 }
 
 func serializeLeagueMatch(m *models.LeagueMatch) gin.H {
-	return gin.H{
+	data := gin.H{
 		"id": m.ID, "stage_id": m.StageID, "game_id": m.GameID,
 		"match_label": m.MatchLabel, "round_index": m.RoundIndex, "table_index": m.TableIndex,
 		"scheduled_players": leagueJSONFieldToStringList(m.ScheduledPlayers),
 		"companion_players": leagueJSONFieldToStringList(m.CompanionPlayers),
-		"created_at": formatTime(m.CreatedAt),
+		"created_at":      formatTime(m.CreatedAt),
+		"game_is_scored":    false,
+		"game_scores":       []gin.H{},
 	}
+	if m.Game != nil {
+		data["game_start_time"] = formatTime(m.Game.StartTime)
+		data["game_is_scored"] = m.Game.IsScored()
+		scores := make([]gin.H, 0, len(m.Game.GamePlayers))
+		for _, gp := range m.Game.GamePlayers {
+			nick := ""
+			if gp.Player != nil {
+				nick = gp.Player.Nickname
+			}
+			scores = append(scores, gin.H{
+				"player_id":   gp.PlayerID,
+				"nickname":    nick,
+				"seat_number": gp.SeatNumber,
+				"score":       gp.Score,
+			})
+		}
+		data["game_scores"] = scores
+	}
+	return data
 }
