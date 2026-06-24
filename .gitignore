@@ -57,3 +57,4 @@ models/mortal_akagi_202401.pth
 .DS_Store/
 
 marjong.db.*
+./backend/marjong.db-*
