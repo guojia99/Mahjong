@@ -58,22 +58,41 @@ function formatSignedRoundPt(n: number): string {
     return `${sign}${body} pt`;
 }
 
+function resolveMatchPlayers(match: LeagueMatch): Player[] {
+    if (match.players?.length) {
+        return match.players;
+    }
+    const scores = match.game_scores ?? [];
+    if (scores.length > 0) {
+        const seen = new Set<string>();
+        const out: Player[] = [];
+        for (const row of scores) {
+            if (seen.has(row.player_id)) continue;
+            seen.add(row.player_id);
+            out.push({ id: row.player_id, nickname: row.nickname } as Player);
+        }
+        if (out.length > 0) return out;
+    }
+    return (match.scheduled_players ?? []).map((id) => ({ id, nickname: id } as Player));
+}
+
 function orderedMatchPlayers(match: LeagueMatch): Player[] {
-    const scores = match.game_scores;
+    const players = resolveMatchPlayers(match);
+    const scores = match.game_scores ?? [];
     if (!scores.length) {
-        return [...match.players];
+        return [...players];
     }
     const byScore = [...scores].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     const seen = new Set<string>();
     const out: Player[] = [];
     for (const row of byScore) {
-        const p = match.players.find(x => x.id === row.player_id);
+        const p = players.find(x => x.id === row.player_id);
         if (p && !seen.has(p.id)) {
             seen.add(p.id);
             out.push(p);
         }
     }
-    for (const p of match.players) {
+    for (const p of players) {
         if (!seen.has(p.id)) out.push(p);
     }
     return out;
@@ -403,11 +422,12 @@ export default function LeagueStageDetailPage() {
                                 </div>
                             )}
                             {sortedMatches.map((match, matchIdx) => {
+                                const gameScores = match.game_scores ?? [];
                                 const companionSet = new Set((match.companion_players ?? []).map(String));
-                                const breakdown = computeLeagueMatchPtBreakdown(stage, match.game_scores);
+                                const breakdown = computeLeagueMatchPtBreakdown(stage, gameScores);
                                 const playersOrdered = orderedMatchPlayers(match);
-                                const canShowPt = match.game_is_scored && match.game_scores.length >= 4
-                                    && match.game_scores.every(g => g.score != null);
+                                const canShowPt = match.game_is_scored && gameScores.length >= 4
+                                    && gameScores.every(g => g.score != null);
 
                                 return (
                                     <div
@@ -447,7 +467,7 @@ export default function LeagueStageDetailPage() {
                                             {playersOrdered.map((p) => {
                                                 const isCompanion = companionSet.has(String(p.id));
                                                 const row = breakdown.get(String(p.id));
-                                                const scoreCell = match.game_scores.find(gs => gs.player_id === p.id)?.score;
+                                                const scoreCell = gameScores.find(gs => gs.player_id === p.id)?.score;
 
                                                 return (
                                                     <div

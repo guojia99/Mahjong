@@ -1380,19 +1380,29 @@ func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
 }
 
 func serializeLeagueMatch(m *models.LeagueMatch) gin.H {
+	companionSet := make(map[string]bool)
+	for _, cid := range leagueJSONFieldToStringList(m.CompanionPlayers) {
+		companionSet[cid] = true
+	}
+
 	data := gin.H{
-		"id": m.ID, "stage_id": m.StageID, "game_id": m.GameID,
+		"id": m.ID, "stage": m.StageID, "stage_id": m.StageID, "game_id": m.GameID,
 		"match_label": m.MatchLabel, "round_index": m.RoundIndex, "table_index": m.TableIndex,
 		"scheduled_players": leagueJSONFieldToStringList(m.ScheduledPlayers),
 		"companion_players": leagueJSONFieldToStringList(m.CompanionPlayers),
-		"created_at":      formatTime(m.CreatedAt),
+		"created_at":        formatTime(m.CreatedAt),
 		"game_is_scored":    false,
 		"game_scores":       []gin.H{},
+		"players":           []gin.H{},
+		"companions":        []gin.H{},
 	}
 	if m.Game != nil {
+		data["game"] = m.GameID
 		data["game_start_time"] = formatTime(m.Game.StartTime)
 		data["game_is_scored"] = m.Game.IsScored()
 		scores := make([]gin.H, 0, len(m.Game.GamePlayers))
+		players := make([]gin.H, 0, len(m.Game.GamePlayers))
+		companions := make([]gin.H, 0)
 		for _, gp := range m.Game.GamePlayers {
 			nick := ""
 			if gp.Player != nil {
@@ -1404,8 +1414,43 @@ func serializeLeagueMatch(m *models.LeagueMatch) gin.H {
 				"seat_number": gp.SeatNumber,
 				"score":       gp.Score,
 			})
+			if gp.Player != nil {
+				brief := getPlayerBrief(gp.Player)
+				players = append(players, brief)
+				if companionSet[gp.PlayerID] {
+					companions = append(companions, brief)
+				}
+			}
 		}
 		data["game_scores"] = scores
+		data["players"] = players
+		data["companions"] = companions
+	} else {
+		scheduledIDs := leagueJSONFieldToStringList(m.ScheduledPlayers)
+		if len(scheduledIDs) > 0 {
+			var dbPlayers []models.Player
+			config.DB.Where("id IN ?", scheduledIDs).Find(&dbPlayers)
+			byID := make(map[string]*models.Player, len(dbPlayers))
+			for i := range dbPlayers {
+				byID[dbPlayers[i].ID] = &dbPlayers[i]
+			}
+			players := make([]gin.H, 0, len(scheduledIDs))
+			companions := make([]gin.H, 0)
+			for _, pid := range scheduledIDs {
+				var brief gin.H
+				if p, ok := byID[pid]; ok {
+					brief = getPlayerBrief(p)
+				} else {
+					brief = gin.H{"id": pid, "nickname": pid}
+				}
+				players = append(players, brief)
+				if companionSet[pid] {
+					companions = append(companions, brief)
+				}
+			}
+			data["players"] = players
+			data["companions"] = companions
+		}
 	}
 	return data
 }
