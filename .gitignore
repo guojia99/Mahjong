@@ -51,10 +51,10 @@ models/
 models/mortal_model_297k_202603.pth
 models/mortal_akagi_202401.pth
 *.log
-./backend/majsoul_node/gateway1.log
-./backend/majsoul_node/gateway2.log
+backend/majsoul_node/gateway1.log
+backend/majsoul_node/gateway2.log
 
 .DS_Store/
 
-marjong.db.*
-./backend/marjong.db-*
+marjong.db-*
+backend/marjong.db-*
