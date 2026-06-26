@@ -312,3 +312,31 @@ export async function importOnlineLeagueMatch(stageId: string, payload: {
     const { data } = await api.post(`/leagues/stages/${stageId}/matches/online/`, payload, { timeout: 120_000 });
     return data;
 }
+
+export interface LeagueOnlineMatchPreviewPlayer {
+    player_id: string;
+    nickname: string;
+    uid: number;
+    seat_number: number;
+    score: number;
+    games_played: number;
+    games_per_player: number;
+    is_full: boolean;
+    is_companion: boolean;
+}
+
+export interface LeagueOnlineMatchPreview {
+    players: LeagueOnlineMatchPreviewPlayer[];
+    companion_players: string[];
+    game_start_time?: string;
+    game_end_time?: string;
+    game_mode: string;
+}
+
+export async function previewOnlineLeagueMatch(stageId: string, payload: {
+    source_url: string;
+    allow_duplicate_url?: boolean;
+}): Promise<LeagueOnlineMatchPreview> {
+    const { data } = await api.post(`/leagues/stages/${stageId}/matches/online/preview/`, payload, { timeout: 120_000 });
+    return data;
+}

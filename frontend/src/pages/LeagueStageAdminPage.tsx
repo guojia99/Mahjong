@@ -14,6 +14,7 @@ import {
     getLeagueStage,
     getStageMatches,
     getStagePlayers,
+    getLeagueSeason,
     promoteStage,
     recalculateStagePt,
     removeStagePlayer,
@@ -23,6 +24,7 @@ import {
     updateStagePlayer,
 } from '@/api/leagues';
 import { sortLeagueMatchesByTime } from '@/utils/sortLeagueMatches';
+import LeagueMatchTimeLabel from '@/components/league/LeagueMatchTimeLabel';
 import Modal from '@/components/Modal';
 import { useToast } from '@/hooks/useToast';
 import type {
@@ -90,7 +92,16 @@ export default function LeagueStageAdminPage() {
             getStagePlayers(id),
             getStageMatches(id),
         ]);
-        setStage(s);
+        let seasonStatus = s.season_status;
+        if (!seasonStatus && s.season) {
+            try {
+                const season = await getLeagueSeason(s.season);
+                seasonStatus = season.status;
+            } catch {
+                // ignore
+            }
+        }
+        setStage({ ...s, season_status: seasonStatus });
         setPlayers(ps);
         setMatches(ms);
         fillForm(s);
@@ -107,6 +118,25 @@ export default function LeagueStageAdminPage() {
                 setLoading(false);
             }
         })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [stageId, t, showToast]);
+
+    useEffect(() => {
+        if (!stageId) return;
+        const refresh = () => {
+            void reloadAll(stageId).catch(() => {
+                showToast(t('league.loadFailed'));
+            });
+        };
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') refresh();
+        };
+        window.addEventListener('pageshow', refresh);
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            window.removeEventListener('pageshow', refresh);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stageId, t, showToast]);
 
@@ -297,7 +327,9 @@ export default function LeagueStageAdminPage() {
         return <div className="text-center py-20" style={{ color: 'var(--color-text-light)' }}>{t('league.loadFailed')}</div>;
     }
 
-    const seasonRegistration = stage.status === 'pending';
+    const stagePending = stage.status === 'pending';
+    const seasonOngoing = stage.season_status === 'ongoing';
+    const canStartStage = stagePending && seasonOngoing;
     const isOngoing = stage.status === 'ongoing';
     const isFinished = stage.status === 'finished';
 
@@ -345,11 +377,25 @@ export default function LeagueStageAdminPage() {
             </div>
 
             {/* Lifecycle */}
+            {stagePending && !seasonOngoing && (
+                <div className="flex items-start gap-2 p-4 rounded-2xl border bg-amber-50 text-amber-800 text-sm" style={{ borderColor: '#fcd34d' }}>
+                    <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                    <div>
+                        <p>{t('league.startStageNeedSeason')}</p>
+                        <Link
+                            to={`/league-admin/seasons/${stage.season}`}
+                            className="inline-flex items-center gap-1 mt-2 font-medium underline hover:no-underline"
+                        >
+                            {t('league.goStartSeason')}
+                        </Link>
+                    </div>
+                </div>
+            )}
             <div className="flex flex-wrap gap-2 p-4 rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
                 <span className="text-sm font-medium self-center mr-2" style={{ color: 'var(--color-text)' }}>
                     {t('league.actions')}:
                 </span>
-                {seasonRegistration && (
+                {canStartStage && (
                     <button
                         onClick={handleStart}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
@@ -414,7 +460,7 @@ export default function LeagueStageAdminPage() {
                             <h3 className="font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                                 <Settings size={16} /> {t('league.configHeader')}
                             </h3>
-                            {seasonRegistration ? (
+                            {stagePending ? (
                                 editing ? (
                                     <div className="flex gap-2">
                                         <button onClick={() => { setEditing(false); fillForm(stage); }} className="text-sm px-3 py-1.5 rounded-lg" style={{ color: 'var(--color-text-light)' }}>
@@ -517,7 +563,7 @@ export default function LeagueStageAdminPage() {
                             <h3 className="font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                                 <Users size={16} /> {t('league.stagePlayers')} ({players.length})
                             </h3>
-                            {seasonRegistration && (
+                            {stagePending && (
                                 <button
                                     onClick={handleSyncPlayers}
                                     className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg"
@@ -650,7 +696,7 @@ export default function LeagueStageAdminPage() {
                                                             )}
                                                         </td>
                                                         <td className="text-right px-3 py-2 space-x-1">
-                                                            {seasonRegistration && stage.has_groups && (
+                                                            {stagePending && stage.has_groups && (
                                                                 <select
                                                                     value={sp.group_type}
                                                                     onChange={e => handleSetGroup(sp, e.target.value as GroupType)}
@@ -670,7 +716,7 @@ export default function LeagueStageAdminPage() {
                                                                     {sp.is_eliminated ? t('league.undoEliminate') : t('league.markEliminated')}
                                                                 </button>
                                                             )}
-                                                            {seasonRegistration && (
+                                                            {stagePending && (
                                                                 <button
                                                                     onClick={() => handleRemovePlayer(sp)}
                                                                     className="inline-block p-1 rounded hover:bg-red-50 text-red-400"
@@ -735,6 +781,8 @@ function Tag({ color, active, children }: { color: 'blue' | 'green' | 'amber'; a
 
 import {
     createOfflineLeagueMatch, deleteLeagueMatch, importOnlineLeagueMatch,
+    previewOnlineLeagueMatch,
+    type LeagueOnlineMatchPreview,
     type OfflineMatchScore,
 } from '@/api/leagues';
 
@@ -802,6 +850,9 @@ function StageMatchesAdminPanel({
             <p className="text-xs px-3 py-2 rounded-lg bg-blue-50 text-blue-700">
                 {t('league.matchScoringHintV2')}
             </p>
+            <p className="text-xs px-3 py-2 rounded-lg bg-orange-50 text-orange-700">
+                {t('league.autoCompanionHint')}
+            </p>
 
             {sortedMatches.length === 0 ? (
                 <div className="text-center py-10 text-sm" style={{ color: 'var(--color-text-light)' }}>
@@ -811,20 +862,23 @@ function StageMatchesAdminPanel({
                 <ul className="space-y-2">
                     {sortedMatches.map((m, idx) => (
                         <li key={m.id} className="rounded-xl border bg-white p-3" style={{ borderColor: 'var(--color-border)' }}>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                                    {t('league.matchOrdinal', { n: idx + 1 })}
-                                    {m.round_index > 0 && (
-                                        <span className="ml-2 text-xs" style={{ color: 'var(--color-text-light)' }}>
-                                            R{m.round_index}/T{m.table_index}
-                                        </span>
-                                    )}
-                                    {m.game_is_scored && (
-                                        <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-600">
-                                            {t('league.matchScored')}
-                                        </span>
-                                    )}
-                                </span>
+                            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                                <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-sm font-medium flex items-center flex-wrap gap-x-2 gap-y-0.5" style={{ color: 'var(--color-text)' }}>
+                                        {t('league.matchOrdinal', { n: idx + 1 })}
+                                        {m.round_index > 0 && (
+                                            <span className="text-xs" style={{ color: 'var(--color-text-light)' }}>
+                                                R{m.round_index}/T{m.table_index}
+                                            </span>
+                                        )}
+                                        {m.game_is_scored && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-600">
+                                                {t('league.matchScored')}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <LeagueMatchTimeLabel match={m} />
+                                </div>
                                 <div className="flex items-center gap-1">
                                     {m.game_id && (
                                         <Link
@@ -1124,8 +1178,33 @@ function OnlineMatchModal({
     const [url, setUrl] = useState('');
     const [label, setLabel] = useState('');
     const [allowDup, setAllowDup] = useState(false);
+    const [parsing, setParsing] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [errorDetail, setErrorDetail] = useState('');
+    const [preview, setPreview] = useState<LeagueOnlineMatchPreview | null>(null);
+
+    async function handleParse() {
+        if (!url.trim()) {
+            showToast(t('league.matchOnlineUrlRequired'));
+            return;
+        }
+        setParsing(true);
+        setErrorDetail('');
+        setPreview(null);
+        try {
+            const data = await previewOnlineLeagueMatch(stage.id, {
+                source_url: url.trim(),
+                allow_duplicate_url: allowDup,
+            });
+            setPreview(data);
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('league.actionFailed');
+            setErrorDetail(msg);
+            showToast(msg);
+        } finally {
+            setParsing(false);
+        }
+    }
 
     async function handleSubmit() {
         if (!url.trim()) {
@@ -1135,11 +1214,15 @@ function OnlineMatchModal({
         setSubmitting(true);
         setErrorDetail('');
         try {
-            await importOnlineLeagueMatch(stage.id, {
+            const match = await importOnlineLeagueMatch(stage.id, {
                 source_url: url.trim(),
                 allow_duplicate_url: allowDup,
                 match_label: label.trim(),
             });
+            const companionCount = match.companion_players?.length ?? 0;
+            if (companionCount > 0) {
+                showToast(t('league.matchOnlineCompanionImported', { n: companionCount }), 'success');
+            }
             await onCreated();
         } catch (e: unknown) {
             const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('league.actionFailed');
@@ -1158,18 +1241,33 @@ function OnlineMatchModal({
                     <Link2 size={14} className="flex-shrink-0 mt-0.5" />
                     <span>{t('league.matchOnlineHint')}</span>
                 </p>
+                <p className="text-xs px-3 py-2 rounded-lg bg-orange-50 text-orange-700">
+                    {t('league.autoCompanionHint')}
+                </p>
                 <div>
                     <label className="text-xs" style={{ color: 'var(--color-text-light)' }}>
                         {t('league.matchOnlineUrlLabel')}
                     </label>
                     <textarea
                         value={url}
-                        onChange={e => setUrl(e.target.value)}
+                        onChange={e => { setUrl(e.target.value); setPreview(null); setErrorDetail(''); }}
                         rows={3}
                         placeholder="https://game.maj-soul.com/1/?paipu=..."
                         className="w-full px-3 py-2 rounded-xl border text-sm font-mono"
                         style={{ borderColor: 'var(--color-border)' }}
                     />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={handleParse}
+                        disabled={parsing || !url.trim()}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm border disabled:opacity-50"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                        <RefreshCw size={14} className={parsing ? 'animate-spin' : ''} />
+                        {parsing ? t('common.loading') : t('league.matchOnlineParse')}
+                    </button>
                 </div>
                 <input
                     value={label}
@@ -1182,10 +1280,52 @@ function OnlineMatchModal({
                     <input
                         type="checkbox"
                         checked={allowDup}
-                        onChange={e => setAllowDup(e.target.checked)}
+                        onChange={e => { setAllowDup(e.target.checked); setPreview(null); }}
                     />
                     <span style={{ color: 'var(--color-text)' }}>{t('league.matchOnlineAllowDup')}</span>
                 </label>
+
+                {preview && (
+                    <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+                        <div className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>
+                            {t('league.matchOnlinePreview')}
+                            {preview.game_start_time && (
+                                <span className="ml-2 font-normal" style={{ color: 'var(--color-text-light)' }}>
+                                    {preview.game_start_time}
+                                    {preview.game_end_time ? ` ~ ${preview.game_end_time}` : ''}
+                                </span>
+                            )}
+                        </div>
+                        <ul className="space-y-1.5">
+                            {preview.players.map((p) => (
+                                <li
+                                    key={p.player_id}
+                                    className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-sm ${
+                                        p.is_companion ? 'bg-orange-50' : 'bg-gray-50'
+                                    }`}
+                                >
+                                    <span style={{ color: 'var(--color-text)' }}>
+                                        {p.nickname}
+                                        <span className="ml-1 text-xs" style={{ color: 'var(--color-text-light)' }}>
+                                            ({p.games_played}/{p.games_per_player})
+                                        </span>
+                                        {p.is_companion && (
+                                            <span className="ml-1 px-1 rounded text-[10px] bg-orange-100 text-orange-600">
+                                                {t('league.companion')}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="text-xs font-mono" style={{ color: 'var(--color-text-light)' }}>
+                                        {p.score}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                        {(preview.companion_players?.length ?? 0) > 0 && (
+                            <p className="text-xs text-orange-700">{t('league.matchOnlineCompanionHint')}</p>
+                        )}
+                    </div>
+                )}
 
                 {errorDetail && (
                     <div className="p-3 rounded-xl text-sm flex items-start gap-2"

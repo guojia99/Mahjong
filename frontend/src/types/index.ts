@@ -399,6 +399,8 @@ export interface LeagueSeason {
 export interface LeagueStage {
     id: string;
     season: string;
+    /** 所属赛季状态：registration / ongoing / finished */
+    season_status?: LeagueSeasonStatus;
     name: string;
     stage_type: StageType;
     status: StageStatus;

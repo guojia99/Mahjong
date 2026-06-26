@@ -655,6 +655,8 @@ func LeagueUnregisterPlayer(c *gin.Context) {
 
 func LeagueStageList(c *gin.Context) {
 	pk := c.Param("pk")
+	var season models.LeagueSeason
+	config.DB.Select("id, status").Where("id = ?", pk).First(&season)
 	var stages []models.LeagueStage
 	config.DB.Where("season_id = ?", pk).Order("`order`").Find(&stages)
 	stageIDs := make([]string, 0, len(stages))
@@ -665,6 +667,7 @@ func LeagueStageList(c *gin.Context) {
 	gameCounts := leagueLoadStageGameCounts(stageIDs)
 	result := make([]gin.H, 0, len(stages))
 	for i := range stages {
+		stages[i].Season = &season
 		result = append(result, serializeLeagueStage(&stages[i], playerCounts, gameCounts))
 	}
 	respondOK(c, result)
@@ -768,7 +771,7 @@ func LeagueStageStart(c *gin.Context) {
 	var stage models.LeagueStage
 	config.DB.Preload("Season").Where("id = ?", pk).First(&stage)
 	if stage.Season.Status != "ongoing" {
-		respondError(c, http.StatusBadRequest, "Season not ongoing")
+		respondError(c, http.StatusBadRequest, "请先在赛季管理中「开赛」，再开始赛段")
 		return
 	}
 	if stage.Status != "pending" {
@@ -787,7 +790,8 @@ func LeagueStageStart(c *gin.Context) {
 	if !leagueStageHasPlayers(stage.ID) && stage.Order == 1 {
 		leagueSyncStagePlayersFromSeason(stage.ID)
 	}
-	respondOK(c, serializeLeagueStage(&stage, nil, nil))
+	config.DB.Preload("Season").First(&stage, "id = ?", pk)
+	respondOK(c, serializeLeagueStageDetail(&stage))
 }
 
 func LeagueStageFinish(c *gin.Context) {
@@ -807,21 +811,21 @@ func LeagueStageFinish(c *gin.Context) {
 
 func LeagueStagePlayers(c *gin.Context) {
 	pk := c.Param("pk")
+	var stage models.LeagueStage
+	gpp := 0
+	if err := config.DB.Select("games_per_player").Where("id = ?", pk).First(&stage).Error; err == nil {
+		gpp = stage.GamesPerPlayer
+	}
 	var sps []models.LeagueStagePlayer
 	config.DB.Preload("Player").Where("stage_id = ?", pk).Find(&sps)
 	result := make([]gin.H, 0, len(sps))
-	for _, sp := range sps {
+	for i := range sps {
+		sp := &sps[i]
 		pData := gin.H{}
 		if sp.Player != nil {
 			pData = getPlayerListData(sp.Player)
 		}
-		result = append(result, gin.H{
-			"id": sp.ID, "stage_id": sp.StageID, "player": pData,
-			"group_type": sp.GroupType, "is_eliminated": sp.IsEliminated,
-			"is_promoted": sp.IsPromoted, "games_played": sp.GamesPlayed,
-			"total_pt": sp.TotalPT, "rank_in_stage": sp.RankInStage,
-			"created_at": formatTime(sp.CreatedAt), "updated_at": formatTime(sp.UpdatedAt),
-		})
+		result = append(result, leagueSerializeStagePlayer(sp, gpp, pData, true))
 	}
 	respondOK(c, result)
 }
@@ -912,17 +916,13 @@ func LeagueStageRanking(c *gin.Context) {
 	var sps []models.LeagueStagePlayer
 	config.DB.Preload("Player").Where("stage_id = ?", pk).Find(&sps)
 	result := make([]gin.H, 0, len(sps))
-	for _, sp := range sps {
+	for i := range sps {
+		sp := &sps[i]
 		pData := gin.H{}
 		if sp.Player != nil {
 			pData = getPlayerListData(sp.Player)
 		}
-		result = append(result, gin.H{
-			"id": sp.ID, "player": pData, "group_type": sp.GroupType,
-			"is_eliminated": sp.IsEliminated, "is_promoted": sp.IsPromoted,
-			"games_played": sp.GamesPlayed, "total_pt": sp.TotalPT,
-			"rank_in_stage": sp.RankInStage,
-		})
+		result = append(result, leagueSerializeStagePlayer(sp, stage.GamesPerPlayer, pData, false))
 	}
 	respondOK(c, result)
 }
@@ -934,11 +934,11 @@ func LeagueMatchList(c *gin.Context) {
 	var matches []models.LeagueMatch
 	config.DB.Preload("Game.GamePlayers.Player").
 		Where("stage_id = ?", pk).
-		Order("round_index, table_index, created_at").
 		Find(&matches)
+	leagueSortMatchesByTime(matches)
 	result := make([]gin.H, 0, len(matches))
-	for _, m := range matches {
-		result = append(result, serializeLeagueMatch(&m))
+	for i := range matches {
+		result = append(result, serializeLeagueMatch(&matches[i]))
 	}
 	respondOK(c, result)
 }
@@ -1186,8 +1186,18 @@ func leagueRecalculateStagePT(stageID string) {
 
 	var matches []models.LeagueMatch
 	config.DB.Preload("Game.GamePlayers.Player").Where("stage_id = ?", stageID).Find(&matches)
+	sort.Slice(matches, func(i, j int) bool {
+		ti, tj := leagueMatchSortTime(&matches[i]), leagueMatchSortTime(&matches[j])
+		if ti.Equal(tj) {
+			return matches[i].CreatedAt.Before(matches[j].CreatedAt)
+		}
+		return ti.Before(tj)
+	})
 
-	for _, match := range matches {
+	playedCount := make(map[string]int)
+
+	for i := range matches {
+		match := &matches[i]
 		if match.Game == nil {
 			continue
 		}
@@ -1203,6 +1213,9 @@ func leagueRecalculateStagePT(stageID string) {
 			continue
 		}
 
+		companionSet := leagueCompanionSetForMatch(&stage, match, playedCount)
+		leagueMergeCompanionPlayers(&stage, match, companionSet)
+
 		sorted := make([]models.GamePlayer, len(gps))
 		copy(sorted, gps)
 		sort.Slice(sorted, func(i, j int) bool {
@@ -1214,7 +1227,7 @@ func leagueRecalculateStagePT(stageID string) {
 			if sp == nil {
 				continue
 			}
-			if leagueJSONFieldContains(match.CompanionPlayers, gp.PlayerID) {
+			if companionSet[gp.PlayerID] {
 				continue
 			}
 			realScore := float64(*gp.Score) * 100
@@ -1224,6 +1237,7 @@ func leagueRecalculateStagePT(stageID string) {
 			}
 			sp.TotalPT = math.Round((sp.TotalPT+pt)*100) / 100
 			sp.GamesPlayed++
+			playedCount[gp.PlayerID]++
 		}
 	}
 
@@ -1318,6 +1332,22 @@ func serializeLeagueSeasonDetailFull(s *models.LeagueSeason) gin.H {
 	return data
 }
 
+func leagueSerializeStagePlayer(sp *models.LeagueStagePlayer, gamesPerPlayer int, pData gin.H, withTimestamps bool) gin.H {
+	data := gin.H{
+		"id": sp.ID, "stage_id": sp.StageID, "player": pData,
+		"group_type": sp.GroupType, "is_eliminated": sp.IsEliminated,
+		"is_promoted": sp.IsPromoted, "games_played": sp.GamesPlayed,
+		"total_pt": sp.TotalPT, "rank_in_stage": sp.RankInStage,
+		"games_per_player": gamesPerPlayer,
+		"is_full":          gamesPerPlayer > 0 && sp.GamesPlayed >= gamesPerPlayer,
+	}
+	if withTimestamps {
+		data["created_at"] = formatTime(sp.CreatedAt)
+		data["updated_at"] = formatTime(sp.UpdatedAt)
+	}
+	return data
+}
+
 func serializeLeagueStage(s *models.LeagueStage, playerCounts, gameCounts map[string]int) gin.H {
 	pc := 0
 	if len(s.StagePlayers) > 0 {
@@ -1335,7 +1365,7 @@ func serializeLeagueStage(s *models.LeagueStage, playerCounts, gameCounts map[st
 	} else if gameCounts != nil {
 		gc = gameCounts[s.ID]
 	}
-	return gin.H{
+	data := gin.H{
 		"id": s.ID, "season_id": s.SeasonID, "season": s.SeasonID, "name": s.Name,
 		"stage_type": s.StageType, "status": s.Status, "order": s.Order,
 		"games_per_player": s.GamesPerPlayer,
@@ -1348,6 +1378,10 @@ func serializeLeagueStage(s *models.LeagueStage, playerCounts, gameCounts map[st
 		"player_count": pc, "game_count": gc,
 		"created_at": formatTime(s.CreatedAt), "updated_at": formatTime(s.UpdatedAt),
 	}
+	if s.Season != nil {
+		data["season_status"] = s.Season.Status
+	}
+	return data
 }
 
 func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
@@ -1355,22 +1389,21 @@ func serializeLeagueStageDetail(s *models.LeagueStage) gin.H {
 	stageGameCounts := leagueLoadStageGameCounts([]string{s.ID})
 	data := serializeLeagueStage(s, stagePlayerCounts, stageGameCounts)
 	sps := make([]gin.H, 0, len(s.StagePlayers))
-	for _, sp := range s.StagePlayers {
+	for i := range s.StagePlayers {
+		sp := &s.StagePlayers[i]
 		pData := gin.H{}
 		if sp.Player != nil {
 			pData = getPlayerListData(sp.Player)
 		}
-		sps = append(sps, gin.H{
-			"id": sp.ID, "player": pData, "group_type": sp.GroupType,
-			"is_eliminated": sp.IsEliminated, "is_promoted": sp.IsPromoted,
-			"games_played": sp.GamesPlayed, "total_pt": sp.TotalPT,
-			"rank_in_stage": sp.RankInStage,
-		})
+		sps = append(sps, leagueSerializeStagePlayer(sp, s.GamesPerPlayer, pData, false))
 	}
 	data["stage_players"] = sps
 	matches := make([]gin.H, 0, len(s.Matches))
-	for _, m := range s.Matches {
-		matches = append(matches, serializeLeagueMatch(&m))
+	sortedMatches := make([]models.LeagueMatch, len(s.Matches))
+	copy(sortedMatches, s.Matches)
+	leagueSortMatchesByTime(sortedMatches)
+	for i := range sortedMatches {
+		matches = append(matches, serializeLeagueMatch(&sortedMatches[i]))
 	}
 	data["matches"] = matches
 	if bypass := leagueLoadBypassPlayers(s); len(bypass) > 0 {

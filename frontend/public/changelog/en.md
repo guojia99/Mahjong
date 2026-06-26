@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.5.6 — 2026-06-26
+
+- League: extra games after completing required half-matches are auto-marked as companion play (no stage PT); recalc and UI updated
+- Players: merge another player’s games, accounts, league records, and related data into the selected player
+
 ## v3.5.5 — 2026-06-24
 
 - Mortal AI scoring: only discards within 25 points of the best count; from 4th rank onward, bonus reduced 20% per rank

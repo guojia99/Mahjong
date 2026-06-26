@@ -58,6 +58,11 @@ export async function deletePlayer(id: string): Promise<void> {
   await api.delete(`/players/${id}/`);
 }
 
+export async function mergePlayer(targetId: string, sourcePlayerId: string): Promise<Player> {
+  const { data } = await api.post(`/players/${targetId}/merge/`, { source_player_id: sourcePlayerId });
+  return data;
+}
+
 export async function bindPlayerAccount(playerId: string, userId: number): Promise<PlayerAccount> {
   const { data } = await api.post<PlayerAccount>(`/players/${playerId}/bind-account/`, { user_id: userId });
   return data;

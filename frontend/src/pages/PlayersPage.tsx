@@ -3,7 +3,7 @@ import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
 import { useTranslation } from 'react-i18next';
 import {
-  getPlayers, createPlayer, deletePlayer, updatePlayer,
+  getPlayers, createPlayer, deletePlayer, updatePlayer, mergePlayer,
   bindPlayerAccount, enablePlayerAccount, updatePlayerAccount, resetPlayerSystemPassword,
   setPlayerPassword, addMajsoulAccount, deleteMajsoulAccount, getMajsoulAccounts,
 } from '@/api/players';
@@ -13,7 +13,7 @@ import Modal from '@/components/Modal';
 import SearchBar from '@/components/SearchBar';
 import { getUnboundUsers } from '@/api/users';
 import type { Player, PlayerAccount, UnboundUser, MajsoulAccount } from '@/types';
-import { Plus, Edit2, Trash2, Link as LinkIcon, KeyRound } from 'lucide-react';
+import { Plus, Edit2, Trash2, Link as LinkIcon, KeyRound, GitMerge } from 'lucide-react';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
 import ViewModeToggle, { useViewMode } from '@/components/ViewModeToggle';
 
@@ -61,29 +61,47 @@ function PlayerRowActions({
   onAccount,
   onMajsoul,
   onEdit,
+  onMerge,
   onDelete,
+  variant = 'inline',
 }: {
   onAccount: () => void;
   onMajsoul: () => void;
   onEdit: () => void;
+  onMerge: () => void;
   onDelete: () => void;
+  variant?: 'inline' | 'card';
 }) {
   const { t } = useTranslation();
+  const wrapCls = variant === 'card'
+    ? 'flex flex-wrap gap-1.5 w-full min-w-0'
+    : 'flex flex-wrap gap-1.5';
+  const btnCls = variant === 'card'
+    ? 'btn btn-sm btn-outline inline-flex items-center justify-center gap-1 flex-1 min-w-[calc(50%-0.375rem)]'
+    : 'btn btn-sm btn-outline inline-flex items-center gap-1';
+  const dangerCls = variant === 'card'
+    ? 'btn btn-sm btn-danger inline-flex items-center justify-center gap-1 flex-1 min-w-[calc(50%-0.375rem)]'
+    : 'btn btn-sm btn-danger inline-flex items-center gap-1';
+
   return (
-    <div className="flex flex-wrap gap-1.5">
-      <button type="button" className="btn btn-sm btn-outline inline-flex items-center gap-1" onClick={onAccount}>
+    <div className={wrapCls}>
+      <button type="button" className={btnCls} onClick={onAccount}>
         <KeyRound size={14} />
         {t('players.accountTitle')}
       </button>
-      <button type="button" className="btn btn-sm btn-outline inline-flex items-center gap-1" onClick={onMajsoul}>
+      <button type="button" className={btnCls} onClick={onMajsoul}>
         <LinkIcon size={14} />
         {t('players.btnMajsoul')}
       </button>
-      <button type="button" className="btn btn-sm btn-outline inline-flex items-center gap-1" onClick={onEdit}>
+      <button type="button" className={btnCls} onClick={onEdit}>
         <Edit2 size={14} />
         {t('common.edit')}
       </button>
-      <button type="button" className="btn btn-sm btn-danger inline-flex items-center gap-1" onClick={onDelete}>
+      <button type="button" className={btnCls} onClick={onMerge}>
+        <GitMerge size={14} />
+        {t('players.btnMerge')}
+      </button>
+      <button type="button" className={dangerCls} onClick={onDelete}>
         <Trash2 size={14} />
         {t('common.delete')}
       </button>
@@ -109,6 +127,7 @@ export default function PlayersPage() {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [uidModal, setUidModal] = useState<Player | null>(null);
   const [accountModal, setAccountModal] = useState<Player | null>(null);
+  const [mergeModal, setMergeModal] = useState<Player | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useViewMode('admin-players-view', 'card');
   const [createPassword, setCreatePassword] = useState('');
@@ -268,6 +287,7 @@ export default function PlayersPage() {
                       onAccount={() => setAccountModal(player)}
                       onMajsoul={() => setUidModal(player)}
                       onEdit={() => setEditingPlayer(player)}
+                      onMerge={() => setMergeModal(player)}
                       onDelete={() => handleDelete(player.id)}
                     />
                   </td>
@@ -279,33 +299,35 @@ export default function PlayersPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {players.map((player) => (
-            <div key={player.id} className="card flex items-center gap-3">
-              {(playerAvatars[player.id] || player.avatar) ? (
-                <img src={playerAvatars[player.id] || player.avatar} alt={player.nickname} className="avatar" />
-              ) : (
-                <div className="avatar-placeholder">{player.nickname.charAt(0)}</div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate">{player.nickname}</div>
-                {player.real_name && (
-                  <div className="text-xs truncate" style={{ color: 'var(--color-text-light)' }}>
-                    {player.real_name}
-                  </div>
+            <div key={player.id} className="card flex flex-col gap-3 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-3 min-w-0">
+                {(playerAvatars[player.id] || player.avatar) ? (
+                  <img src={playerAvatars[player.id] || player.avatar} alt={player.nickname} className="avatar shrink-0" />
+                ) : (
+                  <div className="avatar-placeholder shrink-0">{player.nickname.charAt(0)}</div>
                 )}
-                {player.majsoul_uids && player.majsoul_uids.length > 0 && (
-                  <div className="text-xs" style={{ color: 'var(--color-secondary-dark)' }}>
-                    UID: {player.majsoul_uids.join(', ')}
-                  </div>
-                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{player.nickname}</div>
+                  {player.real_name && (
+                    <div className="text-xs truncate" style={{ color: 'var(--color-text-light)' }}>
+                      {player.real_name}
+                    </div>
+                  )}
+                  {player.majsoul_uids && player.majsoul_uids.length > 0 && (
+                    <div className="text-xs truncate" style={{ color: 'var(--color-secondary-dark)' }}>
+                      UID: {player.majsoul_uids.join(', ')}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5 shrink-0">
-                <PlayerRowActions
-                  onAccount={() => setAccountModal(player)}
-                  onMajsoul={() => setUidModal(player)}
-                  onEdit={() => setEditingPlayer(player)}
-                  onDelete={() => handleDelete(player.id)}
-                />
-              </div>
+              <PlayerRowActions
+                variant="card"
+                onAccount={() => setAccountModal(player)}
+                onMajsoul={() => setUidModal(player)}
+                onEdit={() => setEditingPlayer(player)}
+                onMerge={() => setMergeModal(player)}
+                onDelete={() => handleDelete(player.id)}
+              />
             </div>
           ))}
         </div>
@@ -388,7 +410,85 @@ export default function PlayersPage() {
           />
         )}
       </Modal>
+
+      <Modal open={!!mergeModal} onClose={() => setMergeModal(null)} title={t('players.mergeModalTitle')}>
+        {mergeModal && (
+          <MergePlayerModalContent
+            target={mergeModal}
+            players={players.filter((p) => p.id !== mergeModal.id)}
+            onClose={() => setMergeModal(null)}
+            onMerged={() => { setMergeModal(null); loadPlayers(); }}
+          />
+        )}
+      </Modal>
     </div>
+  );
+}
+
+function MergePlayerModalContent({
+  target,
+  players,
+  onClose,
+  onMerged,
+}: {
+  target: Player;
+  players: Player[];
+  onClose: () => void;
+  onMerged: () => void;
+}) {
+  const { t } = useTranslation();
+  const { showToast, ToastComponent } = useToast();
+  const [sourceId, setSourceId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function handleMerge() {
+    if (!sourceId) {
+      showToast(t('players.mergeSelectSource'));
+      return;
+    }
+    if (!confirm(t('players.mergeConfirm', { source: players.find((p) => p.id === sourceId)?.nickname ?? '', target: target.nickname }))) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await mergePlayer(target.id, sourceId);
+      showToast(t('players.mergeSuccess'), 'success');
+      onMerged();
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('players.mergeFailed');
+      showToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      {ToastComponent}
+      <p className="text-sm mb-3" style={{ color: 'var(--color-text-light)' }}>
+        {t('players.mergeHint', { name: target.nickname })}
+      </p>
+      <div className="form-group">
+        <label className="form-label">{t('players.mergeSourceLabel')}</label>
+        <select
+          className="form-input"
+          value={sourceId}
+          onChange={(e) => setSourceId(e.target.value)}
+        >
+          <option value="">{t('players.mergeSelectPlaceholder')}</option>
+          {players.map((p) => (
+            <option key={p.id} value={p.id}>{p.nickname}{p.real_name ? ` (${p.real_name})` : ''}</option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs mb-4" style={{ color: 'var(--color-text-light)' }}>{t('players.mergeWarning')}</p>
+      <div className="flex gap-3 justify-end">
+        <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>{t('common.cancel')}</button>
+        <button type="button" className="btn btn-primary btn-sm" disabled={saving || !sourceId} onClick={handleMerge}>
+          {saving ? t('common.loading') : t('players.btnMerge')}
+        </button>
+      </div>
+    </>
   );
 }
 

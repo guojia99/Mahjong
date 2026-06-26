@@ -12,6 +12,7 @@ export interface MatchPtBreakdownRow {
 export function computeLeagueMatchPtBreakdown(
     stage: LeagueStage,
     gameScores: LeagueMatchScore[],
+    companionPlayerIds?: ReadonlySet<string>,
 ): Map<string, MatchPtBreakdownRow> {
     const base = stage.base_score;
     const uma = [stage.uma_1st, stage.uma_2nd, stage.uma_3rd, stage.uma_4th];
@@ -21,12 +22,16 @@ export function computeLeagueMatchPtBreakdown(
 
     const map = new Map<string, MatchPtBreakdownRow>();
     sorted.forEach((s, rankIdx) => {
+        const pid = String(s.player_id);
+        const isCompanion = companionPlayerIds?.has(pid) ?? false;
         const raw = s.score ?? 0;
         const realScore = raw * 100;
         const ptFromScore = (realScore - base) / 1000;
         const ptFromUma = rankIdx < uma.length ? uma[rankIdx] : 0;
-        const totalPt = Math.round((ptFromScore + ptFromUma) * 100) / 100;
-        map.set(String(s.player_id), {
+        const totalPt = isCompanion
+            ? 0
+            : Math.round((ptFromScore + ptFromUma) * 100) / 100;
+        map.set(pid, {
             rank: rankIdx + 1,
             tenbaiPoints: raw * 100,
             totalPt,

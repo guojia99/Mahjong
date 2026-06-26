@@ -182,12 +182,18 @@ func LeagueCreateOfflineMatch(c *gin.Context) {
 		}
 		seen[id] = true
 	}
-	if len(companions) > 0 && !stage.AllowCompanion {
+	manualCompanions := companions
+	if len(manualCompanions) > 0 && !stage.AllowCompanion {
 		respondError(c, http.StatusBadRequest, "当前赛段未开放陪打")
 		return
 	}
-	if len(companions) > 2 {
+	if len(manualCompanions) > 2 {
 		respondError(c, http.StatusBadRequest, "陪打选手最多 2 名")
+		return
+	}
+	companions, _, err := leagueCompanionPlayersForScheduled(&stage, pk, scheduled, manualCompanions)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	stagePlayerIDs := leagueLoadStagePlayerIDs(pk)
@@ -264,6 +270,7 @@ func LeagueCreateOfflineMatch(c *gin.Context) {
 		leagueMaybeSettleRanking(&stage, &game)
 	}
 
+	leagueRecalculateStagePT(pk)
 	reloadLeagueMatch(&match)
 	respondCreated(c, serializeLeagueMatch(&match))
 }
@@ -294,29 +301,180 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 		return
 	}
 
-	normalized := majsoulpaipu.NormalizeInputURL(strings.TrimSpace(req.SourceURL))
-	if normalized == "" {
-		respondError(c, http.StatusBadRequest, "请提供有效的牌谱链接")
+	manualCompanions := req.CompanionPlayers
+	if manualCompanions == nil {
+		manualCompanions = []string{}
+	}
+
+	plan, err := leagueBuildOnlineImportPlan(&stage, pk, req.SourceURL, req.AllowDuplicateURL, manualCompanions)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !req.AllowDuplicateURL {
+	stagePlayerIDs := leagueLoadStagePlayerIDs(pk)
+	if err := leagueValidateCompanions(stagePlayerIDs, plan.scheduledIDs, plan.companions); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var createdByID *uint64
+	if user != nil {
+		createdByID = &user.ID
+	}
+
+	gameID := newUUID()
+	game := models.Game{
+		ID:               gameID,
+		GameType:         "online",
+		GameMode:         plan.gameMode,
+		PlayerCount:      plan.playerCount,
+		StartTime:        plan.startTime,
+		EndTime:          plan.endTime,
+		SourceURL:        plan.normalizedURL,
+		PaipuData:        plan.paipuField,
+		AiAnalysisStatus: plan.aiStatus,
+		CreatedByID:      createdByID,
+	}
+	if err := config.DB.Create(&game).Error; err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	for i, row := range plan.sortedRows {
+		player := plan.uidToPlayer[row.UID]
+		_ = ensureMajsoulUIDOnPlayer(player, row.UID, row.Nickname)
+		score := row.Score
+		config.DB.Create(&models.GamePlayer{
+			ID:            newUUID(),
+			GameID:        gameID,
+			PlayerID:      player.ID,
+			SeatNumber:    i,
+			Score:         &score,
+			IsDealerStart: i == 0,
+		})
+	}
+
+	match := models.LeagueMatch{
+		ID:               newUUID(),
+		StageID:          pk,
+		GameID:           &gameID,
+		MatchLabel:       req.MatchLabel,
+		RoundIndex:       req.RoundIndex,
+		TableIndex:       req.TableIndex,
+		ScheduledPlayers: leagueStringListToJSONField(plan.scheduledIDs),
+		CompanionPlayers: leagueStringListToJSONField(plan.companions),
+	}
+	if err := config.DB.Create(&match).Error; err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	config.DB.Preload("GamePlayers").First(&game, "id = ?", gameID)
+	leagueMaybeSettleRanking(&stage, &game)
+
+	leagueRecalculateStagePT(pk)
+	reloadLeagueMatch(&match)
+	respondCreated(c, serializeLeagueMatch(&match))
+}
+
+func LeaguePreviewOnlineMatch(c *gin.Context) {
+	pk := c.Param("pk")
+	var stage models.LeagueStage
+	if err := config.DB.Where("id = ?", pk).First(&stage).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Stage not found")
+		return
+	}
+	if err := leagueEnsureStageOngoing(&stage); err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	var req struct {
+		SourceURL         string `json:"source_url"`
+		AllowDuplicateURL bool   `json:"allow_duplicate_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondError(c, http.StatusBadRequest, "Invalid request")
+		return
+	}
+
+	plan, err := leagueBuildOnlineImportPlan(&stage, pk, req.SourceURL, req.AllowDuplicateURL, nil)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	companionSet := make(map[string]bool, len(plan.companions))
+	for _, id := range plan.companions {
+		companionSet[id] = true
+	}
+
+	players := make([]gin.H, 0, len(plan.sortedRows))
+	for _, row := range plan.sortedRows {
+		player := plan.uidToPlayer[row.UID]
+		gp := plan.gamesPlayed[player.ID]
+		players = append(players, gin.H{
+			"player_id":        player.ID,
+			"nickname":         player.Nickname,
+			"uid":              row.UID,
+			"seat_number":      row.Seat,
+			"score":            row.Score,
+			"games_played":     gp,
+			"games_per_player": stage.GamesPerPlayer,
+			"is_full":          stage.GamesPerPlayer > 0 && gp >= stage.GamesPerPlayer,
+			"is_companion":     companionSet[player.ID],
+		})
+	}
+
+	respondOK(c, gin.H{
+		"players":           players,
+		"companion_players": plan.companions,
+		"game_start_time":   formatTime(plan.startTime),
+		"game_end_time":     formatTimePointer(plan.endTime),
+		"game_mode":         plan.gameMode,
+	})
+}
+
+type leagueOnlineImportPlan struct {
+	normalizedURL string
+	sortedRows    []majsoulpaipu.PlayerRow
+	scheduledIDs  []string
+	companions    []string
+	gamesPlayed   map[string]int
+	uidToPlayer   map[int64]*models.Player
+	startTime     time.Time
+	endTime       *time.Time
+	paipuField    models.JSONField
+	gameMode      string
+	playerCount   int
+	aiStatus      string
+}
+
+func leagueBuildOnlineImportPlan(
+	stage *models.LeagueStage,
+	stageID, sourceURL string,
+	allowDuplicate bool,
+	manualCompanions []string,
+) (*leagueOnlineImportPlan, error) {
+	normalized := majsoulpaipu.NormalizeInputURL(strings.TrimSpace(sourceURL))
+	if normalized == "" {
+		return nil, fmt.Errorf("请提供有效的牌谱链接")
+	}
+	if !allowDuplicate {
 		var count int64
 		config.DB.Model(&models.Game{}).Where("game_type = ? AND source_url = ?", "online", normalized).Count(&count)
 		if count > 0 {
-			respondError(c, http.StatusBadRequest, "该牌谱链接已在系统中存在对局，如需仍录入请勾选「允许重复」")
-			return
+			return nil, fmt.Errorf("该牌谱链接已在系统中存在对局，如需仍录入请勾选「允许重复」")
 		}
 	}
 
 	client, err := majsoulPaipuClient()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, err.Error())
-		return
+		return nil, err
 	}
 	parsed, err := majsoulpaipu.AnalyzeURL(client, normalized)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "解析牌谱失败: "+err.Error())
-		return
+		return nil, fmt.Errorf("解析牌谱失败: %w", err)
 	}
 
 	uids := make([]int64, 0, len(parsed.Players))
@@ -337,7 +495,7 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 		}
 	}
 
-	stagePlayerIDs := leagueLoadStagePlayerIDs(pk)
+	stagePlayerIDs := leagueLoadStagePlayerIDs(stageID)
 	var missingUIDs, notInStageUIDs []int64
 	for _, p := range parsed.Players {
 		player := uidToPlayer[p.UID]
@@ -354,18 +512,31 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 		for _, uid := range missingUIDs {
 			parts = append(parts, fmt.Sprintf("%s(UID:%d)", nickByUID[uid], uid))
 		}
-		respondError(c, http.StatusBadRequest,
-			fmt.Sprintf("以下 UID 尚未绑定到任何雀士，请先在「线上录入」页面完成绑定：%s", strings.Join(parts, ", ")))
-		return
+		return nil, fmt.Errorf("以下 UID 尚未绑定到任何雀士，请先在「线上录入」页面完成绑定：%s", strings.Join(parts, ", "))
 	}
 	if len(notInStageUIDs) > 0 {
 		parts := make([]string, 0, len(notInStageUIDs))
 		for _, uid := range notInStageUIDs {
 			parts = append(parts, fmt.Sprintf("%s(UID:%d)", nickByUID[uid], uid))
 		}
-		respondError(c, http.StatusBadRequest,
-			fmt.Sprintf("以下 UID 对应的雀士不在本赛段名单中：%s", strings.Join(parts, ", ")))
-		return
+		return nil, fmt.Errorf("以下 UID 对应的雀士不在本赛段名单中：%s", strings.Join(parts, ", "))
+	}
+
+	sortedRows := make([]majsoulpaipu.PlayerRow, len(parsed.Players))
+	copy(sortedRows, parsed.Players)
+	sort.Slice(sortedRows, func(i, j int) bool {
+		return sortedRows[i].Seat < sortedRows[j].Seat
+	})
+
+	scheduledIDs := make([]string, 0, len(sortedRows))
+	for _, row := range sortedRows {
+		player := uidToPlayer[row.UID]
+		scheduledIDs = append(scheduledIDs, player.ID)
+	}
+
+	companions, gamesPlayed, err := leagueCompanionPlayersForScheduled(stage, stageID, scheduledIDs, manualCompanions)
+	if err != nil {
+		return nil, err
 	}
 
 	startTime := timeNowLocal()
@@ -386,8 +557,7 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 	ensureMajsoulRecordDetail(paipuData)
 	paipuField, err := models.NewJSONField(paipuData)
 	if err != nil {
-		respondError(c, http.StatusBadRequest, "invalid paipu_data")
-		return
+		return nil, fmt.Errorf("invalid paipu_data")
 	}
 
 	gameMode := parsed.GameMode
@@ -398,78 +568,23 @@ func LeagueCreateOnlineMatch(c *gin.Context) {
 	if playerCount == 0 {
 		playerCount = len(parsed.Players)
 	}
-	var createdByID *uint64
-	if user != nil {
-		createdByID = &user.ID
-	}
 	aiStatus := ""
 	if len(paipuActionsFromGameData(paipuField)) > 0 {
 		aiStatus = "pending"
 	}
 
-	gameID := newUUID()
-	game := models.Game{
-		ID:               gameID,
-		GameType:         "online",
-		GameMode:         gameMode,
-		PlayerCount:      playerCount,
-		StartTime:        startTime,
-		EndTime:          endTime,
-		SourceURL:        normalized,
-		PaipuData:        paipuField,
-		AiAnalysisStatus: aiStatus,
-		CreatedByID:      createdByID,
-	}
-	if err := config.DB.Create(&game).Error; err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	sortedPlayers := make([]majsoulpaipu.PlayerRow, len(parsed.Players))
-	copy(sortedPlayers, parsed.Players)
-	sort.Slice(sortedPlayers, func(i, j int) bool {
-		return sortedPlayers[i].Seat < sortedPlayers[j].Seat
-	})
-
-	scheduledPlayerIDs := make([]string, 0, len(sortedPlayers))
-	for i, p := range sortedPlayers {
-		player := uidToPlayer[p.UID]
-		_ = ensureMajsoulUIDOnPlayer(player, p.UID, p.Nickname)
-		score := p.Score
-		config.DB.Create(&models.GamePlayer{
-			ID:            newUUID(),
-			GameID:        gameID,
-			PlayerID:      player.ID,
-			SeatNumber:    i,
-			Score:         &score,
-			IsDealerStart: i == 0,
-		})
-		scheduledPlayerIDs = append(scheduledPlayerIDs, player.ID)
-	}
-
-	companions := req.CompanionPlayers
-	if companions == nil {
-		companions = []string{}
-	}
-
-	match := models.LeagueMatch{
-		ID:               newUUID(),
-		StageID:          pk,
-		GameID:           &gameID,
-		MatchLabel:       req.MatchLabel,
-		RoundIndex:       req.RoundIndex,
-		TableIndex:       req.TableIndex,
-		ScheduledPlayers: leagueStringListToJSONField(scheduledPlayerIDs),
-		CompanionPlayers: leagueStringListToJSONField(companions),
-	}
-	if err := config.DB.Create(&match).Error; err != nil {
-		respondError(c, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	config.DB.Preload("GamePlayers").First(&game, "id = ?", gameID)
-	leagueMaybeSettleRanking(&stage, &game)
-
-	reloadLeagueMatch(&match)
-	respondCreated(c, serializeLeagueMatch(&match))
+	return &leagueOnlineImportPlan{
+		normalizedURL: normalized,
+		sortedRows:    sortedRows,
+		scheduledIDs:  scheduledIDs,
+		companions:    companions,
+		gamesPlayed:   gamesPlayed,
+		uidToPlayer:   uidToPlayer,
+		startTime:     startTime,
+		endTime:       endTime,
+		paipuField:    paipuField,
+		gameMode:      gameMode,
+		playerCount:   playerCount,
+		aiStatus:      aiStatus,
+	}, nil
 }

@@ -9,6 +9,7 @@ import {
     getLeagueStage, getStageRanking, getStageMatches,
 } from '@/api/leagues';
 import { sortLeagueMatchesByTime } from '@/utils/sortLeagueMatches';
+import LeagueMatchTimeLabel from '@/components/league/LeagueMatchTimeLabel';
 import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueStage, LeagueStagePlayer, LeagueMatch, GroupType, Player } from '@/types';
@@ -424,7 +425,7 @@ export default function LeagueStageDetailPage() {
                             {sortedMatches.map((match, matchIdx) => {
                                 const gameScores = match.game_scores ?? [];
                                 const companionSet = new Set((match.companion_players ?? []).map(String));
-                                const breakdown = computeLeagueMatchPtBreakdown(stage, gameScores);
+                                const breakdown = computeLeagueMatchPtBreakdown(stage, gameScores, companionSet);
                                 const playersOrdered = orderedMatchPlayers(match);
                                 const canShowPt = match.game_is_scored && gameScores.length >= 4
                                     && gameScores.every(g => g.score != null);
@@ -435,23 +436,29 @@ export default function LeagueStageDetailPage() {
                                         className="rounded-[1.35rem] border border-pink-100/90 bg-gradient-to-br from-pink-50/95 via-rose-50/85 to-amber-50/70 p-4 sm:p-5 shadow-[0_10px_40px_-18px_rgba(244,114,182,0.45)]"
                                     >
                                         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                                            <span className="text-sm font-semibold flex items-center gap-2 flex-wrap" style={{ color: 'var(--color-text)' }}>
-                                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-2xl bg-white/80 border border-pink-100 text-pink-500 shadow-sm text-xs font-bold">
-                                                    {matchIdx + 1}
+                                            <div className="flex flex-col gap-1 min-w-0">
+                                                <span className="text-sm font-semibold flex items-center gap-2 flex-wrap" style={{ color: 'var(--color-text)' }}>
+                                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-2xl bg-white/80 border border-pink-100 text-pink-500 shadow-sm text-xs font-bold">
+                                                        {matchIdx + 1}
+                                                    </span>
+                                                    <Heart size={14} className="text-pink-400 opacity-80 fill-pink-100" aria-hidden />
+                                                    {t('league.matchOrdinal', { n: matchIdx + 1 })}
+                                                    {match.round_index > 0 && (
+                                                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/90 border border-pink-100 text-pink-600 font-medium">
+                                                            R{match.round_index}/T{match.table_index}
+                                                        </span>
+                                                    )}
+                                                    {match.game_is_scored && (
+                                                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100/90 text-sky-700 border border-sky-100 font-medium">
+                                                            {t('league.matchScored')}
+                                                        </span>
+                                                    )}
                                                 </span>
-                                                <Heart size={14} className="text-pink-400 opacity-80 fill-pink-100" aria-hidden />
-                                                {t('league.matchOrdinal', { n: matchIdx + 1 })}
-                                                {match.round_index > 0 && (
-                                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/90 border border-pink-100 text-pink-600 font-medium">
-                                                        R{match.round_index}/T{match.table_index}
-                                                    </span>
-                                                )}
-                                                {match.game_is_scored && (
-                                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100/90 text-sky-700 border border-sky-100 font-medium">
-                                                        {t('league.matchScored')}
-                                                    </span>
-                                                )}
-                                            </span>
+                                                <LeagueMatchTimeLabel
+                                                    match={match}
+                                                    className="pl-10 sm:pl-0 text-pink-700/75"
+                                                />
+                                            </div>
                                             {match.game_id && (
                                                 <Link
                                                     to={`/games/${match.game_id}`}
@@ -541,9 +548,11 @@ export default function LeagueStageDetailPage() {
                                                                                     : 'text-slate-500'
                                                                     }`}
                                                                 >
-                                                                    {isCompanion || !canShowPt || !row
-                                                                        ? '—'
-                                                                        : formatSignedRoundPt(row.totalPt)}
+                                                                    {isCompanion
+                                                                        ? t('league.matchCompanionNoPt')
+                                                                        : !canShowPt || !row
+                                                                            ? '—'
+                                                                            : formatSignedRoundPt(row.totalPt)}
                                                                 </div>
                                                             </div>
                                                         </div>

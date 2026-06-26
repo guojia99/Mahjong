@@ -289,6 +289,7 @@ func run(cmd *cobra.Command, args []string) error {
 			players.PUT("/:pk/account/", handlers.PlayerUpdateAccount)
 			players.POST("/:pk/reset-system-password/", handlers.PlayerResetSystemPassword)
 			players.POST("/:pk/set-password/", handlers.PlayerSetPassword)
+			players.POST("/:pk/merge/", handlers.PlayerMerge)
 		}
 
 		rooms := api.Group("/rooms", middleware.InvalidateQueryCacheAfterGameWrite())
@@ -406,6 +407,7 @@ func run(cmd *cobra.Command, args []string) error {
 			leagues.POST("/stages/:pk/generate-semifinal/", handlers.LeagueGenerateSemifinal)
 			leagues.POST("/stages/:pk/matches/offline/", handlers.LeagueCreateOfflineMatch)
 			leagues.POST("/stages/:pk/matches/online/", handlers.LeagueCreateOnlineMatch)
+			leagues.POST("/stages/:pk/matches/online/preview/", handlers.LeaguePreviewOnlineMatch)
 		}
 
 		queMi := api.Group("/que-mi", middleware.InvalidateQueryCacheAfterGameWrite())
