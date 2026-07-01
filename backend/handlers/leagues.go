@@ -502,53 +502,45 @@ func LeagueSeasonStart(c *gin.Context) {
 		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
-	if season.Status != "registration" {
-		respondError(c, http.StatusBadRequest, "Only registration season can start")
-		return
-	}
-	if len(season.SeasonPlayers) < 4 {
-		respondError(c, http.StatusBadRequest, "Need at least 4 players")
-		return
-	}
-	var stageCount int64
-	config.DB.Model(&models.LeagueStage{}).Where("season_id = ?", pk).Count(&stageCount)
-	if stageCount == 0 {
-		respondError(c, http.StatusBadRequest, "Add stages before starting")
-		return
-	}
-	config.DB.Model(&season).Updates(map[string]interface{}{"status": "ongoing"})
+	config.DB.Model(&season).Update("status", "ongoing")
 
 	for idx, sp := range season.SeasonPlayers {
-		label := leagueSeedLabelFor(idx)
-		config.DB.Model(&sp).Update("seed_label", label)
+		if sp.SeedLabel == "" {
+			label := leagueSeedLabelFor(idx)
+			config.DB.Model(&sp).Update("seed_label", label)
+		}
 	}
 
 	var firstStage models.LeagueStage
 	config.DB.Where("season_id = ?", pk).Order("`order`").First(&firstStage)
-	if firstStage.ID != "" {
+	if firstStage.ID != "" && !leagueStageHasPlayers(firstStage.ID) {
 		leagueSyncStagePlayersFromSeason(firstStage.ID)
 	}
 
+	config.DB.Preload("Series").Preload("Stages").Where("id = ?", pk).First(&season)
 	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 func LeagueSeasonFinish(c *gin.Context) {
 	pk := c.Param("pk")
 	var season models.LeagueSeason
-	config.DB.Where("id = ?", pk).First(&season)
-	if season.ID == "" || season.Status != "ongoing" {
-		respondError(c, http.StatusBadRequest, "Only ongoing season can finish")
+	if err := config.DB.Where("id = ?", pk).First(&season).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
 	config.DB.Model(&season).Update("status", "finished")
+	config.DB.Preload("Series").Preload("Stages").Where("id = ?", pk).First(&season)
 	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
 
 func LeagueSeasonReopen(c *gin.Context) {
 	pk := c.Param("pk")
-	config.DB.Model(&models.LeagueSeason{}).Where("id = ?", pk).Update("status", "registration")
-	config.DB.Model(&models.LeagueStage{}).Where("season_id = ?", pk).Update("status", "pending")
 	var season models.LeagueSeason
+	if err := config.DB.Where("id = ?", pk).First(&season).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
+		return
+	}
+	config.DB.Model(&season).Update("status", "registration")
 	config.DB.Preload("Series").Preload("Stages").Where("id = ?", pk).First(&season)
 	respondOK(c, serializeLeagueSeason(&season, nil, nil))
 }
@@ -582,10 +574,6 @@ func LeagueRegisterPlayer(c *gin.Context) {
 	config.DB.Where("id = ?", pk).First(&season)
 	if season.ID == "" {
 		respondError(c, http.StatusNotFound, "Season not found")
-		return
-	}
-	if season.Status != "registration" {
-		respondError(c, http.StatusBadRequest, "Season already started")
 		return
 	}
 	var req struct {
@@ -770,20 +758,8 @@ func LeagueStageStart(c *gin.Context) {
 	pk := c.Param("pk")
 	var stage models.LeagueStage
 	config.DB.Preload("Season").Where("id = ?", pk).First(&stage)
-	if stage.Season.Status != "ongoing" {
-		respondError(c, http.StatusBadRequest, "请先在赛季管理中「开赛」，再开始赛段")
-		return
-	}
-	if stage.Status != "pending" {
-		respondError(c, http.StatusBadRequest, "Stage already started")
-		return
-	}
-	var earlierCount int64
-	config.DB.Model(&models.LeagueStage{}).
-		Where("season_id = ? AND `order` < ? AND status != ?", stage.SeasonID, stage.Order, "finished").
-		Count(&earlierCount)
-	if earlierCount > 0 {
-		respondError(c, http.StatusBadRequest, "Finish earlier stages first")
+	if stage.ID == "" {
+		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
 	config.DB.Model(&stage).Update("status", "ongoing")
@@ -797,14 +773,26 @@ func LeagueStageStart(c *gin.Context) {
 func LeagueStageFinish(c *gin.Context) {
 	pk := c.Param("pk")
 	var stage models.LeagueStage
-	config.DB.Where("id = ?", pk).First(&stage)
-	if stage.Status != "ongoing" {
-		respondError(c, http.StatusBadRequest, "Stage not ongoing")
+	if err := config.DB.Where("id = ?", pk).First(&stage).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
 		return
 	}
 	leagueRecalculateStagePT(stage.ID)
 	config.DB.Model(&stage).Update("status", "finished")
+	config.DB.Preload("Season.Series").First(&stage, "id = ?", pk)
 	respondOK(c, serializeLeagueStage(&stage, nil, nil))
+}
+
+func LeagueStageReopen(c *gin.Context) {
+	pk := c.Param("pk")
+	var stage models.LeagueStage
+	if err := config.DB.Where("id = ?", pk).First(&stage).Error; err != nil {
+		respondError(c, http.StatusNotFound, "Not found")
+		return
+	}
+	config.DB.Model(&stage).Update("status", "pending")
+	config.DB.Preload("Season.Series").First(&stage, "id = ?", pk)
+	respondOK(c, serializeLeagueStageDetail(&stage))
 }
 
 // --- Stage Players ---

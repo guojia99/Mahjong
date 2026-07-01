@@ -195,6 +195,11 @@ export async function finishLeagueStage(stageId: string): Promise<LeagueStage> {
     return data;
 }
 
+export async function reopenLeagueStage(stageId: string): Promise<LeagueStage> {
+    const { data } = await api.post(`/leagues/stages/${stageId}/reopen/`);
+    return data;
+}
+
 export async function getStageRanking(stageId: string, opts?: ApiRequestOptions): Promise<LeagueStagePlayer[]> {
     const { data } = await api.get(`/leagues/stages/${stageId}/ranking/`, mergeApiOptions(opts));
     return data;

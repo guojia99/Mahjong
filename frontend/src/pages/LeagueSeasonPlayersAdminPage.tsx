@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import {
-    ArrowLeft, CheckSquare, Lock, Search, Square,
+    ArrowLeft, CheckSquare, Search, Square,
     UserMinus, UserPlus, Users,
 } from 'lucide-react';
 
@@ -146,7 +146,6 @@ export default function LeagueSeasonPlayersAdminPage() {
         [players, registeredIds],
     );
 
-    const isLocked = season?.status !== 'registration';
 
     function toggle(id: string) {
         setSelected(prev => {
@@ -229,11 +228,6 @@ export default function LeagueSeasonPlayersAdminPage() {
                         {season.name}
                     </p>
                 </div>
-                {isLocked && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-orange-50 text-orange-600">
-                        <Lock size={12} /> {t('league.registrationLocked')}
-                    </span>
-                )}
                 <ViewModeToggle mode={viewMode} onChange={setViewMode} />
             </div>
 
@@ -279,11 +273,9 @@ export default function LeagueSeasonPlayersAdminPage() {
                                         <td className="p-3">{sp.player.real_name || '—'}</td>
                                         <td className="p-3 font-mono text-xs">{sp.player.majsoul_uids?.join(' / ') || '—'}</td>
                                         <td className="p-3">
-                                            {!isLocked && (
-                                                <button onClick={() => handleUnregister(sp.player.id)} className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
-                                                    <UserMinus size={12} /> {t('league.unregister')}
-                                                </button>
-                                            )}
+                                            <button onClick={() => handleUnregister(sp.player.id)} className="text-xs text-red-500 hover:underline inline-flex items-center gap-1">
+                                                <UserMinus size={12} /> {t('league.unregister')}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -321,24 +313,21 @@ export default function LeagueSeasonPlayersAdminPage() {
                                         UID {sp.player.majsoul_uids.join(' / ')}
                                     </div>
                                 )}
-                                {!isLocked && (
-                                    <button
-                                        onClick={() => handleUnregister(sp.player.id)}
-                                        className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded-lg text-red-500 hover:bg-red-50 transition-all border"
-                                        style={{ borderColor: 'var(--color-border)' }}
-                                    >
-                                        <UserMinus size={11} /> {t('league.unregister')}
-                                    </button>
-                                )}
+                                <button
+                                    onClick={() => handleUnregister(sp.player.id)}
+                                    className="mt-2 w-full inline-flex items-center justify-center gap-1 text-[11px] px-2 py-1 rounded-lg text-red-500 hover:bg-red-50 transition-all border"
+                                    style={{ borderColor: 'var(--color-border)' }}
+                                >
+                                    <UserMinus size={11} /> {t('league.unregister')}
+                                </button>
                             </div>
                         ))}
                     </div>
                 )}
             </section>
 
-            {/* Add players (only when registration open, card mode) */}
-            {!isLocked && (
-                <section className="rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
+            {/* Add players */}
+            <section className="rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
                     <header className="px-5 py-3 border-b flex flex-col sm:flex-row sm:items-center gap-2 justify-between" style={{ borderColor: 'var(--color-border)' }}>
                         <h3 className="font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                             <UserPlus size={16} />
@@ -465,14 +454,6 @@ export default function LeagueSeasonPlayersAdminPage() {
                         )}
                     </div>
                 </section>
-            )}
-
-            {isLocked && (
-                <div className="p-4 rounded-2xl border-2 border-dashed text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-light)' }}>
-                    <Lock size={20} className="inline-block mr-2 align-text-bottom" />
-                    {t('league.registrationLockedHint')}
-                </div>
-            )}
         </div>
     );
 }

@@ -196,31 +196,25 @@ export default function LeagueSeasonAdminPage() {
                 <span className="text-sm font-medium self-center mr-2" style={{ color: 'var(--color-text)' }}>
                     {t('league.lifecycle')}:
                 </span>
-                {season.status === 'registration' && (
-                    <button
-                        onClick={handleStart}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
-                    >
-                        <Play size={14} /> {t('league.startSeason')}
-                    </button>
-                )}
-                {season.status === 'ongoing' && (
-                    <button
-                        onClick={handleFinish}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all"
-                    >
-                        <CheckCircle size={14} /> {t('league.finishSeason')}
-                    </button>
-                )}
-                {season.status !== 'registration' && (
-                    <button
-                        onClick={handleReopen}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-all"
-                        title={t('league.reopenHint')}
-                    >
-                        <RefreshCw size={14} /> {t('league.reopenSeason')}
-                    </button>
-                )}
+                <button
+                    onClick={handleStart}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
+                >
+                    <Play size={14} /> {t('league.startSeason')}
+                </button>
+                <button
+                    onClick={handleFinish}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                >
+                    <CheckCircle size={14} /> {t('league.finishSeason')}
+                </button>
+                <button
+                    onClick={handleReopen}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-all"
+                    title={t('league.reopenHint')}
+                >
+                    <RefreshCw size={14} /> {t('league.reopenSeason')}
+                </button>
                 {season.status === 'registration' && (
                     <button
                         onClick={handleDelete}

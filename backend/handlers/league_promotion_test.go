@@ -217,3 +217,55 @@ func TestLeagueCompactElim3NoGroups(t *testing.T) {
 		t.Fatal("compact elimination_3 should not have groups")
 	}
 }
+
+func TestLeagueSeasonReopenPreservesStageStatus(t *testing.T) {
+	leagueTestDB(t)
+	seasonID, _ := leagueTestCreateSeason(t, 4)
+	if err := config.DB.Model(&models.LeagueSeason{}).Where("id = ?", seasonID).Update("status", "ongoing").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	type stageSpec struct {
+		name   string
+		status string
+		order  int
+	}
+	specs := []stageSpec{
+		{name: "积分赛", status: "finished", order: 1},
+		{name: "淘汰赛", status: "ongoing", order: 2},
+		{name: "半决赛", status: "pending", order: 3},
+	}
+	stageIDs := make([]string, len(specs))
+	for i, spec := range specs {
+		id := newUUID()
+		stageIDs[i] = id
+		if err := config.DB.Create(&models.LeagueStage{
+			ID: id, SeasonID: seasonID, Name: spec.name, Status: spec.status, Order: spec.order,
+		}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Mirror LeagueSeasonReopen: only season status changes.
+	if err := config.DB.Model(&models.LeagueSeason{}).Where("id = ?", seasonID).Update("status", "registration").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var season models.LeagueSeason
+	if err := config.DB.Where("id = ?", seasonID).First(&season).Error; err != nil {
+		t.Fatal(err)
+	}
+	if season.Status != "registration" {
+		t.Fatalf("season status = %q, want registration", season.Status)
+	}
+
+	for i, spec := range specs {
+		var stage models.LeagueStage
+		if err := config.DB.Where("id = ?", stageIDs[i]).First(&stage).Error; err != nil {
+			t.Fatal(err)
+		}
+		if stage.Status != spec.status {
+			t.Fatalf("stage %q status = %q, want %q", spec.name, stage.Status, spec.status)
+		}
+	}
+}

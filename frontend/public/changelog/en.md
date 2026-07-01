@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.5.7 — 2026-07-01
+
+- League admin: season and stage status can be switched freely (start / finish / reopen); display only
+- League admin: Swiss (points) stages still allow syncing players from the season while ongoing
+
 ## v3.5.6 — 2026-06-26
 
 - League: extra games after completing required half-matches are auto-marked as companion play (no stage PT); recalc and UI updated

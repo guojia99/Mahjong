@@ -392,6 +392,7 @@ func run(cmd *cobra.Command, args []string) error {
 			leagues.DELETE("/stages/:pk/", handlers.LeagueStageDelete)
 			leagues.POST("/stages/:pk/start/", handlers.LeagueStageStart)
 			leagues.POST("/stages/:pk/finish/", handlers.LeagueStageFinish)
+			leagues.POST("/stages/:pk/reopen/", handlers.LeagueStageReopen)
 			leagues.POST("/stages/:pk/recalculate/", handlers.LeagueRecalculatePT)
 			leagues.POST("/stages/:pk/promote/", handlers.LeaguePromoteStage)
 			leagues.GET("/stages/:pk/players/", handlers.LeagueStagePlayers)

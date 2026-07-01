@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
 import {
     Trophy, Users, Calendar, Clock, ChevronRight,
-    Play, CheckCircle, Settings, BarChart2, Swords,
+    Play, CheckCircle, Settings, BarChart2, Swords, RefreshCw,
 } from 'lucide-react';
-import { getLeagueSeason, getStageRanking, startLeagueSeason, finishLeagueSeason } from '@/api/leagues';
+import { getLeagueSeason, getStageRanking, startLeagueSeason, finishLeagueSeason, reopenLeagueSeason } from '@/api/leagues';
 import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueStage, LeagueStagePlayer } from '@/types';
@@ -127,6 +127,18 @@ export default function LeagueSeasonDetailPage() {
         }
     }
 
+    async function handleReopenSeason() {
+        if (!seasonId) return;
+        try {
+            const updated = await reopenLeagueSeason(seasonId);
+            setSeason(prev => ({ ...prev, ...updated }));
+            showToast(t('league.seasonReopened'), 'success');
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('league.actionFailed');
+            showToast(msg);
+        }
+    }
+
     if (loading) {
         return <div className="text-center py-20" style={{ color: 'var(--color-text-light)' }}>{t('common.loading')}</div>;
     }
@@ -174,17 +186,16 @@ export default function LeagueSeasonDetailPage() {
                             </div>
                         </div>
                         {admin && (
-                            <div className="flex gap-2">
-                                {season.status === 'registration' && (
-                                    <button onClick={handleStartSeason} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all">
-                                        <Play size={14} /> {t('league.startSeason')}
-                                    </button>
-                                )}
-                                {season.status === 'ongoing' && (
-                                    <button onClick={handleFinishSeason} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all">
-                                        <CheckCircle size={14} /> {t('league.finishSeason')}
-                                    </button>
-                                )}
+                            <div className="flex gap-2 flex-wrap">
+                                <button onClick={handleStartSeason} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all">
+                                    <Play size={14} /> {t('league.startSeason')}
+                                </button>
+                                <button onClick={handleFinishSeason} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all">
+                                    <CheckCircle size={14} /> {t('league.finishSeason')}
+                                </button>
+                                <button onClick={handleReopenSeason} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-all">
+                                    <RefreshCw size={14} /> {t('league.reopenSeason')}
+                                </button>
                                 <Link
                                     to={`/league-admin/seasons/${season.id}`}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-all hover:shadow-md"

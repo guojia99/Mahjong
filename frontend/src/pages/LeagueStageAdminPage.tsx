@@ -18,6 +18,7 @@ import {
     promoteStage,
     recalculateStagePt,
     removeStagePlayer,
+    reopenLeagueStage,
     startLeagueStage,
     syncStagePlayersFromSeason,
     updateLeagueStage,
@@ -211,6 +212,19 @@ export default function LeagueStageAdminPage() {
         }
     }
 
+    async function handleReopen() {
+        if (!stage) return;
+        if (!confirm(t('league.reopenStageConfirm'))) return;
+        try {
+            await reopenLeagueStage(stage.id);
+            await reloadAll(stage.id);
+            showToast(t('league.stageReopened'), 'success');
+        } catch (e: unknown) {
+            const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('league.actionFailed');
+            showToast(msg);
+        }
+    }
+
     async function handleRecalc() {
         if (!stage) return;
         try {
@@ -328,10 +342,9 @@ export default function LeagueStageAdminPage() {
     }
 
     const stagePending = stage.status === 'pending';
-    const seasonOngoing = stage.season_status === 'ongoing';
-    const canStartStage = stagePending && seasonOngoing;
     const isOngoing = stage.status === 'ongoing';
     const isFinished = stage.status === 'finished';
+    const canSyncPlayers = stagePending || (stage.stage_type === 'swiss' && isOngoing);
 
     return (
         <div className="space-y-6">
@@ -376,41 +389,28 @@ export default function LeagueStageAdminPage() {
                 </Link>
             </div>
 
-            {/* Lifecycle */}
-            {stagePending && !seasonOngoing && (
-                <div className="flex items-start gap-2 p-4 rounded-2xl border bg-amber-50 text-amber-800 text-sm" style={{ borderColor: '#fcd34d' }}>
-                    <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
-                    <div>
-                        <p>{t('league.startStageNeedSeason')}</p>
-                        <Link
-                            to={`/league-admin/seasons/${stage.season}`}
-                            className="inline-flex items-center gap-1 mt-2 font-medium underline hover:no-underline"
-                        >
-                            {t('league.goStartSeason')}
-                        </Link>
-                    </div>
-                </div>
-            )}
             <div className="flex flex-wrap gap-2 p-4 rounded-2xl border bg-white" style={{ borderColor: 'var(--color-border)' }}>
                 <span className="text-sm font-medium self-center mr-2" style={{ color: 'var(--color-text)' }}>
                     {t('league.actions')}:
                 </span>
-                {canStartStage && (
-                    <button
-                        onClick={handleStart}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
-                    >
-                        <Play size={14} /> {t('league.startStage')}
-                    </button>
-                )}
-                {isOngoing && (
-                    <button
-                        onClick={handleFinish}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all"
-                    >
-                        <CheckCircle size={14} /> {t('league.finishStage')}
-                    </button>
-                )}
+                <button
+                    onClick={handleStart}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all"
+                >
+                    <Play size={14} /> {t('league.startStage')}
+                </button>
+                <button
+                    onClick={handleFinish}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                >
+                    <CheckCircle size={14} /> {t('league.finishStage')}
+                </button>
+                <button
+                    onClick={handleReopen}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-orange-500 text-white hover:bg-orange-600 transition-all"
+                >
+                    <RefreshCw size={14} /> {t('league.reopenStage')}
+                </button>
                 {(isOngoing || isFinished) && (
                     <button
                         onClick={handleRecalc}
@@ -563,7 +563,7 @@ export default function LeagueStageAdminPage() {
                             <h3 className="font-bold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                                 <Users size={16} /> {t('league.stagePlayers')} ({players.length})
                             </h3>
-                            {stagePending && (
+                            {canSyncPlayers && (
                                 <button
                                     onClick={handleSyncPlayers}
                                     className="inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg"
