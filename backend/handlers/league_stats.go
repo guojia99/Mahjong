@@ -64,8 +64,7 @@ func leagueAggregateStageStats(stageID, statType string) []gin.H {
 	var matches []models.LeagueMatch
 	config.DB.Preload("Game.GamePlayers.Player").Where("stage_id = ?", stageID).Find(&matches)
 	acc := make(map[string]*leagueStatsAccumulator)
-	playedCount := make(map[string]int)
-	leagueProcessMatchesForStats(&stage, matches, playedCount, acc)
+	leagueProcessMatchesForStats(matches, acc)
 	return leagueBuildStatsResult(acc, statType)
 }
 
@@ -77,16 +76,13 @@ func leagueAggregateSeasonStats(seasonID, statType string) []gin.H {
 		stage := &stages[i]
 		var matches []models.LeagueMatch
 		config.DB.Preload("Game.GamePlayers.Player").Where("stage_id = ?", stage.ID).Find(&matches)
-		playedCount := make(map[string]int)
-		leagueProcessMatchesForStats(stage, matches, playedCount, acc)
+		leagueProcessMatchesForStats(matches, acc)
 	}
 	return leagueBuildStatsResult(acc, statType)
 }
 
 func leagueProcessMatchesForStats(
-	stage *models.LeagueStage,
 	matches []models.LeagueMatch,
-	playedCount map[string]int,
 	acc map[string]*leagueStatsAccumulator,
 ) {
 	leagueSortMatchesByTime(matches)
@@ -110,13 +106,7 @@ func leagueProcessMatchesForStats(
 			continue
 		}
 
-		companionSet := leagueCompanionSetForMatch(stage, match, playedCount)
-		leagueMergeCompanionPlayers(stage, match, companionSet)
-
 		for _, gp := range gps {
-			if companionSet[gp.PlayerID] {
-				continue
-			}
 			a := leagueGetOrCreateStatsAcc(acc, &gp)
 			a.Total++
 			if gp.Score != nil {
@@ -138,9 +128,6 @@ func leagueProcessMatchesForStats(
 				seatStat, _ := aggregatePaipuPerGameStats(actions)
 				seatToPlayer := leagueSeatToPlayerMap(gps)
 				for _, pid := range seatToPlayer {
-					if companionSet[pid] {
-						continue
-					}
 					leagueGetOrCreateStatsAccByID(acc, pid, gps).OnlineGames++
 				}
 				for seat, s := range seatStat {
@@ -148,7 +135,7 @@ func leagueProcessMatchesForStats(
 						continue
 					}
 					pid, ok := seatToPlayer[seat]
-					if !ok || companionSet[pid] {
+					if !ok {
 						continue
 					}
 					a := leagueGetOrCreateStatsAccByID(acc, pid, gps)
@@ -157,12 +144,6 @@ func leagueProcessMatchesForStats(
 					a.WinPointsSum += s.WinPointsSum
 					a.Wins += s.Wins
 				}
-			}
-		}
-
-		for _, gp := range gps {
-			if !companionSet[gp.PlayerID] {
-				playedCount[gp.PlayerID]++
 			}
 		}
 	}

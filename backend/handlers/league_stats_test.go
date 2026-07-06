@@ -70,10 +70,17 @@ func TestLeagueStageStatsFirstRateAndCompanion(t *testing.T) {
 	if byPlayer[winner] != 100 {
 		t.Fatalf("winner 1st rate = %v, want 100", byPlayer[winner])
 	}
-	for _, row := range result {
-		if playerIDFromRow(row) == companion {
-			t.Fatal("companion should be excluded from stats")
-		}
+	if byPlayer[companion] != 0 {
+		t.Fatalf("companion 1st rate = %v, want 0 (4th place)", byPlayer[companion])
+	}
+	fourth := leagueAggregateStageStats(stage.ID, "4th")
+	fourthByPlayer := map[string]float64{}
+	for _, row := range fourth {
+		rate, _ := row["rate"].(float64)
+		fourthByPlayer[playerIDFromRow(row)] = rate
+	}
+	if fourthByPlayer[companion] != 100 {
+		t.Fatalf("companion 4th rate = %v, want 100", fourthByPlayer[companion])
 	}
 
 	high := leagueAggregateStageStats(stage.ID, "high_score")
@@ -103,7 +110,7 @@ func TestLeagueSeasonStatsAggregatesStages(t *testing.T) {
 	acc := make(map[string]*leagueStatsAccumulator)
 	var matches []models.LeagueMatch
 	config.DB.Preload("Game.GamePlayers.Player").Where("stage_id = ?", stage1.ID).Find(&matches)
-	leagueProcessMatchesForStats(&stage1, matches, make(map[string]int), acc)
+	leagueProcessMatchesForStats(matches, acc)
 
 	p1Copy := acc[p1]
 	acc[p1] = &leagueStatsAccumulator{
