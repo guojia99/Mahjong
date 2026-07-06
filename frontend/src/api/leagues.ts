@@ -1,6 +1,7 @@
 import api from './client';
 import type { ApiRequestOptions } from './types';
 import { mergeApiOptions } from './types';
+import type { FunRankingItem } from './games';
 import type {
     LeagueMatch,
     LeagueSeason,
@@ -202,6 +203,34 @@ export async function reopenLeagueStage(stageId: string): Promise<LeagueStage> {
 
 export async function getStageRanking(stageId: string, opts?: ApiRequestOptions): Promise<LeagueStagePlayer[]> {
     const { data } = await api.get(`/leagues/stages/${stageId}/ranking/`, mergeApiOptions(opts));
+    return data;
+}
+
+export type LeagueStatType =
+    | '1st' | '2nd' | '3rd' | '4th'
+    | 'avg_rank' | 'high_score' | 'avg_win_point' | 'total_kan';
+
+export async function getStageStats(
+    stageId: string,
+    statType: LeagueStatType,
+    opts?: ApiRequestOptions,
+): Promise<FunRankingItem[]> {
+    const { data } = await api.get(`/leagues/stages/${stageId}/stats/`, {
+        params: { stat_type: statType },
+        ...mergeApiOptions(opts),
+    });
+    return data;
+}
+
+export async function getSeasonStats(
+    seasonId: string,
+    statType: LeagueStatType,
+    opts?: ApiRequestOptions,
+): Promise<FunRankingItem[]> {
+    const { data } = await api.get(`/leagues/seasons/${seasonId}/stats/`, {
+        params: { stat_type: statType },
+        ...mergeApiOptions(opts),
+    });
     return data;
 }
 

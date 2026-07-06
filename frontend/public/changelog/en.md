@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.5.8 — 2026-07-06
+
+- League public pages: stage/season stats (1st rate, avg rank, high score, avg win points, kan count, etc.)
+- Fix fun ranking sort for highest/lowest scores
+
 ## v3.5.7 — 2026-07-01
 
 - League admin: season and stage status can be switched freely (start / finish / reopen); display only

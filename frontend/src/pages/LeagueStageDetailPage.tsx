@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -6,8 +6,10 @@ import {
     Users, Gamepad2, Heart,
 } from 'lucide-react';
 import {
-    getLeagueStage, getStageRanking, getStageMatches,
+    getLeagueStage, getStageRanking, getStageMatches, getStageStats,
 } from '@/api/leagues';
+import type { LeagueStatType } from '@/api/leagues';
+import LeagueStatsPanel from '@/components/league/LeagueStatsPanel';
 import { sortLeagueMatchesByTime } from '@/utils/sortLeagueMatches';
 import LeagueMatchTimeLabel from '@/components/league/LeagueMatchTimeLabel';
 import { isAdmin } from '@/api/auth';
@@ -108,7 +110,15 @@ export default function LeagueStageDetailPage() {
     const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
     const [matches, setMatches] = useState<LeagueMatch[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'ranking' | 'matches'>('ranking');
+    const [activeTab, setActiveTab] = useState<'ranking' | 'matches' | 'stats'>('ranking');
+
+    const fetchStageStats = useCallback(
+        (statType: LeagueStatType, signal?: AbortSignal) => {
+            if (!stageId) return Promise.resolve([]);
+            return getStageStats(stageId, statType, { signal });
+        },
+        [stageId],
+    );
 
     const admin = isAdmin();
 
@@ -249,7 +259,7 @@ export default function LeagueStageDetailPage() {
                 </div>
 
                 <div className="border-b flex" style={{ borderColor: 'var(--color-border)' }}>
-                    {(['ranking', 'matches'] as const).map(tab => (
+                    {(['ranking', 'matches', 'stats'] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -570,6 +580,10 @@ export default function LeagueStageDetailPage() {
                                 );
                             })}
                         </div>
+                    )}
+
+                    {activeTab === 'stats' && (
+                        <LeagueStatsPanel fetchStats={fetchStageStats} />
                     )}
                 </div>
             </div>

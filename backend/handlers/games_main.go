@@ -775,10 +775,16 @@ func FunRanking(c *gin.Context) {
 			item["rate"] = math.Round(float64(s.ScoreSum)/float64(s.Total)*10) / 10
 			item["count"] = s.Total
 		} else if rankType == "high_score" {
-			item["rate"] = s.HighScore
+			if s.HighScore == nil {
+				continue
+			}
+			item["rate"] = float64(*s.HighScore)
 			item["count"] = s.Total
 		} else if rankType == "low_score" {
-			item["rate"] = s.LowScore
+			if s.LowScore == nil {
+				continue
+			}
+			item["rate"] = float64(*s.LowScore)
 			item["count"] = s.Total
 		} else {
 			continue

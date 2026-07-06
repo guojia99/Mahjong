@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useAbortableEffect } from '@/hooks/useAbortableEffect';
 import { isAbortError } from '@/utils/http';
 import { loadPlayerAvatarsForList } from '@/services/playerAvatarCache';
@@ -8,7 +8,9 @@ import {
     Trophy, Users, Calendar, Clock, ChevronRight,
     Play, CheckCircle, Settings, BarChart2, Swords, RefreshCw,
 } from 'lucide-react';
-import { getLeagueSeason, getStageRanking, startLeagueSeason, finishLeagueSeason, reopenLeagueSeason } from '@/api/leagues';
+import { getLeagueSeason, getStageRanking, getSeasonStats, startLeagueSeason, finishLeagueSeason, reopenLeagueSeason } from '@/api/leagues';
+import type { LeagueStatType } from '@/api/leagues';
+import LeagueStatsPanel from '@/components/league/LeagueStatsPanel';
 import { isAdmin } from '@/api/auth';
 import { useToast } from '@/hooks/useToast';
 import type { LeagueSeason, LeagueStage, LeagueStagePlayer } from '@/types';
@@ -33,7 +35,15 @@ export default function LeagueSeasonDetailPage() {
     const [rankingMap, setRankingMap] = useState<Record<string, LeagueStagePlayer[]>>({});
     const [playerAvatars, setPlayerAvatars] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'stages' | 'ranking'>('stages');
+    const [activeTab, setActiveTab] = useState<'stages' | 'ranking' | 'stats'>('stages');
+
+    const fetchSeasonStats = useCallback(
+        (statType: LeagueStatType, signal?: AbortSignal) => {
+            if (!seasonId) return Promise.resolve([]);
+            return getSeasonStats(seasonId, statType, { signal });
+        },
+        [seasonId],
+    );
 
     const admin = isAdmin();
 
@@ -392,7 +402,7 @@ export default function LeagueSeasonDetailPage() {
                 )}
 
                 <div className="border-b flex" style={{ borderColor: 'var(--color-border)' }}>
-                    {(['stages', 'ranking'] as const).map(tab => (
+                    {(['stages', 'ranking', 'stats'] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -526,6 +536,10 @@ export default function LeagueSeasonDetailPage() {
                                 <div className="text-center py-8 text-gray-400">{t('league.noRankingData')}</div>
                             )}
                         </div>
+                    )}
+
+                    {activeTab === 'stats' && (
+                        <LeagueStatsPanel fetchStats={fetchSeasonStats} />
                     )}
                 </div>
             </div>
