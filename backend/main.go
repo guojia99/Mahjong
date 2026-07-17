@@ -119,7 +119,7 @@ func newPaipuAuthHelpCmd() *cobra.Command {
   测试：mahjong-backend paipu-login-test -c backend/db_config.json
 
   若报 code=151 且 version_str 为空：多为 WebGL 版本不匹配，可设
-    MAJSOUL_WEBGL_RESOURCE=0.16.238  MAJSOUL_WEBGL_PACKAGE=4.0.44
+    MAJSOUL_WEBGL_RESOURCE=0.16.251  MAJSOUL_WEBGL_PACKAGE=4.0.45
   解析抓包：node backend/majsoul_node/paipu.js --parse-login '<req_b64>' '<res_b64>'
   注意：不是本网站管理员账号。
 

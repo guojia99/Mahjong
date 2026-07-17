@@ -13,19 +13,21 @@ const ROUTE_COUNT = 6;
 const ROUTE_CACHE_MS = 60_000;
 
 const DEFAULT_USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
 
 /** 国服网页 login 使用的 currency_platforms（与浏览器一致） */
 const CN_CURRENCY_PLATFORMS = [1, 2, 5, 6, 8, 10, 11];
 
-/** WebGL package → resource（网页 HTML 不含 WebGL_2022-* 时按 package 查表） */
+/** WebGL package → resource（网页 HTML 通常不含 WebGL_2022-*，按 package 查表） */
 const WEBGL_PACKAGE_RESOURCE = {
   "4.0.38": "0.16.226",
   "4.0.44": "0.16.238",
+  "4.0.45": "0.16.251",
 };
 
-const DEFAULT_WEBGL_RESOURCE = "0.16.238";
-const DEFAULT_WEBGL_PACKAGE = "4.0.44";
+const DEFAULT_WEBGL_RESOURCE = "0.16.251";
+const DEFAULT_WEBGL_PACKAGE = "4.0.45";
+const WEBGL_LOGIN_RETRY_MAX = 12;
 
 let protobufRoot = null;
 let protobufWrapper = null;
@@ -115,57 +117,126 @@ async function initProtobuf() {
   webglVersions = await resolveWebGLVersions(http);
 }
 
+function parseSemverParts(v) {
+  return String(v || "")
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+}
+
+function semverDistance(a, b) {
+  const pa = parseSemverParts(a);
+  const pb = parseSemverParts(b);
+  let dist = 0;
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    dist += Math.abs(d) * Math.pow(100, 2 - i);
+  }
+  return dist;
+}
+
+function makeWebGLVersions(resource, pkg) {
+  return {
+    resource,
+    package: pkg,
+    client_version_string: `WebGL_2022-${resource}`,
+  };
+}
+
 /**
  * 国服 WebGL 客户端版本（非 version.json 的 web-0.11.x）。
  * 错误使用 web-* 会导致 code=151 / version_str 为空。
  */
 function resourceForWebGLPackage(pkg) {
   if (WEBGL_PACKAGE_RESOURCE[pkg]) return WEBGL_PACKAGE_RESOURCE[pkg];
-  const known = Object.keys(WEBGL_PACKAGE_RESOURCE)
-    .map((k) => ({ pkg: k, resource: WEBGL_PACKAGE_RESOURCE[k] }))
-    .sort((a, b) => {
-      const pa = a.pkg.split(".").map(Number);
-      const pb = b.pkg.split(".").map(Number);
-      for (let i = 0; i < 3; i++) {
-        if ((pa[i] || 0) !== (pb[i] || 0)) return (pb[i] || 0) - (pa[i] || 0);
-      }
-      return 0;
-    });
+  const known = Object.entries(WEBGL_PACKAGE_RESOURCE)
+    .map(([knownPkg, resource]) => ({
+      pkg: knownPkg,
+      resource,
+      dist: semverDistance(pkg, knownPkg),
+    }))
+    .sort((a, b) => a.dist - b.dist || b.pkg.localeCompare(a.pkg));
   return known[0]?.resource || DEFAULT_WEBGL_RESOURCE;
+}
+
+function parseWebGLPackageFromHtml(html) {
+  const pkgMatch =
+    html.match(/WebGL-release-([\d.]+)/) ||
+    html.match(/"productVersion":\s*"([\d.]+)"/);
+  return pkgMatch ? pkgMatch[1] : null;
+}
+
+function parseWebGLResourceFromHtml(html) {
+  const resMatch = html.match(/WebGL_2022-([\d.]+)/);
+  return resMatch ? resMatch[1] : null;
+}
+
+function webglVersionCandidates(pkg, primaryResource) {
+  const seen = new Set();
+  const out = [];
+  const push = (resource) => {
+    if (!resource || seen.has(resource)) return;
+    seen.add(resource);
+    out.push(makeWebGLVersions(resource, pkg));
+  };
+
+  push(primaryResource);
+  push(WEBGL_PACKAGE_RESOURCE[pkg]);
+  push(resourceForWebGLPackage(pkg));
+
+  Object.entries(WEBGL_PACKAGE_RESOURCE)
+    .map(([knownPkg, resource]) => ({
+      resource,
+      dist: semverDistance(pkg, knownPkg),
+    }))
+    .sort((a, b) => a.dist - b.dist)
+    .forEach((item) => push(item.resource));
+
+  const m = /^0\.16\.(\d+)$/.exec(primaryResource || "");
+  if (m) {
+    const base = parseInt(m[1], 10);
+    for (let d = 1; d <= 20; d++) {
+      push(`0.16.${base + d}`);
+      if (base - d > 0) push(`0.16.${base - d}`);
+    }
+  }
+
+  return out.slice(0, WEBGL_LOGIN_RETRY_MAX);
+}
+
+function isVersionMismatch151(json) {
+  const code = json?.error?.code;
+  const jp = json?.error?.json_param || "";
+  return code === 151 && jp.includes("version_str");
 }
 
 async function resolveWebGLVersions(http) {
   const envResource = (process.env.MAJSOUL_WEBGL_RESOURCE || "").trim();
   const envPackage = (process.env.MAJSOUL_WEBGL_PACKAGE || "").trim();
-  if (envResource && envPackage) {
-    return {
-      resource: envResource,
-      package: envPackage,
-      client_version_string: `WebGL_2022-${envResource}`,
-    };
+  if (envResource || envPackage) {
+    const pkg = envPackage || DEFAULT_WEBGL_PACKAGE;
+    const resource = envResource || resourceForWebGLPackage(pkg);
+    return makeWebGLVersions(resource, pkg);
   }
-  let pkg = envPackage || DEFAULT_WEBGL_PACKAGE;
-  let resource = envResource || DEFAULT_WEBGL_RESOURCE;
+
+  let pkg = DEFAULT_WEBGL_PACKAGE;
+  let resource = DEFAULT_WEBGL_RESOURCE;
   try {
     const html = String((await http.get("")).data || "");
-    const pkgMatch =
-      html.match(/WebGL-release-([\d.]+)/) ||
-      html.match(/"productVersion":\s*"([\d.]+)"/);
-    if (pkgMatch) pkg = pkgMatch[1];
-    const resMatch = html.match(/WebGL_2022-([\d.]+)/);
-    if (resMatch) {
-      resource = resMatch[1];
-    } else if (!envResource) {
-      resource = resourceForWebGLPackage(pkg);
-    }
+    const htmlPkg = parseWebGLPackageFromHtml(html);
+    if (htmlPkg) pkg = htmlPkg;
+    const htmlRes = parseWebGLResourceFromHtml(html);
+    resource = htmlRes || resourceForWebGLPackage(pkg);
   } catch (e) {
-    if (!envResource) resource = resourceForWebGLPackage(pkg);
+    resource = resourceForWebGLPackage(pkg);
   }
-  return {
-    resource,
-    package: pkg,
-    client_version_string: `WebGL_2022-${resource}`,
-  };
+
+  const vers = makeWebGLVersions(resource, pkg);
+  if (process.env.MAJSOUL_DEBUG_VERSION === "1") {
+    console.error(
+      `[majsoul] WebGL versions: package=${vers.package} resource=${vers.resource}`
+    );
+  }
+  return vers;
 }
 
 function lookupMethod(path) {
@@ -343,14 +414,33 @@ function formatLoginError(res, context) {
 }
 
 async function majsoulLogin(username, password) {
-  const res = await websocketRequest(
-    ".lq.Lobby.login",
-    buildLoginPayload(username, password)
-  );
-  const json = payloadToJson(res);
-  const token = extractAccessToken(res);
-  if (token) return token;
-  if (json?.error) throw new Error(formatLoginError(json, "login"));
+  const base = webglVersions || makeWebGLVersions(DEFAULT_WEBGL_RESOURCE, DEFAULT_WEBGL_PACKAGE);
+  const candidates = webglVersionCandidates(base.package, base.resource);
+  let lastErr = null;
+
+  for (const vers of candidates) {
+    webglVersions = vers;
+    const res = await websocketRequest(
+      ".lq.Lobby.login",
+      buildLoginPayload(username, password)
+    );
+    const json = payloadToJson(res);
+    const token = extractAccessToken(res);
+    if (token) {
+      if (process.env.MAJSOUL_DEBUG_VERSION === "1" && vers !== base) {
+        console.error(
+          `[majsoul] login ok after version retry: package=${vers.package} resource=${vers.resource}`
+        );
+      }
+      return token;
+    }
+    if (json?.error) {
+      lastErr = new Error(formatLoginError(json, "login"));
+      if (!isVersionMismatch151(json)) throw lastErr;
+    }
+  }
+
+  if (lastErr) throw lastErr;
   throw new Error("登录无 access_token 响应");
 }
 
@@ -505,31 +595,48 @@ async function majsoulLoginOAuth2(accessToken, oauth2Type) {
     seen.add(t);
     types.push(t);
   }
+
+  const base = webglVersions || makeWebGLVersions(DEFAULT_WEBGL_RESOURCE, DEFAULT_WEBGL_PACKAGE);
+  const candidates = webglVersionCandidates(base.package, base.resource);
   let lastErr = null;
-  for (const type of types) {
-    const res = await websocketRequest(".lq.Lobby.oauth2Login", {
-      type,
-      access_token: accessToken,
-      reconnect: false,
-      device: buildBrowserDeviceInfo(),
-      random_key: uuidv4(),
-      client_version: {
-        resource: webglVersions.resource,
-        package: webglVersions.package,
-      },
-      gen_access_token: true,
-      currency_platforms: CN_CURRENCY_PLATFORMS,
-      client_version_string: webglVersions.client_version_string,
-      tag: (process.env.MAJSOUL_TAG || "cn").trim() || "cn",
-    });
-    const token = extractAccessToken(res);
-    if (token) return token;
-    const json = payloadToJson(res);
-    if (json?.error) {
-      lastErr = new Error(formatLoginError(json, `oauth2 type=${type}`));
-      if (json.error.code !== 109 && json.error.code !== 1002) throw lastErr;
+
+  for (const vers of candidates) {
+    webglVersions = vers;
+    for (const type of types) {
+      const res = await websocketRequest(".lq.Lobby.oauth2Login", {
+        type,
+        access_token: accessToken,
+        reconnect: false,
+        device: buildBrowserDeviceInfo(),
+        random_key: uuidv4(),
+        client_version: {
+          resource: vers.resource,
+          package: vers.package,
+        },
+        gen_access_token: true,
+        currency_platforms: CN_CURRENCY_PLATFORMS,
+        client_version_string: vers.client_version_string,
+        tag: (process.env.MAJSOUL_TAG || "cn").trim() || "cn",
+      });
+      const token = extractAccessToken(res);
+      if (token) {
+        if (process.env.MAJSOUL_DEBUG_VERSION === "1" && vers !== base) {
+          console.error(
+            `[majsoul] oauth2 ok after version retry: package=${vers.package} resource=${vers.resource}`
+          );
+        }
+        return token;
+      }
+      const json = payloadToJson(res);
+      if (json?.error) {
+        lastErr = new Error(formatLoginError(json, `oauth2 type=${type}`));
+        if (json.error.code === 109 || json.error.code === 1002) continue;
+        if (isVersionMismatch151(json)) break;
+        throw lastErr;
+      }
     }
   }
+
   if (lastErr) throw lastErr;
   throw new Error("OAuth2 登录失败");
 }

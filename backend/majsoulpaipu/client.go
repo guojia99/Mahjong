@@ -99,6 +99,15 @@ func (c *Client) nodeEnv() []string {
 	if v := os.Getenv("MAJSOUL_TAG"); v != "" {
 		env = append(env, "MAJSOUL_TAG="+v)
 	}
+	if v := os.Getenv("MAJSOUL_WEBGL_RESOURCE"); v != "" {
+		env = append(env, "MAJSOUL_WEBGL_RESOURCE="+v)
+	}
+	if v := os.Getenv("MAJSOUL_WEBGL_PACKAGE"); v != "" {
+		env = append(env, "MAJSOUL_WEBGL_PACKAGE="+v)
+	}
+	if v := os.Getenv("MAJSOUL_USER_AGENT"); v != "" {
+		env = append(env, "MAJSOUL_USER_AGENT="+v)
+	}
 	return env
 }
 
