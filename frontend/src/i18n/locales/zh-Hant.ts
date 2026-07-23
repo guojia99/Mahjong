@@ -1479,6 +1479,7 @@ const zhHant: Record<string, string> = {
   'league.gamesUnit': '半莊',
   'league.player': '選手',
   'league.gamesPlayed': '已打',
+  'league.companionGamesPlayed': '陪打局數',
   'league.companion': '陪打',
   'league.eliminated': '淘汰',
   'league.noRankingData': '暫無排名數據',

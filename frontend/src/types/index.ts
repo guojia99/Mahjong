@@ -442,6 +442,7 @@ export interface LeagueStagePlayer {
     is_eliminated: boolean;
     is_promoted: boolean;
     games_played: number;
+    companion_games?: number;
     total_pt: number;
     rank_in_stage: number;
     is_full: boolean;

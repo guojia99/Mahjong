@@ -901,6 +901,7 @@ func LeagueStageRanking(c *gin.Context) {
 	var stage models.LeagueStage
 	config.DB.Preload("Season").Where("id = ?", pk).First(&stage)
 	leagueRecalculateStagePT(stage.ID)
+	companionGames := leagueStageCompanionGamesMap(&stage)
 	var sps []models.LeagueStagePlayer
 	config.DB.Preload("Player").Where("stage_id = ?", pk).Find(&sps)
 	result := make([]gin.H, 0, len(sps))
@@ -910,7 +911,9 @@ func LeagueStageRanking(c *gin.Context) {
 		if sp.Player != nil {
 			pData = getPlayerListData(sp.Player)
 		}
-		result = append(result, leagueSerializeStagePlayer(sp, stage.GamesPerPlayer, pData, false))
+		row := leagueSerializeStagePlayer(sp, stage.GamesPerPlayer, pData, false)
+		row["companion_games"] = companionGames[sp.PlayerID]
+		result = append(result, row)
 	}
 	respondOK(c, result)
 }

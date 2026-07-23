@@ -72,6 +72,52 @@ func leagueStageGamesPlayedMap(stageID string) map[string]int {
 	return out
 }
 
+// leagueStageCompanionGamesMap counts scored matches where each player was marked companion.
+func leagueStageCompanionGamesMap(stage *models.LeagueStage) map[string]int {
+	var matches []models.LeagueMatch
+	config.DB.Preload("Game.GamePlayers").Where("stage_id = ?", stage.ID).Find(&matches)
+	leagueSortMatchesByTime(matches)
+
+	counts := make(map[string]int)
+	playedCount := make(map[string]int)
+
+	for i := range matches {
+		match := &matches[i]
+		if match.Game == nil {
+			continue
+		}
+		gps := match.Game.GamePlayers
+		allScored := true
+		for _, gp := range gps {
+			if gp.Score == nil {
+				allScored = false
+				break
+			}
+		}
+		if !allScored || len(gps) == 0 {
+			continue
+		}
+
+		companionSet := leagueCompanionSetForMatch(stage, match, playedCount)
+		for pid := range companionSet {
+			counts[pid]++
+		}
+
+		sorted := make([]models.GamePlayer, len(gps))
+		copy(sorted, gps)
+		sort.Slice(sorted, func(i, j int) bool {
+			return *sorted[i].Score > *sorted[j].Score
+		})
+		for _, gp := range sorted {
+			if companionSet[gp.PlayerID] {
+				continue
+			}
+			playedCount[gp.PlayerID]++
+		}
+	}
+	return counts
+}
+
 func leagueCompanionSetForMatch(stage *models.LeagueStage, match *models.LeagueMatch, playedBefore map[string]int) map[string]bool {
 	set := make(map[string]bool)
 	for _, cid := range leagueJSONFieldToStringList(match.CompanionPlayers) {

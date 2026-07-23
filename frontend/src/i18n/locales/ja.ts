@@ -1479,6 +1479,7 @@ const ja: Record<string, string> = {
   'league.gamesUnit': '半荘',
   'league.player': '選手',
   'league.gamesPlayed': '対局数',
+  'league.companionGamesPlayed': 'お手伝い',
   'league.companion': 'お手伝い',
   'league.eliminated': '敗退',
   'league.noRankingData': 'ランキングデータなし',

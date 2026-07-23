@@ -334,6 +334,7 @@ export default function LeagueStageDetailPage() {
                                                         <th className="text-left px-4 py-2.5 font-medium w-10" style={{ color: 'var(--color-text-light)' }}>#</th>
                                                         <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'var(--color-text-light)' }}>{t('league.player')}</th>
                                                         <th className="text-center px-4 py-2.5 font-medium" style={{ color: 'var(--color-text-light)' }}>{t('league.gamesPlayed')}</th>
+                                                        <th className="text-center px-4 py-2.5 font-medium" style={{ color: 'var(--color-text-light)' }}>{t('league.companionGamesPlayed')}</th>
                                                         <th className="text-right px-4 py-2.5 font-medium" style={{ color: 'var(--color-text-light)' }}>PT</th>
                                                     </tr>
                                                 </thead>
@@ -401,6 +402,13 @@ export default function LeagueStageDetailPage() {
                                                                 <span className={sp.is_full ? 'text-green-600' : ''}>
                                                                     {sp.games_played}/{sp.games_per_player || stage.games_per_player}
                                                                 </span>
+                                                            </td>
+                                                            <td className="text-center px-4 py-2.5" style={{ ...dimStyle, color: 'var(--color-text-light)' }}>
+                                                                {(sp.companion_games ?? 0) > 0 ? (
+                                                                    <span className="text-slate-500">{sp.companion_games}</span>
+                                                                ) : (
+                                                                    '—'
+                                                                )}
                                                             </td>
                                                             <td className="text-right px-4 py-2.5 font-mono font-bold" style={{
                                                                 ...dimStyle,

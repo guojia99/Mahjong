@@ -1480,6 +1480,7 @@ const en: Record<string, string> = {
   'league.gamesUnit': ' games',
   'league.player': 'Player',
   'league.gamesPlayed': 'Played',
+  'league.companionGamesPlayed': 'Companion',
   'league.companion': 'Companion',
   'league.eliminated': 'Eliminated',
   'league.noRankingData': 'No ranking data',
