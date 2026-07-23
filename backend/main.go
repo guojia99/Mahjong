@@ -111,17 +111,15 @@ func newPaipuAuthHelpCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, err := fmt.Fprint(os.Stdout, `雀魂牌谱拉取需要「国服网页账号」登录，任选其一：
 
-【方式 A】账号密码（推荐，已适配国服 WebGL 网页版）
+【方式 A】账号密码（推荐，代码组装心跳/登录，无需抓包）
   编辑 backend/db_config.json：
     "majsoul_account": "与网页登录完全相同的账号（邮箱或手机号）",
     "majsoul_password": "网页登录密码"
     （清空 majsoul_access_token）
   测试：mahjong-backend paipu-login-test -c backend/db_config.json
 
-  若报 code=151 且 version_str 为空：多为 WebGL 版本不匹配，可设
-    MAJSOUL_WEBGL_RESOURCE=0.16.251  MAJSOUL_WEBGL_PACKAGE=4.0.45
-  解析抓包：node backend/majsoul_node/paipu.js --parse-login '<req_b64>' '<res_b64>'
-  从 HAR 提取：node backend/majsoul_node/extract-har-login.js capture.har --write-config backend/db_config.json
+  若报 code=151：可设 MAJSOUL_WEBGL_RESOURCE=0.16.256 MAJSOUL_WEBGL_PACKAGE=4.0.45
+  仅调试需要时可设 MAJSOUL_WS_CAPTURE=<har路径> 回放抓包
   注意：不是本网站管理员账号。
 
 【方式 B】access_token（国服没有 GameMgr.Inst.access_token 时用）

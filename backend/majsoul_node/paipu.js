@@ -1,6 +1,8 @@
 const axios = require("axios");
 const WebSocket = require("ws");
 const protobuf = require("protobufjs");
+const fs = require("fs");
+const path = require("path");
 const { randomUUID } = require("crypto");
 const uuidv4 = () => randomUUID();
 const hmacSHA256 = require("crypto-js/hmac-sha256");
@@ -29,6 +31,24 @@ const DEFAULT_WEBGL_RESOURCE = "0.16.256";
 const DEFAULT_WEBGL_PACKAGE = "4.0.45";
 const WEBGL_LOGIN_RETRY_MAX = 12;
 
+/** 浏览器 requestConnection 在 schema 外额外携带 tag=web（field 6） */
+const REQUEST_CONNECTION_WEB_TAG = Buffer.from([0x32, 0x03, 0x57, 0x65, 0x62]);
+
+/** route 握手阶段 heartbeat 序列（与网页一致，非固定重复值） */
+const ROUTE_HEARTBEAT_SEQUENCE = [
+  { delay: 5000, no_operation_counter: 0, platform: 11, network_quality: 5000 },
+  { delay: 5000, no_operation_counter: 0, platform: 11, network_quality: 5000 },
+  { delay: 0, no_operation_counter: 0, platform: 11, network_quality: 0 },
+  { delay: 0, no_operation_counter: 0, platform: 11, network_quality: 0 },
+  { delay: 0, no_operation_counter: 0, platform: 11, network_quality: 0 },
+  { delay: 5, no_operation_counter: 0, platform: 11, network_quality: 1 },
+  { delay: 26, no_operation_counter: 0, platform: 11, network_quality: 26 },
+  { delay: 20, no_operation_counter: 0, platform: 11, network_quality: 22 },
+  { delay: 25, no_operation_counter: 0, platform: 11, network_quality: 25 },
+  { delay: 26, no_operation_counter: 0, platform: 11, network_quality: 26 },
+  { delay: 27, no_operation_counter: 0, platform: 11, network_quality: 27 },
+];
+
 let protobufRoot = null;
 let protobufWrapper = null;
 let webglVersions = null;
@@ -37,6 +57,7 @@ let reqIndex = 1;
 const inflightRequests = {};
 const messageQueue = [];
 let activeWssUrl = MAJSOUL_WSS_DEFAULT;
+let activeRouteLine = 2;
 let routeCache = null;
 
 function delay(ms) {
@@ -72,10 +93,13 @@ async function pickBestRouteWss() {
   const forced = (process.env.MAJSOUL_WSS_URL || "").trim();
   if (forced) {
     activeWssUrl = forced;
-    return { url: forced, line: null, latency: null, forced: true };
+    const m = /route-(\d+)/.exec(forced);
+    activeRouteLine = m ? parseInt(m[1], 10) : 2;
+    return { url: forced, line: activeRouteLine, latency: null, forced: true };
   }
   if (process.env.MAJSOUL_SKIP_ROUTE_PROBE === "1") {
     activeWssUrl = MAJSOUL_WSS_DEFAULT;
+    activeRouteLine = 2;
     return { url: activeWssUrl, line: 2, latency: null, forced: true };
   }
   const now = Date.now();
@@ -99,6 +123,7 @@ async function pickBestRouteWss() {
     expiresAt: now + ROUTE_CACHE_MS,
   };
   activeWssUrl = best.url;
+  activeRouteLine = best.line;
   return routeCache;
 }
 
@@ -246,6 +271,46 @@ function lookupMethod(path) {
   return service.methods[parts[parts.length - 1]];
 }
 
+/** 浏览器对 currency_platforms 使用 unpacked repeated，protobufjs 默认 packed */
+function unpackCurrencyPlatformsInLoginWire(buf) {
+  const FIELD_TAG_PACKED = 0x42; // field 8, wire type 2
+  const FIELD_TAG_VARINT = 0x40; // field 8, wire type 0
+  const idx = buf.indexOf(FIELD_TAG_PACKED);
+  if (idx < 0 || idx + 1 >= buf.length) return buf;
+  const len = buf[idx + 1];
+  const packedStart = idx + 2;
+  const packedEnd = packedStart + len;
+  if (packedEnd > buf.length) return buf;
+  const packed = buf.slice(packedStart, packedEnd);
+  const values = [];
+  let pos = 0;
+  while (pos < packed.length) {
+    const v = readVarint(packed, pos);
+    pos = v.pos;
+    values.push(v.val);
+  }
+  const parts = [buf.slice(0, idx)];
+  for (const value of values) {
+    parts.push(Buffer.from([FIELD_TAG_VARINT]));
+    parts.push(writeVarint(value));
+  }
+  parts.push(buf.slice(packedEnd));
+  return Buffer.concat(parts);
+}
+
+function encodeLoginWire(requestType, payload, methodName) {
+  let data = requestType.encode(payload).finish();
+  if (methodName === ".lq.Route.requestConnection") {
+    data = Buffer.concat([Buffer.from(data), REQUEST_CONNECTION_WEB_TAG]);
+  } else if (
+    requestType.name === "ReqLogin" ||
+    requestType.name === "ReqOauth2Login"
+  ) {
+    data = unpackCurrencyPlatformsInLoginWire(Buffer.from(data));
+  }
+  return data;
+}
+
 function encodeRequest({ methodName, payload }) {
   const currentIndex = reqIndex++;
   const methodObj = lookupMethod(methodName);
@@ -254,7 +319,7 @@ function encodeRequest({ methodName, payload }) {
   const msg = protobufWrapper
     .encode({
       name: methodName,
-      data: requestType.encode(payload).finish(),
+      data: encodeLoginWire(requestType, payload, methodName),
     })
     .finish();
   inflightRequests[currentIndex] = { methodName, typeObj: responseType };
@@ -285,11 +350,29 @@ function decodeMessage(buf) {
   return null;
 }
 
+function wsClientHeaders() {
+  const ua =
+    (process.env.MAJSOUL_USER_AGENT || "").trim() || DEFAULT_USER_AGENT;
+  const headers = {
+    Origin: "https://game.maj-soul.com",
+    "User-Agent": ua,
+    "Accept-Language":
+      process.env.MAJSOUL_ACCEPT_LANGUAGE ||
+      "zh,en;q=0.9,zh-CN;q=0.8,zh-HK;q=0.7,zh-TW;q=0.6",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  };
+  return headers;
+}
+
 function createConnection(wssUrl) {
   const url = wssUrl || activeWssUrl;
   return new Promise((resolve, reject) => {
     messageQueue.length = 0;
-    ws = new WebSocket(url, { perMessageDeflate: false });
+    ws = new WebSocket(url, {
+      perMessageDeflate: false,
+      headers: wsClientHeaders(),
+    });
     ws.on("error", reject);
     ws.on("close", () => {});
     ws.on("open", () => resolve());
@@ -325,6 +408,51 @@ async function websocketRequest(methodName, payload) {
   return res ? res.payload : null;
 }
 
+function routeIdFromLine(line) {
+  return `route-${line || activeRouteLine || 2}`;
+}
+
+/** 浏览器在 login 前会 requestConnection(tag=web) + 11 次 heartbeat */
+async function establishRouteSession() {
+  const routeId = routeIdFromLine(activeRouteLine);
+  const res = await websocketRequest(".lq.Route.requestConnection", {
+    type: 1,
+    route_id: routeId,
+    timestamp: String(Math.floor(Date.now() / 1000)),
+  });
+  const json = payloadToJson(res);
+  if (json?.error) {
+    throw new Error(
+      `requestConnection 失败(code=${json.error.code})` +
+        (json.error.message ? `: ${json.error.message}` : "")
+    );
+  }
+  const heartbeatCount =
+    parseInt(process.env.MAJSOUL_HEARTBEAT_COUNT || "11", 10) || 11;
+  const sequence = ROUTE_HEARTBEAT_SEQUENCE.slice(0, heartbeatCount);
+  for (const hb of sequence) {
+    await websocketRequest(".lq.Route.heartbeat", hb);
+  }
+}
+
+async function completeLoginHandshake(loginRes) {
+  const json = payloadToJson(loginRes);
+  if (!json || json.error) return;
+  try {
+    await websocketRequest(".lq.Lobby.fetchLastPrivacy", { type: [1, 2] });
+  } catch (e) {
+    /* 非关键 */
+  }
+  if (json.contract) {
+    await websocketRequest(".lq.Lobby.loginBeat", { contract: json.contract });
+  }
+  try {
+    await websocketRequest(".lq.Lobby.loginSuccess", {});
+  } catch (e) {
+    /* 部分版本无此 RPC */
+  }
+}
+
 function payloadToJson(payload) {
   if (!payload) return null;
   return typeof payload.toJSON === "function" ? payload.toJSON() : payload;
@@ -341,9 +469,9 @@ function buildBrowserDeviceInfo() {
   const ua =
     (process.env.MAJSOUL_USER_AGENT || "").trim() || DEFAULT_USER_AGENT;
   const screenW =
-    parseInt(process.env.MAJSOUL_SCREEN_WIDTH || "1437", 10) || 1437;
+    parseInt(process.env.MAJSOUL_SCREEN_WIDTH || "1080", 10) || 1080;
   const screenH =
-    parseInt(process.env.MAJSOUL_SCREEN_HEIGHT || "476", 10) || 476;
+    parseInt(process.env.MAJSOUL_SCREEN_HEIGHT || "403", 10) || 403;
   const os = (process.env.MAJSOUL_DEVICE_OS || "mac").trim() || "mac";
   const screenType =
     parseInt(process.env.MAJSOUL_SCREEN_TYPE || "1", 10) || 1;
@@ -435,6 +563,7 @@ async function majsoulLogin(username, password) {
           `[majsoul] login ok after version retry: package=${vers.package} resource=${vers.resource}`
         );
       }
+      await completeLoginHandshake(res);
       return token;
     }
     if (json?.error) {
@@ -515,6 +644,207 @@ function writeVarint(n) {
   return Buffer.from(a);
 }
 
+/** 在 protobuf wire 上 patch 指定 string 字段 */
+function patchWireStringFields(buf, fieldMap) {
+  const parts = [];
+  let pos = 0;
+  while (pos < buf.length) {
+    const tagStart = pos;
+    const t = readVarint(buf, pos);
+    pos = t.pos;
+    const field = t.val >>> 3;
+    const wire = t.val & 7;
+    if (wire === 0) {
+      const v = readVarint(buf, pos);
+      pos = v.pos;
+      parts.push(buf.slice(tagStart, pos));
+    } else if (wire === 2) {
+      const l = readVarint(buf, pos);
+      pos = l.pos;
+      let val = buf.slice(pos, pos + l.val);
+      pos += l.val;
+      if (fieldMap[field] !== undefined) {
+        val = Buffer.from(String(fieldMap[field]), "utf8");
+      }
+      const tag = writeVarint(t.val);
+      parts.push(Buffer.concat([tag, writeVarint(val.length), val]));
+    } else {
+      parts.push(buf.slice(tagStart));
+      break;
+    }
+  }
+  return Buffer.concat(parts);
+}
+
+function loadHarChunksFromFile(filePath) {
+  const text = fs.readFileSync(filePath, "utf8");
+  const chunks = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (text[i] === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        try {
+          chunks.push(JSON.parse(text.slice(start, i + 1)));
+        } catch (e) {
+          /* skip */
+        }
+        start = -1;
+      }
+    }
+  }
+  return chunks;
+}
+
+function methodNameFromWrapperBytes(wrapperBytes) {
+  const wm = protobufWrapper.decode(wrapperBytes);
+  return wm.name || wm.Name || "";
+}
+
+function methodNameFromFrameB64(b64) {
+  const buf = Buffer.from(b64.replace(/\s/g, ""), "base64");
+  if (buf.length < 4 || buf[0] !== 2) return "";
+  return methodNameFromWrapperBytes(buf.slice(3));
+}
+
+/** 从 console.log / HAR 提取 route-2 登录会话的上行帧序列 */
+function loadWsCaptureSends(filePath) {
+  const chunks = loadHarChunksFromFile(filePath);
+  if (!chunks.length) {
+    throw new Error(`${filePath} 未找到 HAR JSON`);
+  }
+  let best = null;
+  for (const har of chunks) {
+    for (const entry of har.log?.entries || []) {
+      const url = entry?.request?.url || "";
+      if (!url.includes("route-2")) continue;
+      const sends = (entry._webSocketMessages || []).filter(
+        (m) => m.type === "send" && m.data
+      );
+      const hasLogin = sends.some((m) =>
+        methodNameFromFrameB64(m.data).includes(".lq.Lobby.login")
+      );
+      if (!hasLogin) continue;
+      if (!best || sends.length > best.sends.length) {
+        best = { url, headers: entry.request?.headers || [], sends };
+      }
+    }
+  }
+  if (!best) {
+    throw new Error(`${filePath} 中未找到含 .lq.Lobby.login 的 route-2 WebSocket 抓包`);
+  }
+  const m = /route-(\d+)/.exec(best.url);
+  return {
+    wssUrl: best.url,
+    routeLine: m ? parseInt(m[1], 10) : 2,
+    headers: best.headers,
+    sends: best.sends.map((msg) => ({
+      b64: msg.data,
+      method: methodNameFromFrameB64(msg.data),
+    })),
+  };
+}
+
+function resolveWsCapturePath() {
+  if (process.env.MAJSOUL_USE_WS_CAPTURE === "0") return null;
+  const custom = (process.env.MAJSOUL_WS_CAPTURE || "").trim();
+  if (custom && fs.existsSync(custom)) return custom;
+  return null;
+}
+
+async function sendCapturedFrame(methodName, wrapperBytes) {
+  const methodObj = lookupMethod(methodName);
+  if (!methodObj) {
+    throw new Error(`抓包含未知 RPC: ${methodName}`);
+  }
+  const responseType = methodObj.parent.parent.lookupType(methodObj.responseType);
+  const idx = reqIndex++;
+  inflightRequests[idx] = { methodName, typeObj: responseType };
+  ws.send(
+    Buffer.concat([
+      Buffer.from([2, idx & 0xff, idx >> 8]),
+      wrapperBytes,
+    ])
+  );
+  return getMessage(idx);
+}
+
+/**
+ * 按 _webSocketMessages 顺序回放上行帧（仅 patch 动态字段）。
+ * 回放至 loginSuccess 后停止，后续牌谱请求走 websocketRequest。
+ */
+async function replayWsCaptureLogin(capture, username, password) {
+  reqIndex = 1;
+  messageQueue.length = 0;
+  for (const k of Object.keys(inflightRequests)) delete inflightRequests[k];
+
+  let loginContract = null;
+  let accessToken = null;
+
+  for (const { b64, method } of capture.sends) {
+    const buf = Buffer.from(b64.replace(/\s/g, ""), "base64");
+    if (buf[0] !== 2) continue;
+    const wm = protobufWrapper.decode(buf.slice(3));
+    const methodName = wm.name || wm.Name || method;
+    let wrapperBytes = buf.slice(3);
+
+    if (methodName === ".lq.Lobby.fetchGameRecord") break;
+
+    if (methodName === ".lq.Route.requestConnection") {
+      const data = patchWireStringFields(wm.data, {
+        3: String(Math.floor(Date.now() / 1000)),
+      });
+      wrapperBytes = protobufWrapper
+        .encode({ name: methodName, data })
+        .finish();
+    } else if (methodName === ".lq.Lobby.login") {
+      const patches = { random_key: uuidv4() };
+      if (username && password) {
+        patches.account = username;
+        patches.password = hmacSHA256(password, "lailai").toString();
+      }
+      const data = patchReqLoginWire(wm.data, patches);
+      wrapperBytes = protobufWrapper
+        .encode({ name: methodName, data })
+        .finish();
+    } else if (methodName === ".lq.Lobby.loginBeat") {
+      if (!loginContract) continue;
+      const data = patchWireStringFields(wm.data, { 1: loginContract });
+      wrapperBytes = protobufWrapper
+        .encode({ name: methodName, data })
+        .finish();
+    }
+
+    const res = await sendCapturedFrame(methodName, wrapperBytes);
+    if (!res) {
+      throw new Error(`抓包回放超时: ${methodName}`);
+    }
+
+    if (methodName === ".lq.Lobby.login") {
+      const json = payloadToJson(res.payload);
+      if (json?.error) {
+        throw new Error(formatLoginError(json, "capture replay login"));
+      }
+      accessToken = extractAccessToken(res.payload);
+      loginContract = json?.contract || null;
+      if (!accessToken) {
+        throw new Error("抓包回放登录无 access_token");
+      }
+    }
+
+    if (methodName === ".lq.Lobby.loginSuccess") break;
+  }
+
+  if (!accessToken) {
+    throw new Error("抓包回放未完成登录");
+  }
+  return accessToken;
+}
+
 /** 在保留 device 等字段的前提下 patch ReqLogin 二进制 */
 function patchReqLoginWire(buf, patches) {
   const parts = [];
@@ -551,100 +881,13 @@ function patchReqLoginWire(buf, patches) {
   return Buffer.concat(parts);
 }
 
-function decodeCapturedRequestFrame(b64) {
+async function majsoulLoginFromCapturedFrame(b64, username, password) {
   const raw = b64.replace(/\s/g, "");
   const buf = Buffer.from(raw, "base64");
   if (buf.length < 3 || buf[0] !== 2) {
-    throw new Error("majsoul_login_request_b64 须为 WebSocket 上行请求帧 base64");
+    throw new Error("majsoul_login_request_b64 须为 WebSocket 上行 login 帧 base64");
   }
   const wm = protobufWrapper.decode(buf.slice(3));
-  const methodName = wm.name || wm.Name || "";
-  if (!methodName) {
-    throw new Error("抓包帧缺少 method 名");
-  }
-  return { buf, wm, methodName };
-}
-
-async function majsoulPrepareLogin(accessToken, type) {
-  const res = await websocketRequest(".lq.Lobby.prepareLogin", {
-    access_token: accessToken,
-    type: type ?? 0,
-  });
-  const json = payloadToJson(res);
-  if (json?.error) {
-    throw new Error(formatLoginError(json, "prepareLogin"));
-  }
-}
-
-async function majsoulPrepareLoginBestEffort(accessToken, oauth2Type) {
-  const prepTypes = [];
-  const seen = new Set();
-  for (const t of [oauth2Type, 0, 1]) {
-    if (t == null || seen.has(t)) continue;
-    seen.add(t);
-    prepTypes.push(t);
-  }
-  let lastErr = null;
-  for (const prepType of prepTypes) {
-    try {
-      await majsoulPrepareLogin(accessToken, prepType);
-      return;
-    } catch (err) {
-      lastErr = err;
-      if (isExpiredTokenError(err)) throw err;
-    }
-  }
-  if (process.env.MAJSOUL_DEBUG_VERSION === "1" && lastErr) {
-    console.error(`[majsoul] prepareLogin skipped: ${lastErr.message}`);
-  }
-}
-
-async function majsoulLoginFromCapturedFrame(b64, username, password) {
-  const { wm, methodName } = decodeCapturedRequestFrame(b64);
-
-  if (methodName === ".lq.Lobby.prepareLogin") {
-    const ReqPrepareLogin = protobufRoot.lookup(".lq.ReqPrepareLogin");
-    const req = ReqPrepareLogin.decode(wm.data).toJSON();
-    if (!req.access_token) {
-      throw new Error("prepareLogin 帧缺少 access_token");
-    }
-    return majsoulLoginOAuth2(req.access_token, req.type ?? 0);
-  }
-
-  if (methodName === ".lq.Lobby.oauth2Login") {
-    const ReqOauth2Login = protobufRoot.lookup(".lq.ReqOauth2Login");
-    const req = ReqOauth2Login.decode(wm.data).toJSON();
-    const token = req.access_token;
-    if (!token) throw new Error("oauth2Login 帧缺少 access_token");
-    try {
-      await majsoulPrepareLogin(token, req.type ?? 0);
-    } catch (err) {
-      if (!isExpiredTokenError(err)) throw err;
-    }
-    return majsoulLoginOAuth2(token, req.type ?? 1);
-  }
-
-  if (methodName !== ".lq.Lobby.login") {
-    throw new Error(`不支持的抓包方法: ${methodName}`);
-  }
-
-  const ReqLogin = protobufRoot.lookup(".lq.ReqLogin");
-  const captured = ReqLogin.decode(wm.data).toJSON();
-  if (captured.client_version?.resource && captured.client_version?.package) {
-    webglVersions = makeWebGLVersions(
-      captured.client_version.resource,
-      captured.client_version.package
-    );
-  } else if (captured.client_version_string) {
-    const m = String(captured.client_version_string).match(/WebGL_2022-([\d.]+)/);
-    if (m) {
-      webglVersions = makeWebGLVersions(
-        m[1],
-        captured.client_version?.package || DEFAULT_WEBGL_PACKAGE
-      );
-    }
-  }
-
   const patches = { random_key: uuidv4() };
   if (username && password) {
     patches.account = username;
@@ -671,21 +914,20 @@ async function majsoulLoginFromCapturedFrame(b64, username, password) {
   }
   const token = extractAccessToken(res.payload);
   const json = payloadToJson(res.payload);
-  if (token) return token;
+  if (token) {
+    await completeLoginHandshake(res.payload);
+    return token;
+  }
   if (json?.error) throw new Error(formatLoginError(json, "captured login"));
   throw new Error("登录响应无 access_token");
-}
-
-function isExpiredTokenError(err) {
-  const msg = String(err?.message || err || "");
-  return msg.includes("code=151") || msg.includes("code=109");
 }
 
 async function majsoulLoginOAuth2(accessToken, oauth2Type) {
   const types = [];
   const seen = new Set();
-  for (const t of [oauth2Type, 1, 10, 0]) {
+  for (const t of [oauth2Type, 1, 10]) {
     if (t == null || seen.has(t)) continue;
+    if (t === 0 && oauth2Type !== 0) continue;
     seen.add(t);
     types.push(t);
   }
@@ -693,8 +935,6 @@ async function majsoulLoginOAuth2(accessToken, oauth2Type) {
   const base = webglVersions || makeWebGLVersions(DEFAULT_WEBGL_RESOURCE, DEFAULT_WEBGL_PACKAGE);
   const candidates = webglVersionCandidates(base.package, base.resource);
   let lastErr = null;
-
-  await majsoulPrepareLoginBestEffort(accessToken, oauth2Type);
 
   for (const vers of candidates) {
     webglVersions = vers;
@@ -721,6 +961,7 @@ async function majsoulLoginOAuth2(accessToken, oauth2Type) {
             `[majsoul] oauth2 ok after version retry: package=${vers.package} resource=${vers.resource}`
           );
         }
+        await completeLoginHandshake(res);
         return token;
       }
       const json = payloadToJson(res);
@@ -908,6 +1149,7 @@ async function main() {
     console.error(
       "用法: node paipu.js [--detail] '<paipuList_json>' [username] [password]\n" +
         "  环境变量: MAJSOUL_ACCESS_TOKEN / MAJSOUL_LOGIN_REQUEST_B64\n" +
+        "  抓包回放(可选): MAJSOUL_WS_CAPTURE=<har路径>\n" +
         "  解析抓包: node paipu.js --parse-login '<login_req_b64>' '<login_res_b64>'"
     );
     process.exit(1);
@@ -924,17 +1166,42 @@ async function main() {
   }
 
   await initProtobuf();
-  await pickBestRouteWss();
-  await createConnection();
-  try {
-    const sessionToken = await majsoulAuthenticate({
-      username,
-      password,
-      accessToken,
-      oauth2Type,
-      loginRequestB64,
-    });
 
+  const capturePath =
+    username && password && !accessToken && !loginRequestB64
+      ? resolveWsCapturePath()
+      : null;
+  let sessionToken;
+
+  if (capturePath) {
+    const capture = loadWsCaptureSends(capturePath);
+    activeWssUrl = capture.wssUrl;
+    activeRouteLine = capture.routeLine;
+    await createConnection();
+    if (process.env.MAJSOUL_DEBUG_VERSION === "1") {
+      console.error(
+        `[majsoul] WS 抓包回放: ${capturePath} (${capture.sends.length} 帧)`
+      );
+    }
+    sessionToken = await replayWsCaptureLogin(capture, username, password);
+  } else {
+    await pickBestRouteWss();
+    await createConnection();
+    await establishRouteSession();
+    if (username && password) {
+      sessionToken = await majsoulLogin(username, password);
+    } else {
+      sessionToken = await majsoulAuthenticate({
+        username,
+        password,
+        accessToken,
+        oauth2Type,
+        loginRequestB64,
+      });
+    }
+  }
+
+  try {
     if (mode === "summary") {
       const res = await websocketRequest(".lq.Lobby.fetchGameRecordsDetail", {
         uuid_list: uuidList,

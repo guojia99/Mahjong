@@ -8,13 +8,54 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+function loadHarChunks(filePath) {
+  const text = fs.readFileSync(filePath, "utf8");
+  const chunks = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (text[i] === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        try {
+          chunks.push(JSON.parse(text.slice(start, i + 1)));
+        } catch (e) {
+          /* skip invalid chunk */
+        }
+        start = -1;
+      }
+    }
+  }
+  if (chunks.length === 0) {
+    throw new Error(
+      `${filePath} 未找到 HAR JSON（支持纯 .har 或含 curl 头的 console.log）`
+    );
+  }
+  return chunks;
+}
+
 function loadHar(filePath) {
   const text = fs.readFileSync(filePath, "utf8").trim();
   try {
     return JSON.parse(text);
   } catch (e) {
-    throw new Error(`${filePath} 不是合法 JSON HAR（需 Chrome Network → Save all as HAR）`);
+    const chunks = loadHarChunks(filePath);
+    return chunks[chunks.length - 1];
   }
+}
+
+function collectAllWsEntries(filePath) {
+  const chunks = loadHarChunks(filePath);
+  const entries = [];
+  for (const har of chunks) {
+    for (const entry of har?.log?.entries || []) {
+      if ((entry?._webSocketMessages || []).length > 0) entries.push(entry);
+    }
+  }
+  return entries;
 }
 
 function collectWsMessages(har) {
@@ -85,7 +126,19 @@ function main() {
   }
 
   const har = loadHar(harPath);
-  const messages = collectWsMessages(har);
+  const entries = collectAllWsEntries(harPath);
+  const messages = [];
+  for (const entry of entries) {
+    const url = entry?.request?.url || "";
+    for (const msg of entry._webSocketMessages || []) {
+      messages.push({
+        url,
+        type: msg.type,
+        data: msg.data,
+        headers: entry?.request?.headers || [],
+      });
+    }
+  }
   const sends = messages.filter((m) => m.type === "send" && m.data);
 
   const found = {
