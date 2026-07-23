@@ -22,10 +22,10 @@ const CN_CURRENCY_PLATFORMS = [1, 2, 5, 6, 8, 10, 11];
 const WEBGL_PACKAGE_RESOURCE = {
   "4.0.38": "0.16.226",
   "4.0.44": "0.16.238",
-  "4.0.45": "0.16.251",
+  "4.0.45": "0.16.256",
 };
 
-const DEFAULT_WEBGL_RESOURCE = "0.16.251";
+const DEFAULT_WEBGL_RESOURCE = "0.16.256";
 const DEFAULT_WEBGL_PACKAGE = "4.0.45";
 const WEBGL_LOGIN_RETRY_MAX = 12;
 
@@ -341,20 +341,23 @@ function buildBrowserDeviceInfo() {
   const ua =
     (process.env.MAJSOUL_USER_AGENT || "").trim() || DEFAULT_USER_AGENT;
   const screenW =
-    parseInt(process.env.MAJSOUL_SCREEN_WIDTH || "2560", 10) || 2560;
+    parseInt(process.env.MAJSOUL_SCREEN_WIDTH || "1437", 10) || 1437;
   const screenH =
-    parseInt(process.env.MAJSOUL_SCREEN_HEIGHT || "1440", 10) || 1440;
+    parseInt(process.env.MAJSOUL_SCREEN_HEIGHT || "476", 10) || 476;
+  const os = (process.env.MAJSOUL_DEVICE_OS || "mac").trim() || "mac";
+  const screenType =
+    parseInt(process.env.MAJSOUL_SCREEN_TYPE || "1", 10) || 1;
   return {
     platform: "pc",
     hardware: "pc",
-    os: "windows",
+    os,
     is_browser: true,
     software: "Chrome",
     sale_platform: "web",
     user_agent: ua,
     screen_width: screenW,
     screen_height: screenH,
-    screen_type: 2,
+    screen_type: screenType,
   };
 }
 
@@ -548,13 +551,100 @@ function patchReqLoginWire(buf, patches) {
   return Buffer.concat(parts);
 }
 
-async function majsoulLoginFromCapturedFrame(b64, username, password) {
+function decodeCapturedRequestFrame(b64) {
   const raw = b64.replace(/\s/g, "");
   const buf = Buffer.from(raw, "base64");
   if (buf.length < 3 || buf[0] !== 2) {
-    throw new Error("majsoul_login_request_b64 须为 WebSocket 上行 login 帧 base64");
+    throw new Error("majsoul_login_request_b64 须为 WebSocket 上行请求帧 base64");
   }
   const wm = protobufWrapper.decode(buf.slice(3));
+  const methodName = wm.name || wm.Name || "";
+  if (!methodName) {
+    throw new Error("抓包帧缺少 method 名");
+  }
+  return { buf, wm, methodName };
+}
+
+async function majsoulPrepareLogin(accessToken, type) {
+  const res = await websocketRequest(".lq.Lobby.prepareLogin", {
+    access_token: accessToken,
+    type: type ?? 0,
+  });
+  const json = payloadToJson(res);
+  if (json?.error) {
+    throw new Error(formatLoginError(json, "prepareLogin"));
+  }
+}
+
+async function majsoulPrepareLoginBestEffort(accessToken, oauth2Type) {
+  const prepTypes = [];
+  const seen = new Set();
+  for (const t of [oauth2Type, 0, 1]) {
+    if (t == null || seen.has(t)) continue;
+    seen.add(t);
+    prepTypes.push(t);
+  }
+  let lastErr = null;
+  for (const prepType of prepTypes) {
+    try {
+      await majsoulPrepareLogin(accessToken, prepType);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (isExpiredTokenError(err)) throw err;
+    }
+  }
+  if (process.env.MAJSOUL_DEBUG_VERSION === "1" && lastErr) {
+    console.error(`[majsoul] prepareLogin skipped: ${lastErr.message}`);
+  }
+}
+
+async function majsoulLoginFromCapturedFrame(b64, username, password) {
+  const { wm, methodName } = decodeCapturedRequestFrame(b64);
+
+  if (methodName === ".lq.Lobby.prepareLogin") {
+    const ReqPrepareLogin = protobufRoot.lookup(".lq.ReqPrepareLogin");
+    const req = ReqPrepareLogin.decode(wm.data).toJSON();
+    if (!req.access_token) {
+      throw new Error("prepareLogin 帧缺少 access_token");
+    }
+    return majsoulLoginOAuth2(req.access_token, req.type ?? 0);
+  }
+
+  if (methodName === ".lq.Lobby.oauth2Login") {
+    const ReqOauth2Login = protobufRoot.lookup(".lq.ReqOauth2Login");
+    const req = ReqOauth2Login.decode(wm.data).toJSON();
+    const token = req.access_token;
+    if (!token) throw new Error("oauth2Login 帧缺少 access_token");
+    try {
+      await majsoulPrepareLogin(token, req.type ?? 0);
+    } catch (err) {
+      if (!isExpiredTokenError(err)) throw err;
+    }
+    return majsoulLoginOAuth2(token, req.type ?? 1);
+  }
+
+  if (methodName !== ".lq.Lobby.login") {
+    throw new Error(`不支持的抓包方法: ${methodName}`);
+  }
+
+  const ReqLogin = protobufRoot.lookup(".lq.ReqLogin");
+  const captured = ReqLogin.decode(wm.data).toJSON();
+  if (captured.client_version?.resource && captured.client_version?.package) {
+    webglVersions = makeWebGLVersions(
+      captured.client_version.resource,
+      captured.client_version.package
+    );
+  } else if (captured.client_version_string) {
+    const m = String(captured.client_version_string).match(/WebGL_2022-([\d.]+)/);
+    if (m) {
+      webglVersions = makeWebGLVersions(
+        m[1],
+        captured.client_version?.package || DEFAULT_WEBGL_PACKAGE
+      );
+    }
+  }
+
   const patches = { random_key: uuidv4() };
   if (username && password) {
     patches.account = username;
@@ -586,12 +676,16 @@ async function majsoulLoginFromCapturedFrame(b64, username, password) {
   throw new Error("登录响应无 access_token");
 }
 
+function isExpiredTokenError(err) {
+  const msg = String(err?.message || err || "");
+  return msg.includes("code=151") || msg.includes("code=109");
+}
+
 async function majsoulLoginOAuth2(accessToken, oauth2Type) {
   const types = [];
   const seen = new Set();
-  for (const t of [oauth2Type, 1, 10]) {
+  for (const t of [oauth2Type, 1, 10, 0]) {
     if (t == null || seen.has(t)) continue;
-    if (t === 0 && oauth2Type !== 0) continue;
     seen.add(t);
     types.push(t);
   }
@@ -599,6 +693,8 @@ async function majsoulLoginOAuth2(accessToken, oauth2Type) {
   const base = webglVersions || makeWebGLVersions(DEFAULT_WEBGL_RESOURCE, DEFAULT_WEBGL_PACKAGE);
   const candidates = webglVersionCandidates(base.package, base.resource);
   let lastErr = null;
+
+  await majsoulPrepareLoginBestEffort(accessToken, oauth2Type);
 
   for (const vers of candidates) {
     webglVersions = vers;
