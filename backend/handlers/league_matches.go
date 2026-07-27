@@ -187,11 +187,11 @@ func LeagueCreateOfflineMatch(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "当前赛段未开放陪打")
 		return
 	}
-	if len(manualCompanions) > 2 {
-		respondError(c, http.StatusBadRequest, "陪打选手最多 2 名")
+	if len(manualCompanions) > leagueMaxManualCompanionsOffline {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("陪打选手最多 %d 名", leagueMaxManualCompanionsOffline))
 		return
 	}
-	companions, _, err := leagueCompanionPlayersForScheduled(&stage, pk, scheduled, manualCompanions)
+	companions, _, err := leagueCompanionPlayersForScheduled(&stage, pk, scheduled, manualCompanions, leagueMaxManualCompanionsOffline)
 	if err != nil {
 		respondError(c, http.StatusBadRequest, err.Error())
 		return
@@ -534,7 +534,7 @@ func leagueBuildOnlineImportPlan(
 		scheduledIDs = append(scheduledIDs, player.ID)
 	}
 
-	companions, gamesPlayed, err := leagueCompanionPlayersForScheduled(stage, stageID, scheduledIDs, manualCompanions)
+	companions, gamesPlayed, err := leagueCompanionPlayersForScheduled(stage, stageID, scheduledIDs, manualCompanions, leagueMaxManualCompanionsOnline)
 	if err != nil {
 		return nil, err
 	}

@@ -957,6 +957,8 @@ function StageMatchesAdminPanel({
 }
 
 // ---------------------------------------------------------------------------
+const OFFLINE_MAX_MANUAL_COMPANIONS = 3;
+
 // Offline match modal — pick 4 players, optionally enter scores
 // ---------------------------------------------------------------------------
 
@@ -996,7 +998,7 @@ function OfflineMatchModal({
     function toggleCompanion(id: string) {
         setPickedCompanions(prev => {
             if (prev.includes(id)) return prev.filter(x => x !== id);
-            if (prev.length >= 2) return prev;
+            if (prev.length >= OFFLINE_MAX_MANUAL_COMPANIONS) return prev;
             return [...prev, id];
         });
     }
@@ -1087,7 +1089,7 @@ function OfflineMatchModal({
                 {stage.allow_companion && pickedPlayers.length > 0 && (
                     <div>
                         <label className="text-xs" style={{ color: 'var(--color-text-light)' }}>
-                            {t('league.companionPlayers')} ({pickedCompanions.length}/2)
+                            {t('league.companionPlayers')} ({pickedCompanions.length}/{OFFLINE_MAX_MANUAL_COMPANIONS})
                         </label>
                         <div className="max-h-32 overflow-y-auto border rounded-lg p-2 space-y-0.5" style={{ borderColor: 'var(--color-border)' }}>
                             {players.filter(p => p.is_full && pickedPlayers.includes(p.player.id)).map(p => {

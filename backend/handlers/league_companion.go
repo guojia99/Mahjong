@@ -9,6 +9,11 @@ import (
 	"mahjong-backend/models"
 )
 
+const (
+	leagueMaxManualCompanionsOffline = 3
+	leagueMaxManualCompanionsOnline  = 2
+)
+
 func leagueMatchSortTime(m *models.LeagueMatch) time.Time {
 	if m.Game != nil && !m.Game.StartTime.IsZero() {
 		return m.Game.StartTime
@@ -45,13 +50,16 @@ func leagueResolveCompanionPlayers(stage *models.LeagueStage, scheduled, manual 
 }
 
 // leagueCompanionPlayersForScheduled recalculates stage PT and merges manual + auto companions.
-// Manual companions are limited to 2 and require allow_companion; full players are always auto-marked.
-func leagueCompanionPlayersForScheduled(stage *models.LeagueStage, stageID string, scheduled, manual []string) ([]string, map[string]int, error) {
+// Manual companions are limited by maxManual and require allow_companion; full players are always auto-marked.
+func leagueCompanionPlayersForScheduled(stage *models.LeagueStage, stageID string, scheduled, manual []string, maxManual int) ([]string, map[string]int, error) {
 	if manual == nil {
 		manual = []string{}
 	}
-	if len(manual) > 2 {
-		return nil, nil, fmt.Errorf("陪打选手最多 2 名")
+	if maxManual <= 0 {
+		maxManual = leagueMaxManualCompanionsOnline
+	}
+	if len(manual) > maxManual {
+		return nil, nil, fmt.Errorf("陪打选手最多 %d 名", maxManual)
 	}
 	if len(manual) > 0 && !stage.AllowCompanion {
 		return nil, nil, fmt.Errorf("当前赛段未开放陪打")
